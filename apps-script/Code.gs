@@ -81,7 +81,7 @@ function verifyIdToken_(token) {
 
 /* ===== ติดตั้งครั้งแรก (รันจาก editor) ===== */
 function setup() {
-  const ss = SpreadsheetApp.getActive();
+  const ss = ss_();
   Object.keys(HEAD).forEach(function (n) {
     let sh = ss.getSheetByName(n);
     if (!sh) sh = ss.insertSheet(n);
@@ -106,8 +106,17 @@ function setup() {
 }
 
 /* ===== ตัวช่วยชีต ===== */
+/** เปิด Google Sheet: ใช้ Script property SHEET_ID ถ้ามี (โปรเจกต์ที่สร้างจาก script.google.com)
+ *  ถ้าไม่มี ใช้ชีตที่โปรเจกต์ผูกอยู่ (สร้างจาก ส่วนขยาย → Apps Script ในชีต) */
+function ss_() {
+  const id = PropertiesService.getScriptProperties().getProperty('SHEET_ID');
+  if (id) return SpreadsheetApp.openById(id);
+  const active = SpreadsheetApp.getActive();
+  if (!active) throw new Error('SETUP: ตั้ง Script property SHEET_ID เป็น ID ของ Google Sheet (Project Settings → Script properties)');
+  return active;
+}
 function sh_(n) {
-  const s = SpreadsheetApp.getActive().getSheetByName(n);
+  const s = ss_().getSheetByName(n);
   if (!s) throw new Error('SETUP: ยังไม่ได้รัน setup()');
   return s;
 }

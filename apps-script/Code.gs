@@ -14,7 +14,8 @@ const HEAD = {
   Prices:   ['code', 'name', 'price', 'status', 'note'],
   Requests: ['email', 'at'],
   Visitors: ['email', 'firstSeen', 'lastSeen'],
-  Log:      ['at', 'email', 'action', 'detail']
+  Log:      ['at', 'email', 'action', 'detail'],
+  Formulas: ['id', 'owner', 'name', 'updatedAt', 'data']
 };
 const PERM_KEYS = ['calc', 'export', 'viewDb', 'editPrices', 'manageUsers'];
 const DEFAULT_ROLES = [
@@ -42,7 +43,8 @@ let REQUEST_EMAIL_ = null;
 function doPost(e) {
   const api = {bootstrap: bootstrap, requestAccess: requestAccess, savePrices: savePrices, resetPrices: resetPrices,
     saveExport: saveExport, adminData: adminData, setUser: setUser, removeUser: removeUser, declineRequest: declineRequest,
-    saveAccess: saveAccess, createRole: createRole, updateRole: updateRole, deleteRole: deleteRole};
+    saveAccess: saveAccess, createRole: createRole, updateRole: updateRole, deleteRole: deleteRole,
+    loadMyFormulas: loadMyFormulas, saveMyFormulas: saveMyFormulas, adminFormulas: adminFormulas};
   let out;
   try {
     const req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
@@ -116,7 +118,13 @@ function ss_() {
   return active;
 }
 function sh_(n) {
-  const s = ss_().getSheetByName(n);
+  const ss = ss_();
+  let s = ss.getSheetByName(n);
+  if (!s && HEAD[n] && n === 'Formulas') {   // แท็บที่เพิ่มภายหลัง สร้างให้เองเมื่อยังไม่มี
+    s = ss.insertSheet(n);
+    s.getRange(1, 1, 1, HEAD[n].length).setValues([HEAD[n]]).setFontWeight('bold');
+    s.setFrozenRows(1);
+  }
   if (!s) throw new Error('SETUP: ยังไม่ได้รัน setup()');
   return s;
 }
@@ -407,6 +415,63 @@ function deleteRole(id) {
     log_(m.email, 'deleteRole', id);
     return adminData_(m);
   });
+}
+
+/* ===== สูตรของผู้ใช้ =====
+   เจ้าของสูตรเห็นและแก้ไขได้เฉพาะของตัวเอง (กรองด้วยอีเมลที่ยืนยันแล้วที่เซิร์ฟเวอร์ ไม่เชื่อค่าจากหน้าเว็บ)
+   ดูสูตรของทุกคนได้เฉพาะเจ้าของระบบและบทบาทผู้ดูแลระบบ (admin) */
+const FORMULA_MAX = 300, FORMULA_CELL_MAX = 45000;
+function isAdmin_(m) { return !!m.role && m.active && (m.isOwner || m.role === 'admin'); }
+function formulaOut_(r) {
+  return {id: String(r.id), owner: String(r.owner).toLowerCase(), name: String(r.name), updatedAt: iso_(r.updatedAt), data: String(r.data)};
+}
+function loadMyFormulas() {
+  const m = need_('calc');
+  return rows_('Formulas').filter(function (r) { return String(r.owner).toLowerCase() === m.email; }).map(formulaOut_);
+}
+/** แทนที่ชุดสูตรของผู้เรียกทั้งชุด (เพิ่ม/แก้/ลบเฉพาะของตัวเอง) */
+function saveMyFormulas(items) {
+  return withLock_(function () {
+    const m = need_('calc');
+    if (!Array.isArray(items) || items.length > FORMULA_MAX) throw new Error('บันทึกได้ไม่เกิน ' + FORMULA_MAX + ' สูตร');
+    const keep = {};
+    items.forEach(function (it) {
+      const id = String((it && it.id) || '');
+      if (!/^[A-Za-z0-9_-]{3,40}$/.test(id)) throw new Error('รหัสสูตรไม่ถูกต้อง');
+      const data = String((it && it.data) || '');
+      const name = String((it && it.name) || 'สูตร').slice(0, 120);
+      if (data.length > FORMULA_CELL_MAX) throw new Error('สูตร "' + name.slice(0, 40) + '" ใหญ่เกินไป (ลดจำนวนรายการ)');
+      try { JSON.parse(data); } catch (e) { throw new Error('ข้อมูลสูตรไม่ถูกต้อง'); }
+      keep[id] = {name: name, data: data};
+    });
+    const sheet = sh_('Formulas');
+    const mine = rows_('Formulas').filter(function (r) { return String(r.owner).toLowerCase() === m.email; });
+    mine.filter(function (r) { return !keep[String(r.id)]; }).sort(function (a, b) { return b._row - a._row; })
+      .forEach(function (r) { sheet.deleteRow(r._row); });
+    const rowOf = {};
+    rows_('Formulas').forEach(function (r) { if (String(r.owner).toLowerCase() === m.email) rowOf[String(r.id)] = r; });
+    const now = new Date();
+    let changed = 0;
+    Object.keys(keep).forEach(function (id) {
+      const cur = rowOf[id], k = keep[id];
+      if (cur) {
+        if (String(cur.data) === k.data && String(cur.name) === k.name) return;
+        sheet.getRange(cur._row, 1, 1, 5).setValues([[id, m.email, k.name, now, k.data]]);
+      } else {
+        sheet.appendRow([id, m.email, k.name, now, k.data]);
+      }
+      changed++;
+    });
+    return {saved: Object.keys(keep).length, changed: changed, at: now.toISOString()};
+  });
+}
+/** สูตรของทุกคน: เฉพาะแอดมิน */
+function adminFormulas() {
+  const m = me_();
+  if (!isAdmin_(m)) throw new Error('FORBIDDEN');
+  const list = rows_('Formulas').map(formulaOut_);
+  log_(m.email, 'adminFormulas', list.length + ' สูตร');
+  return list;
 }
 
 /* ฐานราคาเริ่มต้น (RM_RAW) อยู่ในไฟล์ Prices.gs แยกจากไฟล์นี้ — ห้ามอัปโหลด Prices.gs ขึ้น GitHub */

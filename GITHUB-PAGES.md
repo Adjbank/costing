@@ -58,6 +58,9 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1
 | --- | --- |
 | `GOOGLE_CLIENT_ID` | Client ID จากขั้นที่ 2 |
 | `PUBLIC_URL` | `https://<ชื่อผู้ใช้-github>.github.io/<ชื่อ-repo>/` (ใช้ในอีเมลแจ้งผู้ใช้และปุ่มแชร์ลิงก์) |
+| `SHEET_ID` | ID ของ Google Sheet (ส่วนระหว่าง `/d/` กับ `/edit` ในลิงก์ชีต) **จำเป็นถ้าโปรเจกต์ Apps Script สร้างจาก script.google.com** ไม่ต้องตั้งถ้าสร้างจากเมนู ส่วนขยาย → Apps Script ในชีตโดยตรง |
+
+หมายเหตุสิทธิ์: เมื่อใช้ `SHEET_ID` โปรเจกต์ต้องใช้สิทธิ์ `spreadsheets` (เข้าถึงทุกชีตของบัญชีเจ้าของระบบ) แทน `spreadsheets.currentonly` ถ้าต้องการสิทธิ์แคบ ให้สร้างโปรเจกต์ผ่านเมนูในชีตแล้วเปลี่ยนสิทธิ์กลับ
 
 ### 4. Deploy Apps Script เป็น API
 

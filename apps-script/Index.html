@@ -304,7 +304,7 @@ tfoot td{font-weight:700;border-top:1px solid var(--ink);background:var(--bg-sof
       </section>
 
       <section class="block" id="s2">
-        <div class="bh"><h2><span class="n">2</span>ตรวจรายการวัตถุดิบ</h2><span class="hint">แก้ % รหัส หรือใส่ราคาเองได้ในตาราง</span></div>
+        <div class="bh"><h2><span class="n">2</span>ตรวจรายการวัตถุดิบ</h2><span class="hint">แก้ % รหัส หรือใส่ราคาเองได้ในตาราง · <span id="syncStatus" aria-live="polite"></span></span></div>
         <div class="ptabs" id="ptabs"></div>
         <div id="editor"></div>
       </section>
@@ -438,7 +438,7 @@ function sampleProducts(){
   ];
 }
 function active(){ return state.products.find(p=>p.id===state.activeId) || state.products[0]; }
-function save(){ if(S.me) store.set('ss-cost-state:'+S.me.email, state); }
+function save(){ if(S.me){ store.set('ss-cost-state:'+S.me.email, state); scheduleSync(); } }
 
 /* ===== calculation ===== */
 function lookup(line){
@@ -1018,7 +1018,8 @@ function showGate(kind, info){
   if(kind==='signin') renderGsi(info);
 }
 function signOut(){
-  clearToken(); S.inApp=false; S.admin=false;
+  if(SYNC.dirty && !SYNC.busy && SYNC.loaded){ try{ syncNow(); }catch(e){} }   /* ส่งการแก้ไขที่ค้างก่อนออก */
+  clearToken(); S.inApp=false; S.admin=false; ADM_FORMS=null;
   try{ if(window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect(); }catch(e){}
   showGate('signin','ออกจากระบบแล้ว');
 }
@@ -1037,13 +1038,62 @@ function evaluate(){
   if(!S.inApp) enterApp(); else showView(S.admin && can('manageUsers') ? 'admin' : 'calc');
 }
 
+/* --- สูตรของฉัน: เก็บบนเซิร์ฟเวอร์ (ชีต Formulas) เจ้าของเห็นของตัวเอง แอดมินเห็นทุกคนในหน้าจัดการ ---
+   ซิงก์แบบหน่วงเวลา 1.5 วินาทีหลังแก้ไข · สูตรตัวอย่าง (sample) ไม่ถูกส่งขึ้นเซิร์ฟเวอร์ */
+const SYNC = {timer:null, busy:false, dirty:false, loaded:false};
+function setSyncStatus(kind){
+  const el=$('#syncStatus'); if(!el) return;
+  const m={pending:['กำลังบันทึก…',''], saved:['บันทึกบนเซิร์ฟเวอร์แล้ว','var(--ok)'], error:['บันทึกบนเซิร์ฟเวอร์ไม่สำเร็จ จะลองใหม่เมื่อแก้ไขครั้งถัดไป','var(--bad)'], offline:['','']}[kind]||['',''];
+  el.textContent=m[0]; el.style.color=m[1];
+}
+function syncItems(){ return state.products.filter(p=>!p.sample).map(p=>({id:p.id, name:p.name, data:JSON.stringify(p)})); }
+function scheduleSync(){
+  if(!can('calc')) return;
+  SYNC.dirty=true; setSyncStatus('pending');
+  clearTimeout(SYNC.timer); SYNC.timer=setTimeout(syncNow, 1500);
+}
+async function syncNow(){
+  SYNC.timer=null;
+  if(SYNC.busy){ SYNC.dirty=true; return; }
+  if(!SYNC.loaded){ await loadFromServer(); if(!SYNC.loaded){ setSyncStatus('error'); return; } }
+  SYNC.busy=true; SYNC.dirty=false;
+  try{ await api('saveMyFormulas', syncItems()); setSyncStatus(SYNC.dirty?'pending':'saved'); }
+  catch(e){ SYNC.dirty=true; setSyncStatus('error'); }
+  finally{ SYNC.busy=false; if(SYNC.dirty && !SYNC.timer) SYNC.timer=setTimeout(syncNow, 1500); }
+}
+async function loadFromServer(){
+  if(!can('calc')) return;
+  const mine = S.me.email;
+  try{
+    const list = await api('loadMyFormulas');
+    if(!S.me || S.me.email!==mine) return;                 /* เปลี่ยนผู้ใช้ระหว่างโหลด */
+    const server = list.map(r=>{ try{ const p=JSON.parse(r.data); return p && Array.isArray(p.lines) ? Object.assign(p,{id:r.id}) : null; }catch(e){ return null; } }).filter(Boolean);
+    const ids = new Set(server.map(p=>p.id));
+    const localOnly = state.products.filter(p=>!p.sample && !ids.has(p.id));
+    if(server.length || localOnly.length){
+      state.products = server.concat(localOnly);
+      if(!state.products.find(p=>p.id===state.activeId)) state.activeId = state.products[0].id;
+      store.set('ss-cost-state:'+mine, state);
+    }
+    SYNC.loaded = true;
+    if(!S.admin) renderAll();
+    if(localOnly.length) scheduleSync(); else setSyncStatus(server.length?'saved':'offline');
+  }catch(e){ SYNC.loaded=false; }
+}
+window.addEventListener('beforeunload', e=>{ if(SYNC.dirty || SYNC.busy){ e.preventDefault(); e.returnValue=''; } });
+
 /* --- app shell --- */
 function enterApp(){
   S.inApp=true; S.gate='app'; $('#gate').hidden=true; $('#app').hidden=false;
+  if(S.stateOwner!==S.me.email){                          /* ผู้ใช้คนใหม่ในหน้าเดียวกัน: ห้ามพกสูตรของคนก่อนหน้า */
+    state={products:[], activeId:null, threshold:30}; S.stateOwner=S.me.email;
+    SYNC.loaded=false; SYNC.dirty=false; clearTimeout(SYNC.timer); SYNC.timer=null; setSyncStatus('offline');
+  }
   const s=store.get('ss-cost-state:'+S.me.email);
   if(s && Array.isArray(s.products) && s.products.length) state=Object.assign({threshold:30}, s);
   else if(!state.products.length){ state.products=sampleProducts(); state.activeId=state.products[0].id; }
   showView(S.admin && can('manageUsers') ? 'admin' : 'calc');
+  if(can('calc') && !SYNC.loaded) loadFromServer();
 }
 function renderUserBar(){
   $('#userbar').innerHTML = `${ava(S.me.email)}<span id="ubName"></span><span class="rolepill" id="ubRole"></span>
@@ -1117,13 +1167,70 @@ function dirPeople(){
   return [...map.values()];
 }
 function personStatus(p){ return p.owner ? 'owner' : p.user ? 'member' : (S.access.autoJoin && S.roles[S.access.defaultRole]) ? 'auto' : p.requested ? 'req' : 'none'; }
-function tabLabels(){ const d=S.adm; return {dir:`รายชื่อองค์กร (${dirPeople().length})`, users:`ผู้ใช้ (${d.users.length})`, roles:`บทบาทและสิทธิ์ (${S.order.filter(id=>S.roles[id]).length})`}; }
+/* เฉพาะเจ้าของระบบและบทบาท admin ดูสูตรของทุกคนได้ (เซิร์ฟเวอร์ตรวจซ้ำทุกครั้ง) */
+function isAdminRole(){ return !!(S.me && (S.me.isOwner || S.me.role==='admin')); }
+let ADM_FORMS=null, formQ='', formOwner='';
+function tabLabels(){
+  const d=S.adm;
+  const L={dir:`รายชื่อองค์กร (${dirPeople().length})`, users:`ผู้ใช้ (${d.users.length})`, roles:`บทบาทและสิทธิ์ (${S.order.filter(id=>S.roles[id]).length})`};
+  if(isAdminRole()) L.forms = 'สูตรของทุกคน' + (ADM_FORMS ? ` (${ADM_FORMS.length})` : '');
+  return L;
+}
+function refreshTabLabels(){ const L=tabLabels(); document.querySelectorAll('#adminView .atabs [data-tab]').forEach(b=>{ if(L[b.dataset.tab]) b.textContent=L[b.dataset.tab]; }); }
+async function loadAdminForms(force){
+  if(ADM_FORMS && !force) return;
+  const list = await api('adminFormulas');
+  ADM_FORMS = list.map(r=>{
+    let p=null; try{ p=JSON.parse(r.data); }catch(e){}
+    if(!p || !Array.isArray(p.lines)) p={lines:[], unit:'pct'};
+    p.name=r.name; return {id:r.id, owner:r.owner, updatedAt:r.updatedAt, p};
+  });
+}
+function renderFormsTab(){
+  $('#admBody').innerHTML = `<div class="note-box" style="margin-bottom:14px">แสดงสูตรที่ผู้ใช้ทุกคนบันทึกไว้ (อ่านอย่างเดียว) เฉพาะเจ้าของระบบและบทบาทผู้ดูแลระบบเห็นหน้านี้ · การเปิดดูทุกครั้งบันทึกในชีต Log · ราคาที่ใช้คำนวณเป็นฐานราคาปัจจุบัน ไม่ใช่ราคา ณ วันที่ผู้ใช้บันทึก</div>
+    <div class="search"><input id="formQ" type="search" autocomplete="off" placeholder="ค้นหาชื่อสูตรหรืออีเมลเจ้าของ…" value="${esc(formQ)}">
+      <select id="formOwner" aria-label="กรองเจ้าของสูตร"><option value="">ทุกคน</option></select>
+      <button class="btn small" type="button" id="formRefresh">รีเฟรช</button></div>
+    <div id="formsBody"><div class="empty">กำลังโหลดสูตรของทุกคน…</div></div><div id="formDetail"></div>`;
+  loadAdminForms().then(()=>{ if(adminTab!=='forms') return; refreshTabLabels(); drawForms(); })
+    .catch(e=>{ if($('#formsBody')) $('#formsBody').innerHTML=`<div class="msg bad">${esc(errText(e))}</div>`; });
+}
+function drawForms(){
+  const body=$('#formsBody'); if(!body || !ADM_FORMS) return;
+  const owners=[...new Set(ADM_FORMS.map(f=>f.owner))].sort();
+  const sel=$('#formOwner'); sel.innerHTML='<option value="">ทุกคน ('+owners.length+')</option>'+owners.map(o=>`<option value="${esc(o)}" ${o===formOwner?'selected':''}>${esc(o)}</option>`).join('');
+  const q=formQ.trim().toLowerCase();
+  const rows=ADM_FORMS.filter(f=>(!formOwner || f.owner===formOwner) && (!q || f.p.name.toLowerCase().includes(q) || f.owner.includes(q)))
+    .sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt)));
+  body.innerHTML = `<div class="tablebox"><table><thead><tr><th>เจ้าของ</th><th>ชื่อสูตร</th><th class="num">รายการ</th><th class="num">ต้นทุน RM บาท/กก.</th><th>อัปเดตล่าสุด</th><th></th></tr></thead><tbody>
+    ${rows.map(f=>{ let c=null; try{ c=compute(f.p); }catch(e){}
+      return `<tr><td><div class="person">${ava(f.owner)}<div><span>${esc(f.owner)}</span></div></div></td><td>${esc(f.p.name)}</td><td class="num">${f.p.lines.length}</td>
+        <td class="num">${c?(c.complete?'':'≥ ')+fmt(c.rm,2):'–'}</td><td class="muted" style="white-space:nowrap">${fmtSeen(f.updatedAt)}</td>
+        <td><button class="btn small" type="button" data-formopen="${esc(f.id)}" data-formowner="${esc(f.owner)}">เปิดดู</button></td></tr>`; }).join('') || '<tr><td colspan="6" class="empty">ยังไม่มีสูตรที่ผู้ใช้บันทึกไว้</td></tr>'}
+    </tbody></table></div><div class="muted" style="font-size:12.5px;margin-top:8px">แสดง ${rows.length} จาก ${ADM_FORMS.length} สูตร · ${owners.length} ผู้ใช้</div>`;
+}
+function openForm(id, owner){
+  const f=(ADM_FORMS||[]).find(x=>x.id===id && x.owner===owner); const box=$('#formDetail'); if(!f||!box) return;
+  const p=f.p, c=compute(p);
+  box.innerHTML = `<div class="card" style="margin-top:16px">
+    <div class="row" style="justify-content:space-between;align-items:flex-start">
+      <div><h3>สูตรของ ${esc(f.owner)}</h3><div style="font-family:var(--f-display);font-size:26px;line-height:1.2;margin-top:4px">${esc(p.name)}</div>
+        <div class="muted" style="font-size:13px">อัปเดต ${fmtSeen(f.updatedAt)} · หน่วย ${p.unit==='g'?'กรัม':'%'} · batch ${fmtP(c.batchKg)} กก. · เผื่อสูญเสีย ${fmtP(c.loss*100)}%</div></div>
+      <div class="row"><button class="btn small" type="button" id="formExport">ดาวน์โหลด Excel</button><button class="btn small" type="button" id="formClose">ปิด</button></div></div>
+    <div class="tablebox" style="margin-top:12px"><table><thead><tr><th>#</th><th>รหัส RM</th><th>ชื่อวัตถุดิบ</th><th class="num">${p.unit==='g'?'กรัม':'%'}</th><th class="num">% สูตร</th><th class="num">บาท/กรัม</th><th class="num">บาท/กก.</th><th>สถานะ</th></tr></thead><tbody>
+    ${c.rows.map((r,k)=>`<tr><td class="muted">${k+1}</td><td class="mono">${esc(r.e?r.e.code:normCode(r.ln.code))}</td><td>${esc(r.e?r.e.name:(r.ln.nameIn||'—'))}</td>
+      <td class="num">${fmtP(r.amt)}</td><td class="num">${fmt(r.pct,2)}</td><td class="num">${r.price!=null?fmtP(r.price):'–'}</td><td class="num">${r.costKg!=null?fmt(r.costKg,2):'–'}</td><td>${chip(r.status)}</td></tr>`).join('')}
+    </tbody><tfoot><tr><td></td><td colspan="2">รวม ${c.rows.length} รายการ</td><td class="num">${fmtP(c.W)}</td><td class="num">${c.W>0?'100.00':'–'}</td><td></td><td class="num">${c.complete?'':'≥ '}${fmt(c.rm,2)}</td><td></td></tr></tfoot></table></div>
+    <dl class="kv"><dt>ต้นทุนรวมต่อ กก. (รวมสูญเสีย + ค่าแรง/โสหุ้ย)</dt><dd>${c.complete?'':'≥ '}${fmt(c.total,2)} บาท</dd><dt>ต้นทุนต่อ batch</dt><dd>${fmt(c.batchCost,2)} บาท</dd>${c.missing?`<dt>ยังไม่มีราคา</dt><dd>${c.missing} รายการ</dd>`:''}</dl></div>`;
+  box.dataset.id=id; box.dataset.owner=owner; box.scrollIntoView({behavior:'smooth', block:'start'});
+}
 function renderAdmin(){
   if(!S.adm) return;
+  if(adminTab==='forms' && !isAdminRole()) adminTab='dir';
   $('#adminView').innerHTML = `<div class="bh"><h2>จัดการผู้ใช้และบทบาท</h2><span class="hint">ผู้ใช้เข้าสู่ระบบด้วยบัญชี Google ของบริษัท · ทุกการเปลี่ยนแปลงบันทึกในชีต Log</span></div>
     <div class="atabs">${Object.entries(tabLabels()).map(([k,l])=>`<button type="button" class="ptab ${adminTab===k?'on':''}" data-tab="${k}">${esc(l)}</button>`).join('')}</div>
     <div id="admBody"></div>`;
-  adminTab==='dir' ? renderDirTab() : adminTab==='users' ? renderUsersTab() : renderRolesTab();
+  adminTab==='dir' ? renderDirTab() : adminTab==='users' ? renderUsersTab() : adminTab==='forms' ? renderFormsTab() : renderRolesTab();
 }
 function requestsBox(){
   const rq=S.adm.requests.filter(r=>!S.adm.users.some(u=>u.email===r.email));
@@ -1239,10 +1346,29 @@ adm.addEventListener('click', e=>{
   const rr=e.target.closest('tr[data-rid]');
   if(act==='delrole' && rr){ if(!twoStep(e.target,'ยืนยันลบ?')) return; return admCall('deleteRole',[rr.dataset.rid],'ลบบทบาทแล้ว', e.target); }
 });
-adm.addEventListener('input', e=>{ if(e.target.id==='dirQ'){ dirQ=e.target.value; renderDirRows(); } });
+adm.addEventListener('input', e=>{
+  if(e.target.id==='dirQ'){ dirQ=e.target.value; renderDirRows(); }
+  if(e.target.id==='formQ'){ formQ=e.target.value; drawForms(); }
+});
+adm.addEventListener('click', async e=>{
+  const t=e.target;
+  const fo=t.closest('[data-formopen]'); if(fo){ openForm(fo.dataset.formopen, fo.dataset.formowner); return; }
+  if(t.id==='formClose'){ $('#formDetail').innerHTML=''; return; }
+  if(t.id==='formExport'){
+    const box=$('#formDetail'), f=(ADM_FORMS||[]).find(x=>x.id===box.dataset.id && x.owner===box.dataset.owner);
+    if(f) exportXlsx([Object.assign({}, f.p, {name: f.p.name+' – '+shortName(f.owner)})]);
+    return;
+  }
+  if(t.id==='formRefresh'){
+    t.disabled=true;
+    try{ await loadAdminForms(true); refreshTabLabels(); drawForms(); $('#formDetail').innerHTML=''; toast('โหลดสูตรล่าสุดแล้ว'); }
+    catch(err){ toast(errText(err)); } finally{ t.disabled=false; }
+  }
+});
 adm.addEventListener('change', e=>{
   const t=e.target;
   if(t.id==='dirF'){ renderDirRows(); return; }
+  if(t.id==='formOwner'){ formOwner=t.value; drawForms(); return; }
   if(t.id==='accAuto' || t.id==='accRole'){ const on=$('#accAuto').checked, r=$('#accRole').value;
     return admCall('saveAccess',[on, r], on?`เปิดเข้าใช้อัตโนมัติแล้ว · บทบาทเริ่มต้น "${S.roles[r].name}"`:'ปิดเข้าใช้อัตโนมัติแล้ว'); }
   const row=t.closest('tr[data-email]');

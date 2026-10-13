@@ -15,7 +15,8 @@ const HEAD = {
   Requests: ['email', 'at'],
   Visitors: ['email', 'firstSeen', 'lastSeen'],
   Log:      ['at', 'email', 'action', 'detail'],
-  Formulas: ['id', 'owner', 'name', 'updatedAt', 'data']
+  Formulas: ['id', 'owner', 'name', 'updatedAt', 'data'],
+  Pricing:  ['key', 'owner', 'formulaId', 'sell', 'updatedAt', 'updatedBy']
 };
 const PERM_KEYS = ['calc', 'export', 'viewDb', 'editPrices', 'manageUsers'];
 const DEFAULT_ROLES = [
@@ -44,7 +45,8 @@ function doPost(e) {
   const api = {bootstrap: bootstrap, requestAccess: requestAccess, savePrices: savePrices, resetPrices: resetPrices,
     saveExport: saveExport, adminData: adminData, setUser: setUser, removeUser: removeUser, declineRequest: declineRequest,
     saveAccess: saveAccess, createRole: createRole, updateRole: updateRole, deleteRole: deleteRole,
-    loadMyFormulas: loadMyFormulas, saveMyFormulas: saveMyFormulas, adminFormulas: adminFormulas};
+    loadMyFormulas: loadMyFormulas, saveMyFormulas: saveMyFormulas, adminFormulas: adminFormulas,
+    loadPricing: loadPricing, savePricing: savePricing};
   let out;
   try {
     const req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
@@ -120,7 +122,7 @@ function ss_() {
 function sh_(n) {
   const ss = ss_();
   let s = ss.getSheetByName(n);
-  if (!s && HEAD[n] && n === 'Formulas') {   // แท็บที่เพิ่มภายหลัง สร้างให้เองเมื่อยังไม่มี
+  if (!s && HEAD[n] && (n === 'Formulas' || n === 'Pricing')) {   // แท็บที่เพิ่มภายหลัง สร้างให้เองเมื่อยังไม่มี
     s = ss.insertSheet(n);
     s.getRange(1, 1, 1, HEAD[n].length).setValues([HEAD[n]]).setFontWeight('bold');
     s.setFrozenRows(1);
@@ -472,6 +474,53 @@ function adminFormulas() {
   const list = rows_('Formulas').map(formulaOut_);
   log_(m.email, 'adminFormulas', list.length + ' สูตร');
   return list;
+}
+
+/* ===== ทำราคาขาย: เฉพาะเจ้าของระบบและบทบาทผู้ดูแลระบบ (admin) =====
+   ราคาขายเป็นของแต่ละสูตร (key = อีเมลเจ้าของ|รหัสสูตร) เก็บในแท็บ Pricing · เกณฑ์ต้นทุน % เก็บใน Settings (costThreshold) */
+function loadPricing() {
+  const m = me_();
+  if (!isAdmin_(m)) throw new Error('FORBIDDEN');
+  const t = Number(getSetting_('costThreshold'));
+  return {
+    threshold: t > 0 && t <= 100 ? t : 30,
+    items: rows_('Pricing').map(function (r) {
+      return {key: String(r.key), owner: String(r.owner).toLowerCase(), formulaId: String(r.formulaId), sell: Number(r.sell) || 0,
+        updatedAt: iso_(r.updatedAt), updatedBy: String(r.updatedBy)};
+    })
+  };
+}
+function savePricing(items, threshold) {
+  return withLock_(function () {
+    const m = me_();
+    if (!isAdmin_(m)) throw new Error('FORBIDDEN');
+    if (!Array.isArray(items) || items.length > 500) throw new Error('บันทึกได้ครั้งละไม่เกิน 500 สูตร');
+    if (threshold !== undefined && threshold !== null) {
+      const t = Number(threshold);
+      if (!(t > 0 && t <= 100)) throw new Error('เกณฑ์ต้นทุนต้องอยู่ระหว่าง 1–100');
+      setSetting_('costThreshold', t);
+    }
+    const sheet = sh_('Pricing'), rows = {};
+    rows_('Pricing').forEach(function (r) { rows[String(r.key)] = r; });
+    const now = new Date();
+    let changed = 0;
+    items.forEach(function (it) {
+      const owner = normEmail_(it && it.owner), id = String((it && it.formulaId) || '');
+      if (!/^[A-Za-z0-9_-]{3,40}$/.test(id)) throw new Error('รหัสสูตรไม่ถูกต้อง');
+      const sell = Number(it.sell);
+      if (!(sell >= 0) || sell > 1e9) throw new Error('ราคาขายไม่ถูกต้อง');
+      const key = owner + '|' + id, cur = rows[key];
+      if (cur) {
+        if (Number(cur.sell) === sell) return;
+        sheet.getRange(cur._row, 1, 1, 6).setValues([[key, owner, id, sell, now, m.email]]);
+      } else {
+        sheet.appendRow([key, owner, id, sell, now, m.email]);
+      }
+      changed++;
+    });
+    log_(m.email, 'savePricing', changed + ' สูตร' + (threshold != null ? ' · เกณฑ์ ' + threshold + '%' : ''));
+    return {changed: changed, at: now.toISOString()};
+  });
 }
 
 /* ฐานราคาเริ่มต้น (RM_RAW) อยู่ในไฟล์ Prices.gs แยกจากไฟล์นี้ — ห้ามอัปโหลด Prices.gs ขึ้น GitHub */

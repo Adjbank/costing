@@ -498,6 +498,31 @@ const NAME_RE=/ชื่อ|name|รายละเอียด|description|ว�
 const PROD_RE=/สินค้า|product|ชื่อสูตร|formula|sku|ชื่อกลิ่น|fragrance name|เลขที่สูตร/i;
 const TOTAL_RE=/^(รวม|total|sum|ผลรวม)/i;
 function cellStr(v){ return v==null ? '' : String(v).trim(); }
+/* ข้อมูลหัวฟอร์ม (แม่บทต้นแบบ): ชื่อลูกค้า · ชื่อแบรนด์ · รหัสตัวอย่าง · ชื่อตัวอย่าง — ป้ายอยู่ซ้าย ค่าอยู่ช่องขวาถัดไปในแถวเดียวกัน */
+const META_DEFS=[
+  ['customer',   'ชื่อลูกค้า',          /ชื่อกิจการ|customer|ชื่อลูกค้า|^ลูกค้า/i],
+  ['brand',      'ชื่อแบรนด์',          /ชื่อแบรนด์|แบรนด์|brand/i],
+  ['sampleCode', 'รหัสตัวอย่าง',        /รหัสตัวอย่าง|sample\s*code/i],
+  ['sampleName', 'ชื่อตัวอย่าง',        /ชื่อตัวอย่าง|sample\s*name/i]];
+const LABEL_TAIL=/\([A-Za-z][A-Za-z0-9 \/.&-]*\)\s*$/;
+function looksLabel(s){ return LABEL_TAIL.test(s) || META_DEFS.some(d=>d[2].test(s)); }
+function extractMeta(rows, limit){
+  const meta={};
+  for(let i=0;i<Math.min(limit,rows.length);i++){
+    const r=rows[i]||[];
+    for(let j=0;j<r.length;j++){
+      const s=cellStr(r[j]); if(!s || s.length>80) continue;
+      const d=META_DEFS.find(x=>x[2].test(s)); if(!d || meta[d[0]]) continue;
+      let v=''; const m=s.match(/[:：]\s*(.+)$/);
+      if(m && !LABEL_TAIL.test(m[1])) v=m[1].trim();
+      if(!v){ for(let k=j+1;k<r.length;k++){ const t=cellStr(r[k]); if(!t) continue; if(!looksLabel(t)) v=t; break; } }
+      if(v) meta[d[0]]=v.slice(0,120);
+    }
+  }
+  return meta;
+}
+function metaOf(p){ const m=(p&&p.meta)||{}; return {customer:m.customer||'', brand:m.brand||'', sampleCode:m.sampleCode||'', sampleName:m.sampleName||''}; }
+function hasMeta(p){ const m=metaOf(p); return !!(m.customer||m.brand||m.sampleCode||m.sampleName); }
 function rowsToProducts(rows, defaultName){
   rows = rows.filter(r=>Array.isArray(r));
   const ncol = Math.max(0,...rows.map(r=>r.length));
@@ -542,14 +567,18 @@ function rowsToProducts(rows, defaultName){
     if(!groups.has(curProd)) groups.set(curProd, []);
     groups.get(curProd).push({code: hasCode ? normCode(code) : '', nameIn: name, amt: isFinite(amt)?amt:0});
   }
+  const meta = extractMeta(rows, hdrIdx>=0 ? hdrIdx : first);
   const products=[];
-  for(const [name, lines] of groups){
+  for(const [gname, lines] of groups){
     if(!lines.length) continue;
+    const name = (gname===defaultName && meta.sampleName) ? meta.sampleName : gname;   // ไม่มีคอลัมน์ "สินค้า" → ใช้ชื่อตัวอย่างเป็นชื่อสูตร
     const sum = lines.reduce((s,l)=>s+(l.amt||0),0);
     let u = unit;
     if(Math.abs(sum-1)<=0.05 && (u==='pct' || u==null)){ lines.forEach(l=>l.amt=+(l.amt*100).toFixed(6)); u='pct'; }
     else if(u==null) u = Math.abs(sum-100)<=5 ? 'pct' : 'g';
-    products.push({id:newId(), name, unit:u, src:'', ...defaults(), lines});
+    const p={id:newId(), name, unit:u, src:'', ...defaults(), lines};
+    if(Object.keys(meta).length) p.meta=Object.assign({}, meta);
+    products.push(p);
   }
   return {products, error: products.length? null : 'ไม่พบรายการวัตถุดิบในไฟล์'};
 }
@@ -595,10 +624,23 @@ function addProducts(added, errs){
     save(); renderAll();
     const items = added.reduce((s,p)=>s+p.lines.length,0);
     showMsg(errs.length?'warn':'ok', `นำเข้า ${added.length} สินค้า (${items} รายการวัตถุดิบ) แล้ว`+(errs.length?' · '+errs.join(' · '):''));
+    showImportInfo(added);
     document.getElementById('s2').scrollIntoView({behavior:'smooth',block:'start'});
   } else showMsg('bad', errs.join(' · ') || 'ไม่พบข้อมูลที่ใช้ได้');
 }
 function showMsg(kind, text){ $('#uploadMsg').innerHTML = `<div class="msg ${kind}">${esc(text)}</div>`; }
+/* แสดงข้อมูลหัวฟอร์มที่อ่านได้จากไฟล์ หลังวางไฟล์ */
+function showImportInfo(list){
+  const withMeta=list.filter(hasMeta);
+  const rows = withMeta.length ? withMeta : [];
+  const noMeta = list.length-withMeta.length;
+  const cell=v=>v ? esc(v) : '<span class="muted">–</span>';
+  $('#uploadMsg').insertAdjacentHTML('beforeend', rows.length
+    ? `<div class="tablebox" style="margin-top:10px"><table><thead><tr><th>สูตร</th><th>ชื่อลูกค้า</th><th>ชื่อแบรนด์</th><th>รหัสตัวอย่าง (Sample Code)</th><th>ชื่อตัวอย่าง (Sample Name)</th></tr></thead><tbody>
+        ${rows.map(p=>{ const m=metaOf(p); return `<tr><td>${esc(p.name)}</td><td>${cell(m.customer)}</td><td>${cell(m.brand)}</td><td class="mono">${cell(m.sampleCode)}</td><td>${cell(m.sampleName)}</td></tr>`; }).join('')}
+      </tbody></table></div>${noMeta?`<div class="muted" style="font-size:12.5px;margin-top:6px">อีก ${noMeta} สูตรไม่พบข้อมูลหัวฟอร์ม กรอกเองได้ในขั้นตอนที่ 2</div>`:''}`
+    : `<div class="muted" style="font-size:12.5px;margin-top:8px">ไม่พบข้อมูลลูกค้า/แบรนด์/รหัสตัวอย่าง/ชื่อตัวอย่างในไฟล์ · กรอกเองได้ในขั้นตอนที่ 2</div>`);
+}
 
 /* ===== price DB file import ===== */
 async function importDbFile(file){
@@ -665,7 +707,7 @@ function sheetName(s, used){ let n=String(s).replace(/[\[\]:*?\/\\]/g,' ').slice
 function productAoA(p){
   const c=compute(p);
   const aoa=[
-    ['สินค้า', p.name], ['ฐานราคา', DB.source.file+' · อัปเดต '+DB.source.updated], ['วันที่คำนวณ', new Date().toLocaleString('th-TH')], [],
+    ['สินค้า', p.name], ...(hasMeta(p) ? META_DEFS.map(d=>[d[1], metaOf(p)[d[0]]]) : []), ['ฐานราคา', DB.source.file+' · อัปเดต '+DB.source.updated], ['วันที่คำนวณ', new Date().toLocaleString('th-TH')], [],
     ['ลำดับ','รหัส RM','ชื่อวัตถุดิบ','หมวด', p.unit==='pct'?'% ในไฟล์':'กรัม ในไฟล์','% ในสูตร (ปรับรวม 100)','ราคา บาท/กรัม','ต้นทุน บาท/กก. หัวน้ำหอม','สัดส่วนต้นทุน %',`กรัมที่ใช้ต่อ batch ${fmt(c.batchKg,2)} กก.`,'สถานะ','หมายเหตุ']
   ];
   c.rows.forEach((r,k)=>aoa.push([k+1, r.e?r.e.code:normCode(r.ln.code), r.e?r.e.name:r.ln.nameIn, r.e?catOf(r.e.code):'', r.amt, +r.pct.toFixed(4), r.price, r.costKg!=null?+r.costKg.toFixed(4):null, r.costKg!=null?+(r.share*100).toFixed(2):null, +r.gBatch.toFixed(2), STATUS[r.status].t, r.e?r.e.note:'']));
@@ -681,11 +723,11 @@ function productAoA(p){
 function exportXlsx(list){
   if(typeof XLSX==='undefined'){ toast('โหลดตัวเขียน Excel ไม่สำเร็จ'); return; }
   const wb=XLSX.utils.book_new(), used=new Set(['สรุป']);
-  const sum=[['สินค้า','จำนวนรายการ','ต้นทุน RM บาท/กก.','ต้นทุนรวม บาท/กก.','ต้นทุนรวม บาท/กรัม','batch กก.','ต้นทุนต่อ batch','สถานะราคา']];
+  const sum=[['สินค้า','จำนวนรายการ','ต้นทุน RM บาท/กก.','ต้นทุนรวม บาท/กก.','ต้นทุนรวม บาท/กรัม','batch กก.','ต้นทุนต่อ batch','สถานะราคา','ชื่อลูกค้า','ชื่อแบรนด์','รหัสตัวอย่าง','ชื่อตัวอย่าง']];
   const sheets=[];
   for(const p of list){
     const {aoa,c}=productAoA(p);
-    sum.push([p.name, p.lines.length, +c.rm.toFixed(2), +c.total.toFixed(2), +c.perG.toFixed(4), c.batchKg, +c.batchCost.toFixed(2), c.complete?'ครบ':`ขาด ${c.missing} รายการ`]);
+    sum.push([p.name, p.lines.length, +c.rm.toFixed(2), +c.total.toFixed(2), +c.perG.toFixed(4), c.batchKg, +c.batchCost.toFixed(2), c.complete?'ครบ':`ขาด ${c.missing} รายการ`, metaOf(p).customer, metaOf(p).brand, metaOf(p).sampleCode, metaOf(p).sampleName]);
     const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:24},{wch:18},{wch:44},{wch:22},{wch:11},{wch:12},{wch:12},{wch:16},{wch:12},{wch:18},{wch:20},{wch:40}];
     sheets.push([sheetName(p.name,used), ws]);
   }
@@ -741,6 +783,9 @@ function renderEditor(){
       <div style="flex:1 1 260px;min-width:0"><label class="muted" for="pname" style="font-size:12px">ชื่อสินค้า / รหัสสูตร ${p.sample?'<span class="sample-tag">ตัวอย่าง</span>':''}</label>
         <input class="pname" id="pname" value="${esc(p.name)}"></div>
       <span class="muted" style="font-size:12.5px">${p.src?'ที่มา: '+esc(p.src):''}</span>
+    </div>
+    <div class="settings" id="metaBox" aria-label="ข้อมูลตัวอย่าง">
+      ${META_DEFS.map(([k,l])=>`<div class="field"><label for="meta_${k}">${l}${k==='sampleCode'?' (Sample Code)':k==='sampleName'?' (Sample Name)':''}</label><input id="meta_${k}" data-meta="${k}" value="${esc(metaOf(p)[k])}" maxlength="120" placeholder="ไม่บังคับ"></div>`).join('')}
     </div>
     <div class="settings">
       <div class="field"><label for="unit">หน่วยในสูตร</label><select id="unit"><option value="pct" ${p.unit==='pct'?'selected':''}>% (รวม 100)</option><option value="g" ${p.unit==='g'?'selected':''}>กรัม (น้ำหนักจริง)</option></select></div>
@@ -816,9 +861,11 @@ function renderSummary(){
 function renderOverview(){
   const t=$('#overview');
   if(!state.products.length){ t.innerHTML='<tbody><tr><td class="empty">ยังไม่มีสินค้า</td></tr></tbody>'; return; }
-  t.innerHTML = `<thead><tr><th>สินค้า</th><th class="num">รายการ</th><th class="num">ต้นทุน RM บาท/กก.</th><th class="num">ต้นทุนรวม บาท/กก.</th><th>ราคาวัตถุดิบ</th></tr></thead>
-  <tbody>${state.products.map(p=>{ const c=compute(p), h=health(c); return `<tr>
+  const showMeta=state.products.some(hasMeta);
+  t.innerHTML = `<thead><tr><th>สินค้า</th>${showMeta?'<th>ลูกค้า</th><th>แบรนด์</th><th>รหัสตัวอย่าง</th>':''}<th class="num">รายการ</th><th class="num">ต้นทุน RM บาท/กก.</th><th class="num">ต้นทุนรวม บาท/กก.</th><th>ราคาวัตถุดิบ</th></tr></thead>
+  <tbody>${state.products.map(p=>{ const c=compute(p), h=health(c), m=metaOf(p); return `<tr>
     <td><button type="button" class="btn link" data-open="${p.id}" style="text-align:left;color:var(--ink)">${esc(p.name)}</button>${p.sample?'<span class="sample-tag">ตัวอย่าง</span>':''}</td>
+    ${showMeta?`<td>${esc(m.customer)||'<span class="muted">–</span>'}</td><td>${esc(m.brand)||'<span class="muted">–</span>'}</td><td class="mono">${esc(m.sampleCode)||'<span class="muted">–</span>'}</td>`:''}
     <td class="num">${p.lines.length}</td><td class="num">${c.complete?'':'≥ '}${fmt(c.rm,2)}</td><td class="num"><b>${c.complete?'':'≥ '}${fmt(c.total,2)}</b></td>
     <td>${c.complete && h==='ok' ? '<span class="chip ok">ครบ</span>' : (c.complete?'<span class="chip warn">ครบ · มีเตือน</span>':`<span class="chip warn">ขาด ${c.missing} รายการ</span>`)}</td></tr>`; }).join('')}</tbody>`;
 }
@@ -872,6 +919,7 @@ $('#ptabs').addEventListener('click',e=>{
 $('#editor').addEventListener('change',e=>{
   const p=active(); if(!p) return; const t=e.target;
   if(t.id==='pname'){ p.name=t.value.trim()||p.name; p.sample=false; }
+  else if(t.dataset.meta){ p.meta=Object.assign({}, p.meta, {[t.dataset.meta]: t.value.trim()}); }
   else if(['unit','batchKg','lossPct','overhead'].includes(t.id)){ p[t.id]= t.id==='unit' ? t.value : t.value; }
   else if(t.dataset.f){ const ln=p.lines[+t.dataset.i]; if(!ln) return;
     if(t.dataset.f==='code'){ ln.code=normCode(t.value); ln.nameIn=''; }
@@ -1197,6 +1245,7 @@ function renderAllView(){
 function formsFiltered(){
   const q=formQ.trim().toLowerCase();
   return (ADM_FORMS||[]).filter(f=>(!formOwner || f.owner===formOwner) && (!q || f.p.name.toLowerCase().includes(q) || f.owner.includes(q)
+      || Object.values(metaOf(f.p)).some(v=>v.toLowerCase().includes(q))
       || f.p.lines.some(l=>String(l.code||'').toLowerCase().includes(q) || String(l.nameIn||'').toLowerCase().includes(q))))
     .sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt)));
 }
@@ -1215,25 +1264,25 @@ function drawForms(){
     + stat('ผู้ใช้ที่มีสูตร', new Set(rows.map(f=>f.owner)).size)
     + stat('ต้นทุน RM เฉลี่ย บาท/กก.', avg!=null?fmt(avg,2):'–')
     + stat('สูตรที่ราคาไม่ครบ', incomplete);
-  body.innerHTML = `<div class="tablebox"><table><thead><tr><th>เจ้าของ</th><th>ชื่อสูตร</th><th class="num">รายการ</th><th class="num">ต้นทุน RM บาท/กก.</th><th class="num">ต้นทุนรวม บาท/กก.</th><th>อัปเดตล่าสุด</th><th></th></tr></thead><tbody>
-    ${rows.map((f,i)=>{ const c=cs[i];
-      return `<tr><td><div class="person">${ava(f.owner)}<div><span>${esc(f.owner)}</span></div></div></td><td>${esc(f.p.name)}</td><td class="num">${f.p.lines.length}</td>
+  body.innerHTML = `<div class="tablebox"><table><thead><tr><th>เจ้าของ</th><th>ชื่อสูตร</th><th>ชื่อลูกค้า</th><th>ชื่อแบรนด์</th><th>รหัสตัวอย่าง</th><th class="num">รายการ</th><th class="num">ต้นทุน RM บาท/กก.</th><th class="num">ต้นทุนรวม บาท/กก.</th><th>อัปเดตล่าสุด</th><th></th></tr></thead><tbody>
+    ${rows.map((f,i)=>{ const c=cs[i], m=metaOf(f.p), dash='<span class="muted">–</span>';
+      return `<tr><td><div class="person">${ava(f.owner)}<div><span>${esc(f.owner)}</span></div></div></td><td>${esc(f.p.name)}</td><td>${esc(m.customer)||dash}</td><td>${esc(m.brand)||dash}</td><td class="mono">${esc(m.sampleCode)||dash}</td><td class="num">${f.p.lines.length}</td>
         <td class="num">${c?(c.complete?'':'≥ ')+fmt(c.rm,2):'–'}</td><td class="num">${c?(c.complete?'':'≥ ')+fmt(c.total,2):'–'}</td><td class="muted" style="white-space:nowrap">${fmtSeen(f.updatedAt)}</td>
-        <td><div class="adm-actions"><button class="btn small" type="button" data-formopen="${esc(f.id)}" data-formowner="${esc(f.owner)}">เปิดดู</button></div></td></tr>`; }).join('') || '<tr><td colspan="7" class="empty">ยังไม่มีสูตรที่ผู้ใช้บันทึกไว้ (สูตรจะปรากฏเมื่อผู้ใช้เปิดเว็บเวอร์ชันนี้และบันทึกหรือแก้สูตร)</td></tr>'}
+        <td><div class="adm-actions"><button class="btn small" type="button" data-formopen="${esc(f.id)}" data-formowner="${esc(f.owner)}">เปิดดู</button></div></td></tr>`; }).join('') || '<tr><td colspan="10" class="empty">ยังไม่มีสูตรที่ผู้ใช้บันทึกไว้ (สูตรจะปรากฏเมื่อผู้ใช้เปิดเว็บเวอร์ชันนี้และบันทึกหรือแก้สูตร)</td></tr>'}
     </tbody></table></div><div class="muted" style="font-size:12.5px;margin-top:8px">แสดง ${rows.length} จาก ${ADM_FORMS.length} สูตร · ${owners.length} ผู้ใช้</div>`;
 }
 function exportAllForms(){
   if(typeof XLSX==='undefined'){ toast('โหลดตัวเขียน Excel ไม่สำเร็จ'); return; }
   const list=formsFiltered(); if(!list.length){ toast('ไม่มีสูตรให้ดาวน์โหลด'); return; }
-  const sum=[['เจ้าของ','ชื่อสูตร','จำนวนรายการ','ต้นทุน RM บาท/กก.','ต้นทุนรวม บาท/กก.','ต้นทุนรวม บาท/กรัม','batch กก.','ต้นทุนต่อ batch','สถานะราคา','อัปเดตล่าสุด']];
+  const sum=[['เจ้าของ','ชื่อสูตร','จำนวนรายการ','ต้นทุน RM บาท/กก.','ต้นทุนรวม บาท/กก.','ต้นทุนรวม บาท/กรัม','batch กก.','ต้นทุนต่อ batch','สถานะราคา','อัปเดตล่าสุด','ชื่อลูกค้า','ชื่อแบรนด์','รหัสตัวอย่าง','ชื่อตัวอย่าง']];
   const det=[['เจ้าของ','ชื่อสูตร','#','รหัส RM','ชื่อวัตถุดิบ','ปริมาณ ('+'% หรือ กรัม'+')','% สูตร','บาท/กรัม','บาท/กก. ในสูตร','สถานะ']];
   for(const f of list){
     const c=safeCompute(f.p); if(!c) continue;
-    sum.push([f.owner, f.p.name, f.p.lines.length, +c.rm.toFixed(2), +c.total.toFixed(2), +c.perG.toFixed(4), c.batchKg, +c.batchCost.toFixed(2), c.complete?'ครบ':`ขาด ${c.missing} รายการ`, String(f.updatedAt||'')]);
+    sum.push([f.owner, f.p.name, f.p.lines.length, +c.rm.toFixed(2), +c.total.toFixed(2), +c.perG.toFixed(4), c.batchKg, +c.batchCost.toFixed(2), c.complete?'ครบ':`ขาด ${c.missing} รายการ`, String(f.updatedAt||''), metaOf(f.p).customer, metaOf(f.p).brand, metaOf(f.p).sampleCode, metaOf(f.p).sampleName]);
     c.rows.forEach((r,k)=>det.push([f.owner, f.p.name, k+1, r.e?r.e.code:normCode(r.ln.code), r.e?r.e.name:(r.ln.nameIn||''), r.amt, +r.pct.toFixed(4), r.price!=null?r.price:null, r.costKg!=null?+r.costKg.toFixed(2):null, STATUS[r.status].t]));
   }
   const wb=XLSX.utils.book_new();
-  const w1=XLSX.utils.aoa_to_sheet(sum); w1['!cols']=[{wch:30},{wch:34},{wch:10},{wch:16},{wch:16},{wch:14},{wch:9},{wch:14},{wch:14},{wch:14},{wch:16},{wch:22}];
+  const w1=XLSX.utils.aoa_to_sheet(sum); w1['!cols']=[{wch:30},{wch:34},{wch:10},{wch:16},{wch:16},{wch:14},{wch:9},{wch:14},{wch:14},{wch:14},{wch:16},{wch:22},{wch:30},{wch:20},{wch:18},{wch:30}];
   const w2=XLSX.utils.aoa_to_sheet(det); w2['!cols']=[{wch:30},{wch:34},{wch:5},{wch:22},{wch:44},{wch:14},{wch:10},{wch:11},{wch:14},{wch:16}];
   XLSX.utils.book_append_sheet(wb, w1, 'สรุปทั้งหมด'); XLSX.utils.book_append_sheet(wb, w2, 'รายการวัตถุดิบ');
   const d=new Date(), stamp=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
@@ -1246,6 +1295,7 @@ function openForm(id, owner){
   box.innerHTML = `<div class="card" style="margin-top:16px">
     <div class="row" style="justify-content:space-between;align-items:flex-start">
       <div><h3>สูตรของ ${esc(f.owner)}</h3><div style="font-family:var(--f-display);font-size:26px;line-height:1.2;margin-top:4px">${esc(p.name)}</div>
+        ${hasMeta(p)?`<dl class="kv" style="grid-template-columns:auto 1fr;justify-items:start;margin:8px 0">${META_DEFS.map(d=>`<dt>${d[1]}</dt><dd style="text-align:left">${esc(metaOf(p)[d[0]])||'–'}</dd>`).join('')}</dl>`:''}
         <div class="muted" style="font-size:13px">อัปเดต ${fmtSeen(f.updatedAt)} · หน่วย ${p.unit==='g'?'กรัม':'%'} · batch ${fmtP(c.batchKg)} กก. · เผื่อสูญเสีย ${fmtP(c.loss*100)}%</div></div>
       <div class="row"><button class="btn small" type="button" id="formExport">ดาวน์โหลด Excel</button><button class="btn small" type="button" id="formClose">ปิด</button></div></div>
     <div class="tablebox" style="margin-top:12px"><table><thead><tr><th>#</th><th>รหัส RM</th><th>ชื่อวัตถุดิบ</th><th class="num">${p.unit==='g'?'กรัม':'%'}</th><th class="num">% สูตร</th><th class="num">บาท/กรัม</th><th class="num">บาท/กก.</th><th>สถานะ</th></tr></thead><tbody>
@@ -1272,7 +1322,7 @@ function prcStatus(x){
 function setPrcSave(t){ const el=$('#prcSave'); if(el) el.textContent=t; }
 function prcFiltered(){
   const q=prcQ.trim().toLowerCase();
-  return (ADM_FORMS||[]).filter(f=>(!prcOwner || f.owner===prcOwner) && (!q || f.p.name.toLowerCase().includes(q) || f.owner.includes(q)))
+  return (ADM_FORMS||[]).filter(f=>(!prcOwner || f.owner===prcOwner) && (!q || f.p.name.toLowerCase().includes(q) || f.owner.includes(q) || Object.values(metaOf(f.p)).some(v=>v.toLowerCase().includes(q))))
     .sort((a,b)=>(a.p.name).localeCompare(b.p.name,'th'));
 }
 function renderPriceView(){
@@ -1312,7 +1362,7 @@ function drawPrice(){
   const rows=prcFiltered();
   body.innerHTML = `<div class="tablebox"><table><thead><tr><th>เจ้าของ</th><th>ชื่อสูตร</th><th class="num">ต้นทุนรวม บาท/กก.</th><th class="num">ราคาแนะนำ</th><th class="num">ราคาขาย บาท/กก.</th><th class="num">ต้นทุน/ราคาขาย</th><th class="num">กำไรขั้นต้น บาท/กก.</th><th>สถานะ</th></tr></thead><tbody>
     ${rows.map(f=>{ const x=prcCalc(f);
-      return `<tr data-fid="${esc(f.id)}" data-owner="${esc(f.owner)}"><td><div class="person">${ava(f.owner)}<div><span>${esc(f.owner)}</span></div></div></td><td>${esc(f.p.name)}</td>
+      return `<tr data-fid="${esc(f.id)}" data-owner="${esc(f.owner)}"><td><div class="person">${ava(f.owner)}<div><span>${esc(f.owner)}</span></div></div></td><td>${esc(f.p.name)}${hasMeta(f.p)?`<div class="muted" style="font-size:12px">${[metaOf(f.p).customer, metaOf(f.p).brand, metaOf(f.p).sampleCode].filter(Boolean).map(esc).join(' · ')}</div>`:''}</td>
         <td class="num">${x.c?(x.c.complete?'':'≥ ')+fmt(x.total,2):'–'}</td>
         <td class="num">${x.sug!=null?`${fmt(x.sug,0)} <button class="btn small" type="button" data-use="1" title="ใช้ราคาแนะนำ">ใช้</button>`:'–'}</td>
         <td class="num"><input class="prc-in" type="number" min="0" step="any" value="${x.sell>0?esc(x.sell):''}" placeholder="0" aria-label="ราคาขาย ${esc(f.p.name)}" style="width:110px;text-align:right;border:1px solid var(--line-strong);border-radius:7px;padding:5px 8px;background:var(--input-bg)"></td>
@@ -1347,11 +1397,11 @@ async function flushPrice(){
 function exportPrice(){
   if(typeof XLSX==='undefined'){ toast('โหลดตัวเขียน Excel ไม่สำเร็จ'); return; }
   const list=prcFiltered(); if(!list.length){ toast('ไม่มีสูตรให้ดาวน์โหลด'); return; }
-  const aoa=[['เจ้าของ','ชื่อสูตร','ต้นทุนรวม บาท/กก.','ต้นทุนรวม บาท/กรัม','เกณฑ์ต้นทุน %','ราคาแนะนำ บาท/กก.','ราคาขาย บาท/กก.','ต้นทุน/ราคาขาย %','กำไรขั้นต้น บาท/กก.','สถานะ','สถานะราคาวัตถุดิบ']];
+  const aoa=[['เจ้าของ','ชื่อสูตร','ต้นทุนรวม บาท/กก.','ต้นทุนรวม บาท/กรัม','เกณฑ์ต้นทุน %','ราคาแนะนำ บาท/กก.','ราคาขาย บาท/กก.','ต้นทุน/ราคาขาย %','กำไรขั้นต้น บาท/กก.','สถานะ','สถานะราคาวัตถุดิบ','ชื่อลูกค้า','ชื่อแบรนด์','รหัสตัวอย่าง','ชื่อตัวอย่าง']];
   for(const f of list){
     const x=prcCalc(f); if(!x.c) continue;
     aoa.push([f.owner, f.p.name, +x.total.toFixed(2), +x.c.perG.toFixed(4), PRC.threshold, x.sug, x.sell>0?x.sell:null, x.ratio!=null?+x.ratio.toFixed(2):null, x.profit!=null?+x.profit.toFixed(2):null,
-      !(x.sell>0)?'ยังไม่ตั้งราคา':(x.ratio<=PRC.threshold?'อยู่ในเกณฑ์':'เกินเกณฑ์'), x.c.complete?'ครบ':`ขาด ${x.c.missing} รายการ`]);
+      !(x.sell>0)?'ยังไม่ตั้งราคา':(x.ratio<=PRC.threshold?'อยู่ในเกณฑ์':'เกินเกณฑ์'), x.c.complete?'ครบ':`ขาด ${x.c.missing} รายการ`, metaOf(f.p).customer, metaOf(f.p).brand, metaOf(f.p).sampleCode, metaOf(f.p).sampleName]);
   }
   const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:30},{wch:34},{wch:16},{wch:16},{wch:12},{wch:16},{wch:16},{wch:14},{wch:16},{wch:14},{wch:18}];
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'ทำราคาขาย');

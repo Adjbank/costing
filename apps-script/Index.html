@@ -277,6 +277,7 @@ tfoot td{font-weight:700;border-top:1px solid var(--ink);background:var(--bg-sof
   <section id="adminView" hidden style="padding-block:24px 56px"></section>
   <section id="allView" hidden style="padding-block:24px 56px"></section>
   <section id="priceView" hidden style="padding-block:24px 56px"></section>
+  <section id="rmView" hidden style="padding-block:24px 56px"></section>
   <div id="calcView">
   <div class="steps" id="stepsBar" aria-label="ขั้นตอน">
     <span><b>1</b>ใส่ไฟล์สูตร</span><span><b>2</b>ตรวจรายการ &amp; แก้ราคาที่ขาด</span><span><b>3</b>สรุปต้นทุน &amp; ส่งออก Excel</span>
@@ -673,10 +674,11 @@ async function importDbFile(file){
 /* ฐานราคามาจากเซิร์ฟเวอร์ (ชีต Prices) เท่านั้น */
 function applyPriceData(d){
   if(d && Array.isArray(d.entries) && d.entries.length){
-    setDB(d.entries.map(x=>makeEntry(x.c, x.n, x.p==null ? (x.s==='recheck'?'R':x.s==='cancel'?'X':x.s==='rd'?'D':'') : x.p, x.o)),
+    setDB(d.entries.map(x=>{ const e=makeEntry(x.c, x.n, x.p==null ? (x.s==='recheck'?'R':x.s==='cancel'?'X':x.s==='rd'?'D':'') : x.p, x.o); e.at=x.u||''; e.by=x.b||''; return e; }),
       {file:(d.src&&d.src.file)||'Summary RM', updated:(d.src&&d.src.updated)||'', by:(d.src&&d.src.by)||null}, !!d.custom);
   } else setDB([], {file:'ยังไม่มีข้อมูลราคา', updated:'–'}, false);
   if(S.inApp && !S.admin){ renderDbCard(); renderDbFilters(); renderWork(); if(can('viewDb')) renderDbTable(); }
+  if(S.inApp && S.view==='rm' && typeof renderRmView==='function') renderRmView();
 }
 
 /* ===== downloads: ดาวน์โหลดตรง + สำรองบันทึกลง Google Drive ===== */
@@ -1136,6 +1138,7 @@ function renderUserBar(){
   $('#userbar').innerHTML = `${ava(S.me.email)}<span id="ubName"></span><span class="rolepill" id="ubRole"></span>
     ${isAdminRole()?`<button class="btn-ghost-dark" type="button" id="btnAll">${S.view==='all'?'กลับไปหน้าคำนวณ':'สูตรทั้งหมด'}</button>
     <button class="btn-ghost-dark" type="button" id="btnPrice">${S.view==='price'?'กลับไปหน้าคำนวณ':'ทำราคาขาย'}</button>`:''}
+    ${can('editPrices')?`<button class="btn-ghost-dark" type="button" id="btnRm">${S.view==='rm'?'กลับไปหน้าคำนวณ':'ฐานราคาวัตถุดิบ'}</button>`:''}
     ${can('manageUsers')?`<button class="btn-ghost-dark" type="button" id="btnAdmin">${S.view==='admin'?'กลับไปหน้าคำนวณ':'จัดการผู้ใช้และบทบาท'}</button>`:''}
     <button class="btn-ghost-dark" type="button" id="btnShare">แชร์ลิงก์</button>
     <button class="btn-ghost-dark" type="button" id="btnReload" title="โหลดสิทธิ์และฐานราคาล่าสุด">รีเฟรช</button>
@@ -1178,14 +1181,18 @@ $('#userbar').addEventListener('click', e=>{
   if(e.target.id==='btnAdmin') showView(S.view==='admin' ? 'calc' : 'admin');
   if(e.target.id==='btnAll') showView(S.view==='all' ? 'calc' : 'all');
   if(e.target.id==='btnPrice') showView(S.view==='price' ? 'calc' : 'price');
+  if(e.target.id==='btnRm') showView(S.view==='rm' ? 'calc' : 'rm');
 });
 async function showView(v){
   if(v==='admin' && !can('manageUsers')) v='calc';
   if((v==='all' || v==='price') && !isAdminRole()) v='calc';
+  if(v==='rm' && !can('editPrices')) v='calc';
   if(S.view==='price' && v!=='price') flushPrice();
+  if(S.view==='rm' && v!=='rm') flushRm();
   S.view=v; S.admin = v!=='calc';                 /* S.admin = ไม่ได้อยู่หน้าคำนวณ */
-  $('#adminView').hidden=v!=='admin'; $('#allView').hidden=v!=='all'; $('#priceView').hidden=v!=='price'; $('#calcView').hidden=v!=='calc';
+  $('#adminView').hidden=v!=='admin'; $('#allView').hidden=v!=='all'; $('#priceView').hidden=v!=='price'; $('#rmView').hidden=v!=='rm'; $('#calcView').hidden=v!=='calc';
   renderUserBar();
+  if(v==='rm'){ window.scrollTo(0,0); renderRmView(); return; }
   if(v==='all'){ window.scrollTo(0,0); renderAllView(); return; }
   if(v==='price'){ window.scrollTo(0,0); renderPriceView(); return; }
   if(v==='admin'){
@@ -1442,6 +1449,153 @@ prcv.addEventListener('click', async e=>{
   }
 });
 window.addEventListener('beforeunload', e=>{ if(Object.keys(prcDirty).length){ e.preventDefault(); e.returnValue=''; } });
+/* --- ฐานราคาวัตถุดิบ: แก้ราคาทีละรายการ (สิทธิ์ editPrices = เจ้าของระบบ แอดมิน จัดซื้อ) --- */
+let rmQ='', rmStatus='', rmCat='', rmPage=0, rmDirty={}, rmTimer=null;
+const RM_PAGE=50;
+function setRmSave(t){ const el=$('#rmSave'); if(el) el.textContent=t; }
+function rmFiltered(){
+  const q=rmQ.trim().toLowerCase();
+  return DB.entries.filter(e=>(!rmStatus||e.status===rmStatus) && (!rmCat||e.code.split('-')[2]===rmCat) && (!q || e.code.toLowerCase().includes(q) || e.name.toLowerCase().includes(q) || e.note.toLowerCase().includes(q)));
+}
+function renderRmView(){
+  const cats=[...new Set(DB.entries.map(e=>e.code.split('-')[2]))].filter(c=>CAT[c]).sort();
+  $('#rmView').innerHTML = `<div class="bh"><h2>ฐานราคาวัตถุดิบ</h2><span class="hint">เจ้าของระบบ แอดมิน และจัดซื้อแก้ราคาได้ · บันทึกอัตโนมัติ · ทีมเห็นราคาใหม่เมื่อเปิดระบบหรือกด "รีเฟรช" · ทุกการแก้ไขบันทึกในชีต Log</span></div>
+    <div id="rmStats" class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:16px"></div>
+    <div class="search"><input id="rmQ" type="search" autocomplete="off" placeholder="ค้นหารหัส ชื่อ หรือหมายเหตุ เช่น Hedione, RM-002-001" value="${esc(rmQ)}">
+      <select id="rmSt" aria-label="กรองสถานะ"><option value="">ทุกสถานะ</option>${Object.entries({ok:'มีราคา',recheck:'ต้อง recheck ราคา',rd:'สกัดเอง · ถาม RD',cancel:'ยกเลิก / เลิกจำหน่าย',none:'ไม่มีราคา'}).map(([k,l])=>`<option value="${k}" ${rmStatus===k?'selected':''}>${l}</option>`).join('')}</select>
+      <select id="rmCat" aria-label="กรองหมวด"><option value="">ทุกหมวด</option>${cats.map(c=>`<option value="${c}" ${rmCat===c?'selected':''}>${c} · ${esc(CAT[c])}</option>`).join('')}</select>
+      <button class="btn small" type="button" id="rmAddToggle">เพิ่มรหัสใหม่</button>
+      <button class="btn small" type="button" id="rmFile">อัปเดตจากไฟล์ Excel</button>
+      <button class="btn small" type="button" id="rmDl">ดาวน์โหลด Excel</button>
+      <button class="btn small" type="button" id="rmRefresh">รีเฟรช</button></div>
+    <form id="rmAddForm" class="card" hidden style="margin-bottom:14px" novalidate>
+      <h3>เพิ่มวัตถุดิบรหัสใหม่</h3>
+      <div class="settings" style="margin:10px 0 0">
+        <div class="field"><label for="rmNewCode">รหัส RM</label><input id="rmNewCode" placeholder="RM-001-001-0001" maxlength="40" required></div>
+        <div class="field"><label for="rmNewName">ชื่อวัตถุดิบ</label><input id="rmNewName" maxlength="300" required></div>
+        <div class="field"><label for="rmNewPrice">ราคา (บาท/กรัม)</label><input id="rmNewPrice" type="number" min="0" step="any" placeholder="ไม่บังคับ"></div>
+        <div class="field"><label for="rmNewNote">หมายเหตุ</label><input id="rmNewNote" maxlength="500" placeholder="ไม่บังคับ"></div>
+      </div>
+      <div class="row" style="margin-top:12px"><button class="btn primary" type="submit">เพิ่มรหัส</button><span class="muted" id="rmAddErr" style="color:var(--bad)" role="alert"></span></div>
+    </form>
+    <div id="rmBody"></div>
+    <div class="muted" id="rmSave" aria-live="polite" style="font-size:12.5px;margin-top:8px"></div>
+    <div class="note-box" style="margin-top:14px">ใส่ราคา = สถานะ "มีราคา" อัตโนมัติ · ล้างราคาแล้วเลือกสถานะอื่นได้ (recheck / สกัดเอง / ยกเลิก) · ราคาเป็น บาท/กรัม · ไฟล์ Excel ที่ดาวน์โหลดแก้แล้วอัปโหลดกลับด้วยปุ่ม "อัปเดตจากไฟล์ Excel" ได้ (ช่องราคาใส่ตัวเลข หรือ R = recheck, X = ยกเลิก, D = สกัดเอง) · การอัปโหลดไฟล์จะแทนที่ฐานราคาทั้งหมด</div>`;
+  drawRm();
+}
+function drawRmStats(){
+  const el=$('#rmStats'); if(!el) return;
+  const n=DB.entries.length, c=s=>DB.entries.filter(e=>e.status===s).length;
+  const stat=(k,v,sub)=>`<div class="card" style="padding:12px 18px;min-width:150px"><div class="muted" style="font-size:12.5px">${k}</div><div style="font-family:var(--f-display);font-size:28px;line-height:1.2">${v}</div>${sub?`<div class="muted" style="font-size:12px">${sub}</div>`:''}</div>`;
+  el.innerHTML = stat('วัตถุดิบทั้งหมด', n.toLocaleString('th-TH'))
+    + stat('มีราคา', c('ok').toLocaleString('th-TH'))
+    + stat('ต้อง recheck', c('recheck').toLocaleString('th-TH'))
+    + stat('ไม่มีราคา', c('none').toLocaleString('th-TH'))
+    + stat('อัปเดตล่าสุด', esc(DB.source.updated||'–'), DB.source.by?'โดย '+esc(DB.source.by):'');
+}
+function drawRm(){
+  const body=$('#rmBody'); if(!body) return;
+  const list=rmFiltered(), pages=Math.max(1,Math.ceil(list.length/RM_PAGE));
+  if(rmPage>=pages) rmPage=pages-1;
+  const shown=list.slice(rmPage*RM_PAGE, rmPage*RM_PAGE+RM_PAGE);
+  const stOpt=(cur)=>Object.entries({ok:'มีราคา',recheck:'ต้อง recheck',rd:'สกัดเอง · ถาม RD',cancel:'ยกเลิก / เลิกใช้',none:'ไม่มีราคา'}).map(([k,l])=>`<option value="${k}" ${cur===k?'selected':''}>${l}</option>`).join('');
+  const inp='border:1px solid var(--line-strong);border-radius:7px;padding:5px 8px;background:var(--input-bg);font:inherit';
+  body.innerHTML = `<div class="tablebox"><table><thead><tr><th>รหัส</th><th>รายละเอียด</th><th>หมวด</th><th class="num">ราคา บาท/กรัม</th><th>สถานะ</th><th>หมายเหตุ</th><th>แก้ล่าสุด</th></tr></thead><tbody>
+    ${shown.map(e=>`<tr data-code="${esc(e.code)}"><td class="mono">${esc(e.code)}</td><td>${esc(e.name)}</td><td class="muted" style="white-space:nowrap">${esc(catOf(e.code))}</td>
+      <td class="num"><input class="rm-price" type="number" min="0" step="any" value="${e.price!=null?esc(e.price):''}" placeholder="–" aria-label="ราคา ${esc(e.code)}" style="${inp};width:110px;text-align:right"></td>
+      <td><select class="rm-st" aria-label="สถานะ ${esc(e.code)}" style="${inp}">${stOpt(e.status)}</select></td>
+      <td><input class="rm-note" value="${esc(e.note)}" maxlength="500" aria-label="หมายเหตุ ${esc(e.code)}" style="${inp};width:200px"></td>
+      <td class="muted" style="white-space:nowrap;font-size:12.5px" data-c="at">${e.at?fmtSeen(e.at)+(e.by?'<br>'+esc(e.by):''):'–'}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">ไม่พบรายการที่ตรงกับคำค้น</td></tr>'}
+    </tbody></table></div>
+    <div class="row" style="margin-top:10px;justify-content:space-between;font-size:12.5px"><span class="muted">แสดง ${shown.length} จาก ${list.length.toLocaleString('th-TH')} รายการ · หน้า ${rmPage+1}/${pages}</span>
+      <span class="row"><button class="btn small" type="button" id="rmPrev" ${rmPage<=0?'disabled':''}>ก่อนหน้า</button><button class="btn small" type="button" id="rmNext" ${rmPage>=pages-1?'disabled':''}>ถัดไป</button></span></div>`;
+  drawRmStats();
+}
+function rmMark(tr, patch){
+  const code=tr.dataset.code, e=DB.byCode.get(code) || DB.entries.find(x=>x.code===code); if(!e) return;
+  const cur=rmDirty[code] || {c:code, p:e.price, s:e.status, o:e.note};
+  Object.assign(cur, patch); rmDirty[code]=cur;
+  setRmSave('มีการแก้ไข · กำลังบันทึก…');
+  clearTimeout(rmTimer); rmTimer=setTimeout(flushRm, 1200);
+}
+async function flushRm(){
+  clearTimeout(rmTimer); rmTimer=null;
+  const items=Object.values(rmDirty); if(!items.length) return;
+  rmDirty={}; setRmSave('กำลังบันทึก…');
+  try{
+    const r=await api('updatePrices', items);
+    items.forEach(it=>{
+      const e=DB.entries.find(x=>x.code===it.c); if(!e) return;
+      const price=toNum(it.p); const has=it.p!=null && it.p!=='' && isFinite(price) && price>0;
+      e.price=has?price:null; e.status=has?'ok':(it.s==='ok'?'none':it.s); e.note=String(it.o||'').trim(); e.disc=DISC_RE.test(e.note); e.at=r.at; e.by=r.by;
+    });
+    DB.source=Object.assign({}, DB.source, {updated:r.updated, by:r.by}); DB.custom=true; setDB(DB.entries, DB.source, true);
+    if(!Object.keys(rmDirty).length){ setRmSave(`บันทึกแล้ว ${r.changed} รายการ · ${new Date().toLocaleTimeString('th-TH')}`); drawRmStats(); }
+  }catch(e){ items.forEach(it=>{ if(!rmDirty[it.c]) rmDirty[it.c]=it; }); setRmSave('บันทึกไม่สำเร็จ: '+errText(e)); toast(errText(e)); }
+}
+function exportDbXlsx(){
+  if(typeof XLSX==='undefined'){ toast('โหลดตัวเขียน Excel ไม่สำเร็จ'); return; }
+  const list=rmFiltered();
+  const cell=e=>e.status==='ok' ? e.price : e.status==='recheck' ? 'R' : e.status==='cancel' ? 'X' : e.status==='rd' ? 'D' : '';
+  const aoa=[['รหัส','รายละเอียด','ราคา (บาท/กรัม)','หมายเหตุ','หมวด','สถานะ','แก้ล่าสุด','แก้โดย']].concat(list.map(e=>[e.code, e.name, cell(e), e.note, catOf(e.code), STATUS[e.status]?STATUS[e.status].t:'', e.at||'', e.by||'']));
+  const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:20},{wch:50},{wch:16},{wch:40},{wch:28},{wch:22},{wch:22},{wch:30}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'ฐานราคา');
+  const d=new Date(), stamp=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  saveFile(`ฐานราคาวัตถุดิบ_${list.length}รายการ_${stamp}.xlsx`, XLSX.write(wb,{type:'array',bookType:'xlsx'}));
+  toast(`ดาวน์โหลด ${list.length} รายการแล้ว`);
+}
+const rmv=$('#rmView');
+rmv.addEventListener('input', e=>{
+  const t=e.target;
+  if(t.id==='rmQ'){ rmQ=t.value; rmPage=0; drawRm(); return; }
+  const tr=t.closest('tr[data-code]'); if(!tr) return;
+  if(t.classList.contains('rm-price')){
+    const v=toNum(t.value), has=isFinite(v) && v>0, st=tr.querySelector('.rm-st');
+    if(has) st.value='ok'; else if(st.value==='ok') st.value='none';
+    rmMark(tr, {p: has ? v : null, s: st.value});
+  } else if(t.classList.contains('rm-note')) rmMark(tr, {o:t.value});
+});
+rmv.addEventListener('change', e=>{
+  const t=e.target;
+  if(t.id==='rmSt'){ rmStatus=t.value; rmPage=0; drawRm(); return; }
+  if(t.id==='rmCat'){ rmCat=t.value; rmPage=0; drawRm(); return; }
+  if(t.classList.contains('rm-st')){
+    const tr=t.closest('tr[data-code]'), pr=tr.querySelector('.rm-price');
+    if(t.value!=='ok'){ pr.value=''; rmMark(tr, {p:null, s:t.value}); }
+    else if(!(toNum(pr.value)>0)){ t.value='none'; toast('ใส่ราคาเพื่อให้เป็นสถานะ "มีราคา"'); pr.focus(); }
+  }
+});
+rmv.addEventListener('click', async e=>{
+  const t=e.target;
+  if(t.id==='rmPrev'){ rmPage--; drawRm(); return; }
+  if(t.id==='rmNext'){ rmPage++; drawRm(); return; }
+  if(t.id==='rmAddToggle'){ const f=$('#rmAddForm'); f.hidden=!f.hidden; if(!f.hidden) $('#rmNewCode').focus(); return; }
+  if(t.id==='rmFile'){ $('#fileDb').click(); return; }
+  if(t.id==='rmDl'){ exportDbXlsx(); return; }
+  if(t.id==='rmRefresh'){
+    t.disabled=true;
+    try{ await flushRm(); await reloadAll(); drawRm(); }catch(err){ toast(errText(err)); } finally{ t.disabled=false; }
+  }
+});
+rmv.addEventListener('submit', async e=>{
+  e.preventDefault();
+  if(e.target.id!=='rmAddForm') return;
+  const code=normCode($('#rmNewCode').value), name=$('#rmNewName').value.trim(), price=toNum($('#rmNewPrice').value), err=$('#rmAddErr');
+  if(!/^RM-[A-Z0-9]+-\d{3}-\d{1,4}$/.test(code)){ err.textContent='รหัสต้องเป็นรูปแบบ RM-xxx-000-0000'; return; }
+  if(!name){ err.textContent='ใส่ชื่อวัตถุดิบ'; return; }
+  if(DB.entries.some(x=>x.code===code)){ err.textContent='มีรหัสนี้ในฐานราคาแล้ว ค้นหาแล้วแก้ในตารางได้เลย'; return; }
+  err.textContent='';
+  const btn=e.target.querySelector('button[type=submit]'); btn.disabled=true;
+  try{
+    await flushRm();
+    const has=isFinite(price) && price>0, note=$('#rmNewNote').value.trim();
+    const r=await api('updatePrices', [{c:code, n:name, p:has?price:null, s:has?'ok':'none', o:note}]);
+    const ent=makeEntry(code, name, has?price:'', note); ent.at=r.at; ent.by=r.by;
+    DB.entries.unshift(ent); DB.source=Object.assign({}, DB.source, {updated:r.updated, by:r.by}); setDB(DB.entries, DB.source, true);
+    e.target.reset(); e.target.hidden=true; rmQ=code; rmStatus=''; rmCat=''; rmPage=0; renderRmView(); toast(`เพิ่ม ${code} แล้ว`);
+  }catch(ex){ err.textContent=errText(ex); } finally{ btn.disabled=false; }
+});
+window.addEventListener('beforeunload', e=>{ if(Object.keys(rmDirty).length){ e.preventDefault(); e.returnValue=''; } });
 function renderAdmin(){
   if(!S.adm) return;
   if(adminTab==='forms') adminTab='dir';

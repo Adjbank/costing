@@ -1,0 +1,21 @@
+# This folder also holds internal files (price PDFs, the old offline page with embedded prices).
+# Ignore everything by default and list only the website sources that may go to GitHub.
+/*
+
+!/.gitignore
+!/.github/
+!/build.ps1
+!/site.config.json
+!/GITHUB-PAGES.md
+
+!/apps-script/
+/apps-script/*
+!/apps-script/Index.html
+!/apps-script/Code.gs
+!/apps-script/appsscript.json
+!/apps-script/คู่มือติดตั้ง.md
+
+# Never commit these, wherever they are
+Prices.gs
+*.pdf
+dist/

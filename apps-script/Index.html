@@ -1,0 +1,1291 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{margin:0}img{max-width:100%}</style>
+</head>
+<body>
+<title>ระบบต้นทุนหัวน้ำหอม</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Noto+Sans+Thai:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+/* Layout: navy masthead, three-step costing flow on the left, a sticky cost summary on the right; stacks to one column on phones. Scent & Sense brand tokens. */
+:root{
+  --navy:#091e4b; --copper:#c46d4e; --cream:#f0e0ca; --sand:#cea67d; --dusk:#494b74; --cobalt:#063b7c;
+  --bg:#ffffff; --bg-soft:#faf6f0; --tint:#f0e0ca; --ink:#091e4b; --ink-muted:#494b74; --line:#091e4b26; --line-strong:#494b74;
+  --head-bg:#091e4b; --head-ink:#ffffff; --head-muted:#cea67d; --accent:#c46d4e; --accent-ink:#ffffff;
+  --input-bg:#ffffff; --focus:#063b7c;
+  --ok:#256b4b; --ok-bg:#e3f1e9; --warn:#93520f; --warn-bg:#fbecd9; --bad:#a3271f; --bad-bg:#f9e1de; --info:#063b7c; --info-bg:#e1e9f5;
+  --f-display:"Cormorant Garamond","Canela Deck",Georgia,serif;
+  --f-body:"Noto Sans Thai","Noto Sans",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  --r-card:12px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#091e4b; --bg-soft:#0d2558; --tint:#063b7c; --ink:#ffffff; --ink-muted:#cea67d; --line:#ffffff26; --line-strong:#cea67d;
+  --head-bg:#061638; --head-ink:#ffffff; --head-muted:#cea67d; --accent:#d9825f; --accent-ink:#091e4b;
+  --input-bg:#071a42; --focus:#f0e0ca;
+  --ok:#86d6ae; --ok-bg:#12403a; --warn:#f2b878; --warn-bg:#47331f; --bad:#ff9d93; --bad-bg:#4a2230; --info:#a9c4f0; --info-bg:#123a72;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#091e4b; --bg-soft:#0d2558; --tint:#063b7c; --ink:#ffffff; --ink-muted:#cea67d; --line:#ffffff26; --line-strong:#cea67d;
+  --head-bg:#061638; --head-ink:#ffffff; --head-muted:#cea67d; --accent:#d9825f; --accent-ink:#091e4b;
+  --input-bg:#071a42; --focus:#f0e0ca;
+  --ok:#86d6ae; --ok-bg:#12403a; --warn:#f2b878; --warn-bg:#47331f; --bad:#ff9d93; --bad-bg:#4a2230; --info:#a9c4f0; --info-bg:#123a72;
+  color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.6}
+.wrap{max-width:1280px;margin:0 auto;padding-inline:clamp(16px,4vw,48px)}
+.mono{font-family:var(--f-mono);font-size:12.5px;white-space:nowrap}
+.num{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+h1,h2,h3{text-wrap:balance;margin:0;font-weight:500}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+/* masthead */
+.mast{background:var(--head-bg);color:var(--head-ink)}
+.mast .wrap{padding-block:28px 22px;display:flex;flex-wrap:wrap;gap:16px 32px;align-items:flex-end;justify-content:space-between}
+.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--head-muted)}
+.mast .wrap > div:first-child{flex:1 1 380px;min-width:0}
+.mast h1{font-family:var(--f-display);font-size:clamp(26px,3.6vw,40px);line-height:1.25;margin-top:6px;overflow-wrap:anywhere;line-break:auto}
+.mast h1 small{overflow-wrap:anywhere}
+.mast h1 small{display:block;font-family:var(--f-body);font-size:16px;font-weight:400;color:#ffffffcc;margin-top:6px}
+.mast .rule{height:1px;background:var(--copper);margin-top:14px;width:72px}
+.dbcard{min-width:0;max-width:440px;border:1px solid #ffffff33;border-radius:var(--r-card);padding:12px 14px;font-size:13px}
+.dbcard b{font-weight:700}
+.dbcard .meta{color:#ffffffb3}
+.dbcard .acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.btn-ghost-dark{background:transparent;border:1px solid #ffffff66;color:#fff;border-radius:8px;padding:5px 11px;cursor:pointer;font-size:13px}
+.btn-ghost-dark:hover{border-color:var(--copper);color:#fff;background:#ffffff12}
+
+/* steps */
+.steps{display:flex;flex-wrap:wrap;gap:6px 22px;padding-block:18px 6px;color:var(--ink-muted);font-size:13px}
+.steps span b{color:var(--accent);font-family:var(--f-display);font-size:18px;margin-right:6px}
+
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:28px;padding-block:12px 56px;align-items:start}
+@media (max-width:980px){.layout{grid-template-columns:minmax(0,1fr)}}
+.col{display:flex;flex-direction:column;gap:28px;min-width:0}
+section.block{min-width:0}
+.bh{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 16px;border-bottom:1px solid var(--ink);padding-bottom:8px;margin-bottom:14px}
+.bh h2{font-family:var(--f-display);font-size:26px;line-height:1.2}
+.bh h2 .n{color:var(--accent);margin-right:10px}
+.bh .hint{color:var(--ink-muted);font-size:13px}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;border-radius:8px;padding:7px 14px;cursor:pointer;border:1px solid var(--line-strong);background:var(--bg);font-size:13.5px;line-height:1.3}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--navy);color:#fff;border-color:var(--navy)}
+:root[data-theme="dark"] .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}}
+.btn.primary:hover{filter:brightness(1.1)}
+.btn.small{padding:4px 10px;font-size:12.5px}
+.btn.link{border:none;background:none;padding:2px 4px;color:var(--ink-muted);text-decoration:underline;text-underline-offset:3px}
+.btn.link:hover{color:var(--accent)}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+
+/* upload */
+.drop{display:block;border:1.5px dashed var(--line-strong);border-radius:var(--r-card);padding:26px 20px;text-align:center;background:var(--bg-soft);cursor:pointer;transition:border-color .15s,background .15s}
+.drop:hover,.drop.over{border-color:var(--accent);background:var(--tint)}
+.drop strong{display:block;font-size:16px;margin-bottom:2px}
+.drop .sub{color:var(--ink-muted);font-size:13px}
+.spec{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px 20px;margin-top:14px;font-size:13px;color:var(--ink-muted)}
+.spec b{color:var(--ink);font-weight:500}
+details.paste{margin-top:12px}
+details.paste summary{cursor:pointer;color:var(--ink-muted);font-size:13px}
+details.paste textarea{width:100%;min-height:110px;margin-top:8px;border:1px solid var(--line-strong);border-radius:8px;padding:10px;background:var(--input-bg);font-family:var(--f-mono);font-size:12.5px}
+.msg{margin-top:12px;font-size:13px;padding:9px 12px;border-radius:8px}
+.msg.ok{background:var(--ok-bg);color:var(--ok)}
+.msg.bad{background:var(--bad-bg);color:var(--bad)}
+.msg.warn{background:var(--warn-bg);color:var(--warn)}
+
+/* product tabs */
+.ptabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.ptab{border:1px solid var(--line-strong);border-radius:999px;padding:5px 14px;background:var(--bg);cursor:pointer;font-size:13px;display:inline-flex;gap:8px;align-items:center;max-width:100%}
+.ptab .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px}
+.ptab.on{background:var(--navy);border-color:var(--navy);color:#fff}
+:root[data-theme="dark"] .ptab.on{background:var(--cream);border-color:var(--cream);color:var(--navy)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .ptab.on{background:var(--cream);border-color:var(--cream);color:var(--navy)}}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--ok)}
+.dot.warn{background:var(--warn)} .dot.bad{background:var(--bad)}
+.sample-tag{display:inline-block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--accent);border:1px solid var(--accent);border-radius:4px;padding:0 6px;margin-left:6px;vertical-align:middle}
+
+/* settings */
+.settings{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px;padding:14px;background:var(--bg-soft);border-radius:var(--r-card)}
+.field label{display:block;font-size:12px;color:var(--ink-muted);margin-bottom:3px}
+.field input,.field select{width:100%;border:1px solid var(--line-strong);border-radius:7px;padding:6px 9px;background:var(--input-bg)}
+.field.wide{grid-column:1/-1}
+.pname{width:100%;font-family:var(--f-display);font-size:22px;border:none;border-bottom:1px solid var(--line);background:transparent;padding:2px 0;border-radius:0}
+.pname:hover{border-bottom-color:var(--line-strong)}
+
+/* table */
+.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r-card)}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{font-size:11.5px;font-weight:700;letter-spacing:.04em;color:var(--ink-muted);text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-strong);white-space:nowrap;background:var(--bg-soft);position:sticky;top:0}
+td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:var(--bg-soft)}
+td input{border:1px solid transparent;border-radius:6px;padding:3px 6px;background:transparent;width:100%}
+td input:hover{border-color:var(--line)}
+td input:focus{border-color:var(--line-strong);background:var(--input-bg)}
+td input.code{font-family:var(--f-mono);font-size:12.5px;min-width:142px}
+td .nm .chip{margin-top:3px}
+td input.amt{text-align:right;min-width:72px;font-variant-numeric:tabular-nums}
+td input.price{text-align:right;min-width:78px;font-variant-numeric:tabular-nums;border-color:var(--warn)}
+td .nm{min-width:200px;max-width:320px}
+td .note{display:block;font-size:12px;color:var(--ink-muted);margin-top:2px;line-height:1.45}
+.chip{display:inline-block;font-size:11.5px;font-weight:500;padding:1px 8px;border-radius:999px;white-space:nowrap}
+.chip.ok{background:var(--ok-bg);color:var(--ok)}
+.chip.warn{background:var(--warn-bg);color:var(--warn)}
+.chip.bad{background:var(--bad-bg);color:var(--bad)}
+.chip.info{background:var(--info-bg);color:var(--info)}
+.share{display:flex;align-items:center;gap:6px;min-width:96px}
+.share i{display:block;height:6px;border-radius:3px;background:var(--accent);min-width:1px}
+.share span{font-size:11.5px;color:var(--ink-muted)}
+tfoot td{font-weight:700;border-top:1px solid var(--ink);background:var(--bg-soft)}
+.x{border:none;background:none;cursor:pointer;color:var(--ink-muted);font-size:16px;line-height:1;padding:2px 6px;border-radius:6px}
+.x:hover{color:var(--bad);background:var(--bad-bg)}
+
+/* summary */
+.summary{position:sticky;top:calc(env(safe-area-inset-top,0px) + 16px);display:flex;flex-direction:column;gap:16px}
+@media (max-width:980px){.summary{position:static}}
+.card{border:1px solid var(--line);border-radius:var(--r-card);padding:18px}
+.card.hero{background:var(--tint);border-color:transparent}
+.card h3{font-size:12px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--ink-muted)}
+.big{font-family:var(--f-display);font-size:44px;line-height:1.05;margin-top:6px;font-variant-numeric:tabular-nums;font-weight:600}
+.big small{font-family:var(--f-body);font-size:14px;font-weight:400;color:var(--ink-muted);margin-left:4px}
+.kv{display:grid;grid-template-columns:1fr auto;gap:5px 12px;margin-top:12px;font-size:13.5px}
+.kv dt{color:var(--ink-muted)} .kv dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+.kv .sum{border-top:1px solid var(--line-strong);padding-top:6px;font-weight:700;color:var(--ink)}
+.meter{height:6px;background:var(--line);border-radius:3px;margin-top:10px;overflow:hidden}
+.meter i{display:block;height:100%;background:var(--ok)}
+.meter.warn i{background:var(--warn)}
+.drivers{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+.drivers li{font-size:12.5px}
+.drivers .top{display:flex;justify-content:space-between;gap:10px}
+.drivers .top span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.drivers .bar{height:5px;border-radius:3px;background:var(--line);margin-top:3px}
+.drivers .bar i{display:block;height:100%;border-radius:3px;background:var(--accent)}
+.alert{font-size:13px;margin-top:10px;padding:8px 10px;border-radius:8px}
+.alert.warn{background:var(--warn-bg);color:var(--warn)}
+.alert.bad{background:var(--bad-bg);color:var(--bad)}
+.alert.ok{background:var(--ok-bg);color:var(--ok)}
+.exp{display:flex;flex-direction:column;gap:8px}
+.exp .btn{justify-content:center}
+
+/* overview + db */
+.search{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+.search input{flex:1 1 240px;min-width:0;border:1px solid var(--line-strong);border-radius:8px;padding:7px 11px;background:var(--input-bg)}
+.search select{border:1px solid var(--line-strong);border-radius:8px;padding:7px 10px;background:var(--input-bg)}
+.muted{color:var(--ink-muted)}
+.foot{color:var(--ink-muted);font-size:12.5px;padding-block:20px 40px;border-top:1px solid var(--line)}
+.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 20px);transform:translateX(-50%);background:var(--navy);color:#fff;padding:9px 16px;border-radius:8px;font-size:13px;box-shadow:0 6px 24px #0003;z-index:20;max-width:calc(100% - 32px)}
+.empty{padding:26px;text-align:center;color:var(--ink-muted)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+[hidden]{display:none!important}
+
+/* login gate */
+.gate{min-height:100vh;min-height:100dvh;background:var(--head-bg);display:flex;padding:32px 16px}
+.gate-card{margin:auto;width:100%;max-width:400px;background:var(--bg);color:var(--ink);border-radius:16px;padding:32px 28px;display:flex;flex-direction:column;gap:18px;box-shadow:0 20px 60px #0004}
+.gate-card .eyebrow{color:var(--accent)}
+.gate-card h1{font-family:var(--f-display);font-size:30px;line-height:1.2;margin-top:4px}
+.gate-card p{margin:0;color:var(--ink-muted);font-size:13.5px}
+.who{display:flex;align-items:center;gap:12px;padding:12px;border-radius:12px;background:var(--bg-soft)}
+.ava{width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:12px;flex:none;font-family:var(--f-body)}
+.ava.lg{width:44px;height:44px;font-size:17px}
+.person .ava{width:30px;height:30px}
+.who span.ava{color:#fff;font-size:17px}
+.who b{display:block;font-size:15px}
+.who span{font-size:12.5px;color:var(--ink-muted)}
+.pin{width:100%;font-family:var(--f-mono);font-size:26px;letter-spacing:.5em;text-align:center;border:1px solid var(--line-strong);border-radius:10px;padding:10px 12px;background:var(--input-bg)}
+.pin-label{font-size:12.5px;color:var(--ink-muted);margin-bottom:4px;display:block}
+.gate-card form{display:flex;flex-direction:column;gap:12px}
+.gate-card .btn.primary{justify-content:center;padding:10px 14px;font-size:15px}
+.gate-err{font-size:13px;color:var(--bad);min-height:1.2em}
+.spin{width:28px;height:28px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--accent);animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* user bar in masthead */
+.userbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;justify-content:flex-end;margin-bottom:12px;font-size:13px}
+.userbar img{width:28px;height:28px;border-radius:50%;object-fit:cover}
+.rolepill{border:1px solid var(--copper);color:#f0e0ca;border-radius:999px;padding:1px 9px;font-size:12px}
+.mast-right{display:flex;flex-direction:column;align-items:flex-end;min-width:0;max-width:100%}
+
+/* share dialog */
+.overlay{position:fixed;inset:0;background:#091e4b99;display:flex;padding:24px 16px;z-index:30;overflow-y:auto}
+.share-card{margin:auto;width:100%;max-width:460px;background:var(--bg);color:var(--ink);border-radius:16px;padding:24px;display:flex;flex-direction:column;gap:14px;box-shadow:0 20px 60px #0005}
+.share-card h2{font-family:var(--f-display);font-size:26px;line-height:1.2}
+.share-card .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.linkrow{display:flex;gap:8px}
+.linkrow input{flex:1;min-width:0;font-family:var(--f-mono);font-size:12.5px;border:1px solid var(--line-strong);border-radius:8px;padding:8px 10px;background:var(--input-bg)}
+.share-card textarea{width:100%;min-height:128px;border:1px solid var(--line-strong);border-radius:8px;padding:10px;background:var(--input-bg);font-size:13px;resize:vertical}
+.share-card .btn{white-space:nowrap}
+
+/* admin */
+.atabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+.adm-grid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:24px;align-items:start}
+@media (max-width:900px){.adm-grid{grid-template-columns:minmax(0,1fr)}}
+.person{display:flex;align-items:center;gap:10px;min-width:180px}
+.person img{width:30px;height:30px;border-radius:50%;object-fit:cover;flex:none}
+.person small{display:block;color:var(--ink-muted);font-size:11.5px}
+.adm-actions{display:flex;flex-wrap:wrap;gap:6px}
+.adm-actions .btn{white-space:nowrap}
+.btn.danger{color:var(--bad);border-color:var(--bad)}
+.picker{position:relative}
+.picker input{width:100%;border:1px solid var(--line-strong);border-radius:8px;padding:7px 11px;background:var(--input-bg)}
+.hits{list-style:none;margin:6px 0 0;padding:0;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.hits li button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:8px 10px;border:none;background:var(--bg);cursor:pointer}
+.hits li button:hover,.hits li button.on{background:var(--tint)}
+.hits img{width:26px;height:26px;border-radius:50%}
+.perm-grid td{text-align:center}
+.perm-grid td:first-child,.perm-grid th:first-child{text-align:left}
+.perm-grid input[type=checkbox]{width:18px;height:18px;accent-color:var(--navy);cursor:pointer}
+.perm-grid input.rname{border:1px solid transparent;border-radius:6px;padding:3px 6px;background:transparent;font-weight:500;min-width:140px}
+.perm-grid input.rname:hover{border-color:var(--line)}
+.checks{display:flex;flex-direction:column;gap:6px;font-size:13px}
+.checks label{display:flex;gap:8px;align-items:flex-start}
+.note-box{font-size:12.5px;color:var(--ink-muted);background:var(--bg-soft);border-radius:10px;padding:10px 12px;line-height:1.55}
+</style>
+
+<div class="gate" id="gate">
+  <div class="gate-card" id="gateCard" aria-live="polite">
+    <div class="eyebrow">Scent &amp; Sense ✦ ระบบต้นทุนหัวน้ำหอม</div>
+    <div class="spin" role="status" aria-label="กำลังตรวจสอบสิทธิ์"></div>
+    <p>กำลังตรวจสอบสิทธิ์การใช้งาน…</p>
+  </div>
+</div>
+
+<div id="app" hidden>
+<header class="mast">
+  <div class="wrap">
+    <div>
+      <div class="eyebrow">Scent &amp; Sense ✦ ทีมต้นทุนสินค้า</div>
+      <h1>ระบบคำนวณต้นทุนหัวน้ำหอม<small>Fragrance Oil Costing · ราคาวัตถุดิบ บาท/กรัม จากไฟล์ Summary RM</small></h1>
+      <div class="rule"></div>
+    </div>
+    <div class="mast-right">
+      <div class="userbar" id="userbar"></div>
+      <div class="dbcard" id="dbcard"></div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section id="adminView" hidden style="padding-block:24px 56px"></section>
+  <div id="calcView">
+  <div class="steps" id="stepsBar" aria-label="ขั้นตอน">
+    <span><b>1</b>ใส่ไฟล์สูตร</span><span><b>2</b>ตรวจรายการ &amp; แก้ราคาที่ขาด</span><span><b>3</b>สรุปต้นทุน &amp; ส่งออก Excel</span>
+  </div>
+
+  <div class="layout">
+    <div class="col">
+      <section class="block" id="s1">
+        <div class="bh"><h2><span class="n">1</span>ใส่ไฟล์สูตรสินค้า</h2>
+          <div class="row"><button class="btn small" id="btnTemplate" type="button">ดาวน์โหลดไฟล์ตัวอย่าง (.xlsx)</button></div></div>
+        <label class="drop" id="drop" for="fileFormula" tabindex="0" role="button">
+          <strong>ลากไฟล์มาวาง หรือคลิกเพื่อเลือกไฟล์</strong>
+          <span class="sub">รองรับ .xlsx .xls .csv · เลือกได้หลายไฟล์ · 1 ไฟล์มีได้หลายสินค้า</span>
+        </label>
+        <input type="file" id="fileFormula" accept=".xlsx,.xls,.csv,.txt" multiple hidden>
+        <div class="spec">
+          <div><b>คอลัมน์ที่ต้องมี</b><br>รหัส RM (เช่น RM-002-001-0184) และ % ในสูตร หรือ กรัม</div>
+          <div><b>หลายสินค้าในไฟล์เดียว</b><br>เพิ่มคอลัมน์ "สินค้า" หรือแยกสินค้าละ 1 ชีต</div>
+          <div><b>ไม่มีรหัส?</b><br>ใส่ชื่อวัตถุดิบให้ตรงกับฐานราคา ระบบจะจับคู่ให้</div>
+        </div>
+        <details class="paste">
+          <summary>หรือคัดลอกตารางจาก Excel มาวางที่นี่</summary>
+          <textarea id="pasteBox" placeholder="รหัส RM&#9;% ในสูตร&#10;RM-002-001-0184&#9;20&#10;RM-002-001-0203&#9;15"></textarea>
+          <div class="row" style="margin-top:8px"><input id="pasteName" class="btn" style="flex:1 1 200px;cursor:text" placeholder="ชื่อสินค้า (ไม่บังคับ)"><button class="btn primary" type="button" id="btnPaste">คำนวณจากข้อมูลที่วาง</button></div>
+        </details>
+        <div id="uploadMsg"></div>
+      </section>
+
+      <section class="block" id="s2">
+        <div class="bh"><h2><span class="n">2</span>ตรวจรายการวัตถุดิบ</h2><span class="hint">แก้ % รหัส หรือใส่ราคาเองได้ในตาราง</span></div>
+        <div class="ptabs" id="ptabs"></div>
+        <div id="editor"></div>
+      </section>
+
+      <section class="block" id="s4">
+        <div class="bh"><h2>ภาพรวมทุกสินค้า</h2><span class="hint">คลิกชื่อเพื่อเปิดดู</span></div>
+        <div class="tablebox"><table id="overview"></table></div>
+      </section>
+
+      <section class="block" id="s5">
+        <div class="bh"><h2>ฐานราคาวัตถุดิบ</h2><span class="hint" id="dbHint"></span></div>
+        <div class="search">
+          <input id="dbq" type="search" placeholder="ค้นหารหัสหรือชื่อ เช่น Hedione, RM-002-001">
+          <select id="dbf" aria-label="กรองสถานะ">
+            <option value="">ทุกสถานะ</option><option value="ok">มีราคา</option><option value="recheck">ต้อง recheck ราคา</option><option value="rd">สกัดเอง · ถาม RD</option><option value="cancel">ยกเลิก / เลิกจำหน่าย</option><option value="none">ไม่มีราคา</option>
+          </select>
+          <select id="dbc" aria-label="กรองหมวด"></select>
+        </div>
+        <div class="tablebox"><table id="dbtable"></table></div>
+        <div class="muted" id="dbcount" style="font-size:12.5px;margin-top:8px"></div>
+      </section>
+    </div>
+
+    <aside class="summary" id="summary" aria-label="สรุปต้นทุน"></aside>
+  </div>
+
+  <div class="foot">
+    สูตรคำนวณ: ต้นทุน RM ต่อ กก. = Σ (สัดส่วนในสูตร × ราคา บาท/กรัม × 1,000) · ถ้าผลรวม % ไม่ครบ 100 ระบบปรับสัดส่วนให้รวมเป็น 1 กก. ·
+    ต้นทุนรวม/กก. = ต้นทุน RM ÷ (1 − % สูญเสีย) + ค่าแรงและโสหุ้ย · รายการที่ไม่มีราคาจะไม่ถูกรวม และระบบจะแสดงเตือน ·
+    สูตรที่คุณแก้ไขเก็บไว้ในเบราว์เซอร์ของคุณเท่านั้น · ฐานราคาใช้ร่วมกันทั้งทีม
+  </div>
+  </div>
+</main>
+</div>
+<input type="file" id="fileDb" accept=".xlsx,.xls,.csv" hidden>
+<div class="overlay" id="shareOverlay" hidden>
+  <div class="share-card" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
+    <div class="top">
+      <div><div class="eyebrow" style="color:var(--accent)">Scent &amp; Sense ✦ ทีมต้นทุนสินค้า</div><h2 id="shareTitle">แชร์ระบบต้นทุนให้ทีม</h2></div>
+      <button class="x" type="button" id="shareClose" aria-label="ปิด">×</button>
+    </div>
+    <div>
+      <label class="pin-label" for="shareUrl">ลิงก์ระบบ</label>
+      <div class="linkrow"><input id="shareUrl" readonly><button class="btn primary" type="button" id="shareCopyUrl">คัดลอกลิงก์</button></div>
+    </div>
+    <div>
+      <label class="pin-label" for="shareMsg">ข้อความสำหรับส่งใน LINE หรืออีเมล</label>
+      <textarea id="shareMsg" readonly></textarea>
+      <div class="row" style="margin-top:8px"><button class="btn" type="button" id="shareCopyMsg">คัดลอกข้อความ</button></div>
+    </div>
+    <div class="note-box" id="shareNote"></div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+/* ===== ฐานราคา RM: ถอดจาก "PRODUCT RM - Summary RM.pdf" (อัปเดต 12/10/2026 11:41:18, 1,123 แถว) =====
+   รูปแบบ: รหัส|รายละเอียด|ราคา บาท/กรัม (ตัวเลข / R = ถ้าใช้แจ้ง PC recheck ราคา / X = ยกเลิก / D = สกัดเอง ถาม RD / ว่าง = ไม่มีราคา)|หมายเหตุ */
+const RM_RAW = ``; /* prices come from the server (Prices sheet), only for permitted users */
+
+const BUILTIN_SOURCE = {file:'PRODUCT RM - Summary RM.pdf', updated:'12/10/2026 11:41:18'};
+const CAT = {'000':'ยังไม่ทราบแหล่งซื้อ','001':'สารหอม · Aroma Compound','002':'ตัวทำละลาย · Solvent','003':'สารชะล้าง · Surfactant','004':'สารเติมแต่ง · Additive','005':'สารขึ้นเนื้อ · Thickener','006':'สีเติมแต่ง · Color','007':'สารกันเสีย · Preservative','008':'อิมัลชั่น · Emulsifier','009':'หัวน้ำหอม · Fragrance Oil','010':'น้ำมัน · Oil','011':'อื่น ๆ · Other','012':'น้ำมันหอมระเหย · Essential Oil'};
+const STATUS = {
+  ok:{t:'มีราคา',c:'ok'}, recheck:{t:'แจ้ง PC recheck ราคา',c:'warn'}, rd:{t:'สกัดเอง · ถาม RD',c:'warn'},
+  cancel:{t:'ยกเลิก / เลิกใช้',c:'bad'}, none:{t:'ไม่มีราคาในฐาน',c:'warn'}, notfound:{t:'ไม่พบรหัสในฐาน',c:'bad'},
+  manual:{t:'ใส่ราคาเอง',c:'info'}, empty:{t:'ยังไม่ใส่รหัส',c:'warn'}
+};
+const DISC_RE = /ยกเลิก|เลิกจำหน่าย|ไม่มีการสั่งซื้อ|ไม่มีจำหน่าย|Failed|ห้ามใช้/i;
+const RM_RE = /RM-[A-Z0-9]+-\d{3}-\d{1,4}/i;
+
+/* ===== helpers ===== */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = (n, d=2) => (n==null || !isFinite(n)) ? '–' : n.toLocaleString('th-TH',{minimumFractionDigits:d,maximumFractionDigits:d});
+const fmtP = n => (n==null||!isFinite(n)) ? '–' : n.toLocaleString('th-TH',{maximumFractionDigits:4});
+function normCode(s){ if(s==null) return ''; const t=String(s).toUpperCase().replace(/[–—]/g,'-').replace(/\s+/g,''); const m=t.match(RM_RE); return m?m[0]:t; }
+function toNum(v){ if(typeof v==='number') return v; if(v==null) return NaN; const s=String(v).replace(/,/g,'').replace(/%/g,'').trim(); return s==='' ? NaN : Number(s); }
+function catOf(code){ const p=code.split('-'); return CAT[p[2]] || '–'; }
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.hidden=false; clearTimeout(toast._t); toast._t=setTimeout(()=>t.hidden=true,3200); }
+const store = {
+  get(k){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):null; }catch(e){ return null; } },
+  set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} },
+  del(k){ try{ localStorage.removeItem(k); }catch(e){} }
+};
+
+/* ===== price database ===== */
+function statusFromCell(p){
+  if(typeof p==='number') return 'ok';
+  const s=String(p??'').trim();
+  if(s==='') return 'none';
+  if(s==='R' || /recheck/i.test(s)) return 'recheck';
+  if(s==='X' || /ยกเลิก|เลิก|ไม่มีการสั่งซื้อ|ไม่มีจำหน่าย/.test(s)) return 'cancel';
+  if(s==='D' || /สกัด|RD/.test(s)) return 'rd';
+  return isFinite(toNum(s)) ? 'ok' : 'none';
+}
+function makeEntry(code, name, priceCell, note){
+  const n = toNum(priceCell);
+  const status = isFinite(n) && n>0 ? 'ok' : statusFromCell(priceCell);
+  return {code:normCode(code), name:String(name||'').trim(), price: status==='ok'? n : null, status, note:String(note||'').trim(),
+          disc: DISC_RE.test(String(note||'')) };
+}
+function parseBuiltin(){
+  return RM_RAW.split('\n').map(l=>{ const [c,n,p,note]=l.split('|'); return makeEntry(c,n,p,note); });
+}
+let DB = {entries:[], byCode:new Map(), byName:new Map(), source:BUILTIN_SOURCE, custom:false};
+function setDB(entries, source, custom){
+  const byCode=new Map(), byName=new Map();
+  for(const e of entries){
+    const cur=byCode.get(e.code);
+    if(!cur || (cur.price==null && e.price!=null)) byCode.set(e.code,e);
+    const k=e.name.toLowerCase(); if(k && (!byName.has(k) || (byName.get(k).price==null && e.price!=null))) byName.set(k,e);
+  }
+  DB={entries, byCode, byName, source, custom};
+}
+
+/* ===== state ===== */
+let uid = 1; const newId = () => 'p'+(Date.now().toString(36))+(uid++);
+const defaults = () => ({batchKg:1, lossPct:0, overhead:0, sell:0});
+let state = {products:[], activeId:null, threshold:30};
+function sampleProducts(){
+  return [
+    {id:newId(), name:'Woody Musk Accord', sample:true, unit:'pct', src:'ตัวอย่าง', ...defaults(), batchKg:5, sell:12000, lines:[
+      ['RM-002-001-0184',20],['RM-002-001-0203',15],['RM-002-001-0193',8],['RM-002-001-0173',10],['RM-002-001-0165',8],
+      ['RM-002-001-0148',3],['RM-002-001-0164',1],['RM-002-001-0254',6],['RM-002-001-0192',10],['RM-002-001-0182',5],
+      ['RM-044-001-0116',0.5],['RM-008-012-0567',8],['RM-404-002-0001',5],['RM-003-001-0896',0.5]
+    ].map(([code,amt])=>({code,nameIn:'',amt}))},
+    {id:newId(), name:'Citrus Fresh (สูตรเป็นกรัม)', sample:true, unit:'g', src:'ตัวอย่าง', ...defaults(), batchKg:10, lines:[
+      ['RM-008-012-0537',250],['RM-008-010-0532',150],['RM-002-001-0192',200],['RM-002-001-0907',30],
+      ['RM-002-001-0254',120],['RM-002-001-0193',100],['RM-002-001-0184',100],['RM-001-009-0080',50]
+    ].map(([code,amt])=>({code,nameIn:'',amt}))}
+  ];
+}
+function active(){ return state.products.find(p=>p.id===state.activeId) || state.products[0]; }
+function save(){ if(S.me) store.set('ss-cost-state:'+S.me.email, state); }
+
+/* ===== calculation ===== */
+function lookup(line){
+  const code=normCode(line.code);
+  if(code && DB.byCode.has(code)) return DB.byCode.get(code);
+  const nm=String(line.nameIn||'').trim().toLowerCase();
+  if(nm && DB.byName.has(nm)) return DB.byName.get(nm);
+  return null;
+}
+function compute(p){
+  const rows = p.lines.map((ln,i)=>{
+    const e = lookup(ln);
+    const amt = toNum(ln.amt);
+    const ov = toNum(ln.override);
+    let status, price=null;
+    if(isFinite(ov) && ov>0){ status='manual'; price=ov; }
+    else if(!ln.code && !ln.nameIn) status='empty';
+    else if(!e) status='notfound';
+    else { status=e.status; price=e.price; }
+    return {i, ln, e, amt: isFinite(amt)&&amt>0 ? amt : 0, price, status};
+  });
+  const W = rows.reduce((s,r)=>s+r.amt,0);
+  let rm=0, knownFrac=0, missing=0;
+  for(const r of rows){
+    r.frac = W>0 ? r.amt/W : 0;
+    r.pct = r.frac*100;
+    r.costKg = r.price!=null ? r.frac*r.price*1000 : null;
+    if(r.costKg!=null){ rm+=r.costKg; knownFrac+=r.frac; } else if(r.amt>0) missing++;
+  }
+  for(const r of rows){ r.share = rm>0 && r.costKg!=null ? r.costKg/rm : 0; }
+  const loss = Math.min(Math.max(toNum(p.lossPct)||0,0),95)/100;
+  const afterLoss = rm/(1-loss);
+  const overhead = toNum(p.overhead)||0;
+  const total = afterLoss + overhead;
+  const batchKg = toNum(p.batchKg)||0;
+  const inputKg = batchKg/(1-loss);
+  for(const r of rows){ r.gBatch = r.frac*inputKg*1000; }
+  const sell = toNum(p.sell)||0;
+  const pctSum = p.unit==='pct' ? W : null;
+  const disc = rows.filter(r=>r.e && r.e.disc && r.status!=='manual').length;
+  return {rows, W, rm, loss, lossCost:afterLoss-rm, overhead, total, perG: total/1000, batchKg, batchCost: total*batchKg, inputKg,
+          knownFrac, missing, sell, ratio: sell>0 ? total/sell*100 : null, pctSum, disc, complete: missing===0 && W>0};
+}
+function health(c){
+  if(c.W<=0) return 'bad';
+  if(c.rows.some(r=>r.status==='notfound'||r.status==='cancel')) return 'bad';
+  if(c.missing>0 || c.disc>0 || (c.pctSum!=null && Math.abs(c.pctSum-100)>0.01)) return 'warn';
+  return 'ok';
+}
+
+/* ===== file parsing ===== */
+const PCT_RE=/%|เปอร์เซ็น|percent|สัดส่วน|ratio|conc/i;
+const G_RE=/กรัม|gram|\(g\)|^g\.?$|weight|น้ำหนัก|ปริมาณ|qty|quantity|amount|kg|กก/i;
+const NAME_RE=/ชื่อ|name|รายละเอียด|description|วัตถุดิบ|material|ingredient/i;
+const PROD_RE=/สินค้า|product|ชื่อสูตร|formula|sku|ชื่อกลิ่น|fragrance name|เลขที่สูตร/i;
+const TOTAL_RE=/^(รวม|total|sum|ผลรวม)/i;
+function cellStr(v){ return v==null ? '' : String(v).trim(); }
+function rowsToProducts(rows, defaultName){
+  rows = rows.filter(r=>Array.isArray(r));
+  const ncol = Math.max(0,...rows.map(r=>r.length));
+  const codeCount = Array(ncol).fill(0);
+  rows.forEach(r=>r.forEach((c,j)=>{ if(RM_RE.test(cellStr(c))) codeCount[j]++; }));
+  let codeCol = codeCount.indexOf(Math.max(...codeCount));
+  if(!(codeCount[codeCol]>0)) codeCol=-1;
+  // header row: the last row above the first code row that has 2+ text cells, or a row containing a code/รหัส header
+  let first = codeCol>=0 ? rows.findIndex(r=>RM_RE.test(cellStr(r[codeCol]))) : -1;
+  let hdrIdx=-1;
+  if(first>=0){ for(let k=first-1;k>=Math.max(0,first-6);k--){ const r=rows[k]||[]; if(r.filter(c=>cellStr(c)!=='').length>=2){hdrIdx=k;break;} } }
+  else { // no RM codes: look for a header with name + amount
+    hdrIdx = rows.findIndex(r=>r.some(c=>NAME_RE.test(cellStr(c))) && r.some(c=>PCT_RE.test(cellStr(c))||G_RE.test(cellStr(c))));
+    if(hdrIdx<0) return {products:[], error:'ไม่พบรหัส RM หรือหัวตาราง (ชื่อวัตถุดิบ + % / กรัม) ในไฟล์'};
+    first = hdrIdx+1;
+  }
+  const hdr = hdrIdx>=0 ? rows[hdrIdx].map(cellStr) : [];
+  const used = new Set([codeCol]);
+  let prodCol = hdr.findIndex((h,j)=>!used.has(j) && PROD_RE.test(h) && !/วัตถุดิบ|rm/i.test(h)); if(prodCol>=0) used.add(prodCol);
+  let unit=null;
+  let amtCol = hdr.findIndex((h,j)=>!used.has(j) && PCT_RE.test(h) && !/ราคา|price|cost|ต้นทุน/i.test(h));
+  if(amtCol>=0) unit='pct'; else { amtCol = hdr.findIndex((h,j)=>!used.has(j) && G_RE.test(h) && !/ราคา|price|cost|ต้นทุน/i.test(h)); if(amtCol>=0) unit='g'; }
+  const data = rows.slice(first);
+  if(amtCol<0){ // most numeric column, rightmost on ties
+    let best=-1,bc=0; for(let j=0;j<ncol;j++){ if(used.has(j)) continue; const c=data.filter(r=>isFinite(toNum(r[j]))&&cellStr(r[j])!=='').length; if(c>=bc && c>0){bc=c;best=j;} }
+    amtCol=best;
+  }
+  if(amtCol<0) return {products:[], error:'ไม่พบคอลัมน์ % หรือ กรัม ของวัตถุดิบ'};
+  used.add(amtCol);
+  let nameCol = hdr.findIndex((h,j)=>!used.has(j) && NAME_RE.test(h) && !PROD_RE.test(h));
+  if(nameCol<0){ let best=-1,bc=0; for(let j=0;j<ncol;j++){ if(used.has(j)) continue; const c=data.filter(r=>{const s=cellStr(r[j]); return s && !isFinite(toNum(s)) && !RM_RE.test(s);}).length; if(c>bc){bc=c;best=j;} } nameCol=best; }
+
+  const groups=new Map(); let curProd=defaultName;
+  for(const r of data){
+    const code = codeCol>=0 ? cellStr(r[codeCol]) : '';
+    const name = nameCol>=0 ? cellStr(r[nameCol]) : '';
+    const amt = toNum(r[amtCol]);
+    if(prodCol>=0 && cellStr(r[prodCol])) curProd = cellStr(r[prodCol]);
+    const hasCode = RM_RE.test(code);
+    if(!hasCode && (!name || TOTAL_RE.test(name) || TOTAL_RE.test(code))) continue;
+    if(!hasCode && !isFinite(amt)) continue;
+    if(!groups.has(curProd)) groups.set(curProd, []);
+    groups.get(curProd).push({code: hasCode ? normCode(code) : '', nameIn: name, amt: isFinite(amt)?amt:0});
+  }
+  const products=[];
+  for(const [name, lines] of groups){
+    if(!lines.length) continue;
+    const sum = lines.reduce((s,l)=>s+(l.amt||0),0);
+    let u = unit;
+    if(Math.abs(sum-1)<=0.05 && (u==='pct' || u==null)){ lines.forEach(l=>l.amt=+(l.amt*100).toFixed(6)); u='pct'; }
+    else if(u==null) u = Math.abs(sum-100)<=5 ? 'pct' : 'g';
+    products.push({id:newId(), name, unit:u, src:'', ...defaults(), lines});
+  }
+  return {products, error: products.length? null : 'ไม่พบรายการวัตถุดิบในไฟล์'};
+}
+function readWorkbook(file){
+  return new Promise((res,rej)=>{
+    const fr=new FileReader();
+    fr.onload=()=>{ try{
+      const isCsv=/\.(csv|txt)$/i.test(file.name);
+      let text=null;
+      if(isCsv){ const bytes=new Uint8Array(fr.result);
+        try{ text=new TextDecoder('utf-8',{fatal:true}).decode(bytes); }
+        catch(e){ try{ text=new TextDecoder('windows-874').decode(bytes); }catch(e2){ text=new TextDecoder('utf-8').decode(bytes); } } } // CSV จาก Excel ภาษาไทยมักเป็น windows-874
+      const wb = isCsv ? XLSX.read(text,{type:'string'}) : XLSX.read(fr.result,{type:'array'});
+      res(wb);
+    }catch(e){ rej(e); } };
+    fr.onerror=()=>rej(fr.error); fr.readAsArrayBuffer(file);
+  });
+}
+async function importFormulaFiles(files){
+  if(typeof XLSX==='undefined'){ showMsg('bad','โหลดตัวอ่าน Excel ไม่สำเร็จ ตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง'); return; }
+  const added=[], errs=[];
+  for(const f of files){
+    try{
+      const wb = await readWorkbook(f);
+      const base = f.name.replace(/\.[^.]+$/,'');
+      const multi = wb.SheetNames.length>1;
+      let got=0;
+      for(const sn of wb.SheetNames){
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:true,defval:null,blankrows:false});
+        if(/วิธีใช้|readme|instruction/i.test(sn)) continue;
+        const r = rowsToProducts(rows, multi ? sn : base);
+        r.products.forEach(p=>{ p.src=f.name+(multi?' › '+sn:''); added.push(p); got++; });
+      }
+      if(!got) errs.push(f.name+': ไม่พบรายการวัตถุดิบ (ต้องมีรหัส RM และ % หรือ กรัม)');
+    }catch(e){ errs.push(f.name+': อ่านไฟล์ไม่ได้'); }
+  }
+  addProducts(added, errs);
+}
+function addProducts(added, errs){
+  if(added.length){
+    state.products = state.products.filter(p=>!p.sample).concat(added);
+    state.activeId = added[0].id;
+    save(); renderAll();
+    const items = added.reduce((s,p)=>s+p.lines.length,0);
+    showMsg(errs.length?'warn':'ok', `นำเข้า ${added.length} สินค้า (${items} รายการวัตถุดิบ) แล้ว`+(errs.length?' · '+errs.join(' · '):''));
+    document.getElementById('s2').scrollIntoView({behavior:'smooth',block:'start'});
+  } else showMsg('bad', errs.join(' · ') || 'ไม่พบข้อมูลที่ใช้ได้');
+}
+function showMsg(kind, text){ $('#uploadMsg').innerHTML = `<div class="msg ${kind}">${esc(text)}</div>`; }
+
+/* ===== price DB file import ===== */
+async function importDbFile(file){
+  try{
+    const wb = await readWorkbook(file);
+    let entries=[];
+    for(const sn of wb.SheetNames){
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:true,defval:null,blankrows:false});
+      const hIdx = rows.findIndex(r=>r && r.some(c=>/รหัส|code/i.test(cellStr(c))) && r.some(c=>/ราคา|price/i.test(cellStr(c))));
+      if(hIdx<0) continue;
+      const h = rows[hIdx].map(cellStr);
+      const cc=h.findIndex(x=>/^รหัส$|^code$|รหัส\s*rm|item\s*code/i.test(x)) >=0 ? h.findIndex(x=>/^รหัส$|^code$|รหัส\s*rm|item\s*code/i.test(x)) : h.findIndex(x=>/รหัส|code/i.test(x));
+      const pc=h.findIndex(x=>/ราคา|price/i.test(x));
+      const nc=h.findIndex(x=>/รายละเอียด|ชื่อ|name|description/i.test(x));
+      const notec=h.findIndex(x=>/หมายเหตุ|note|remark/i.test(x));
+      for(const r of rows.slice(hIdx+1)){
+        let code=cellStr(r[cc]); if(!RM_RE.test(code)){ const alt=r.map(cellStr).find(s=>RM_RE.test(s)&&normCode(s).split('-').length===4); if(!alt) continue; code=alt; }
+        const pre = cc>0 ? cellStr(r[cc-1]) : '';
+        const note=[notec>=0?cellStr(r[notec]):'', pre && !/^RM-[A-Z0-9/,\s-]*$/i.test(pre) ? pre : ''].filter(Boolean).join(' · ');
+        entries.push(makeEntry(code, nc>=0?cellStr(r[nc]):'', r[pc], note));
+      }
+    }
+    if(!entries.length){ toast('ไม่พบคอลัมน์ "รหัส" และ "ราคา" ในไฟล์'); return; }
+    toast('กำลังบันทึกฐานราคาให้ทั้งทีม…');
+    const res = await api('savePrices', {file:file.name, entries: entries.map(e=>({c:e.code,n:e.name,p:e.price,s:e.status,o:e.note}))});
+    applyPriceData(res);
+    toast(`อัปเดตฐานราคาให้ทั้งทีมแล้ว: ${file.name} (${entries.length} รายการ)`);
+  }catch(e){ toast(e && e.message ? 'บันทึกฐานราคาไม่สำเร็จ: '+errText(e) : 'อ่านไฟล์ฐานราคาไม่ได้'); }
+}
+/* ฐานราคามาจากเซิร์ฟเวอร์ (ชีต Prices) เท่านั้น */
+function applyPriceData(d){
+  if(d && Array.isArray(d.entries) && d.entries.length){
+    setDB(d.entries.map(x=>makeEntry(x.c, x.n, x.p==null ? (x.s==='recheck'?'R':x.s==='cancel'?'X':x.s==='rd'?'D':'') : x.p, x.o)),
+      {file:(d.src&&d.src.file)||'Summary RM', updated:(d.src&&d.src.updated)||'', by:(d.src&&d.src.by)||null}, !!d.custom);
+  } else setDB([], {file:'ยังไม่มีข้อมูลราคา', updated:'–'}, false);
+  if(S.inApp && !S.admin){ renderDbCard(); renderDbFilters(); renderWork(); if(can('viewDb')) renderDbTable(); }
+}
+
+/* ===== downloads: ดาวน์โหลดตรง + สำรองบันทึกลง Google Drive ===== */
+function bufToB64(buf){ const u8=new Uint8Array(buf); let s=''; for(let i=0;i<u8.length;i+=0x8000) s+=String.fromCharCode.apply(null, u8.subarray(i,i+0x8000)); return btoa(s); }
+function saveFile(filename, buf){
+  try{
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+    a.download=filename; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);
+  }catch(e){}
+  showDriveFallback(filename, buf);
+}
+function showDriveFallback(filename, buf){
+  let bar=$('#dlBar');
+  if(!bar){ bar=document.createElement('div'); bar.id='dlBar'; bar.className='toast'; bar.style.cssText='display:flex;gap:10px;align-items:center;flex-wrap:wrap;bottom:calc(env(safe-area-inset-bottom,0px) + 70px)'; document.body.append(bar); }
+  bar.hidden=false;
+  bar.innerHTML=`<span>ถ้าไฟล์ไม่ถูกดาวน์โหลด</span><button class="btn-ghost-dark" type="button" id="dlDrive">บันทึกลง Google Drive แทน</button><button class="btn-ghost-dark" type="button" id="dlClose" aria-label="ปิด">×</button>`;
+  clearTimeout(showDriveFallback._t); showDriveFallback._t=setTimeout(()=>{ bar.hidden=true; },12000);
+  $('#dlClose').onclick=()=>{ bar.hidden=true; };
+  $('#dlDrive').onclick=async ()=>{
+    clearTimeout(showDriveFallback._t); bar.innerHTML='<span>กำลังบันทึกลง Google Drive…</span>';
+    try{ const url=await api('saveExport', filename, bufToB64(buf));
+      bar.innerHTML=`<span>บันทึกแล้ว</span><a class="btn-ghost-dark" href="${esc(url)}" target="_blank" rel="noopener" style="text-decoration:none">เปิดไฟล์ใน Drive</a><button class="btn-ghost-dark" type="button" id="dlClose2" aria-label="ปิด">×</button>`;
+      $('#dlClose2').onclick=()=>{ bar.hidden=true; };
+    }catch(e){ bar.innerHTML=`<span>บันทึกไม่สำเร็จ: ${esc(errText(e))}</span>`; setTimeout(()=>{ bar.hidden=true; },6000); }
+  };
+}
+function sheetName(s, used){ let n=String(s).replace(/[\[\]:*?\/\\]/g,' ').slice(0,28).trim()||'Sheet'; let k=n,i=2; while(used.has(k)) k=n.slice(0,25)+' ('+(i++)+')'; used.add(k); return k; }
+function productAoA(p){
+  const c=compute(p);
+  const aoa=[
+    ['สินค้า', p.name], ['ฐานราคา', DB.source.file+' · อัปเดต '+DB.source.updated], ['วันที่คำนวณ', new Date().toLocaleString('th-TH')], [],
+    ['ลำดับ','รหัส RM','ชื่อวัตถุดิบ','หมวด', p.unit==='pct'?'% ในไฟล์':'กรัม ในไฟล์','% ในสูตร (ปรับรวม 100)','ราคา บาท/กรัม','ต้นทุน บาท/กก. หัวน้ำหอม','สัดส่วนต้นทุน %',`กรัมที่ใช้ต่อ batch ${fmt(c.batchKg,2)} กก.`,'สถานะ','หมายเหตุ']
+  ];
+  c.rows.forEach((r,k)=>aoa.push([k+1, r.e?r.e.code:normCode(r.ln.code), r.e?r.e.name:r.ln.nameIn, r.e?catOf(r.e.code):'', r.amt, +r.pct.toFixed(4), r.price, r.costKg!=null?+r.costKg.toFixed(4):null, r.costKg!=null?+(r.share*100).toFixed(2):null, +r.gBatch.toFixed(2), STATUS[r.status].t, r.e?r.e.note:'']));
+  aoa.push([], ['','','รวม','', c.W, 100, '', +c.rm.toFixed(4), c.complete?100:null, +(c.inputKg*1000).toFixed(2)]);
+  aoa.push([],['สรุปต้นทุน'],
+    ['ต้นทุนวัตถุดิบ (RM) บาท/กก.', +c.rm.toFixed(2)],
+    ['เผื่อสูญเสียการผลิต %', +(c.loss*100).toFixed(2)], ['ต้นทุนส่วนสูญเสีย บาท/กก.', +c.lossCost.toFixed(2)],
+    ['ค่าแรง + โสหุ้ย บาท/กก.', c.overhead], ['ต้นทุนรวม บาท/กก.', +c.total.toFixed(2)], ['ต้นทุนรวม บาท/กรัม', +c.perG.toFixed(4)],
+    ['ขนาด batch (กก.)', c.batchKg], ['ต้นทุนต่อ batch (บาท)', +c.batchCost.toFixed(2)],
+    ['ราคาขาย บาท/กก.', c.sell||null], ['ต้นทุนต่อราคาขาย %', c.ratio!=null?+c.ratio.toFixed(2):null],
+    ['ความครบถ้วนของราคา', c.complete ? 'ครบทุกรายการ' : `ขาดราคา ${c.missing} รายการ (${fmt((1-c.knownFrac)*100,2)}% ของสูตร) — ต้นทุนจริงสูงกว่านี้`]);
+  return {aoa, c};
+}
+function exportXlsx(list){
+  if(typeof XLSX==='undefined'){ toast('โหลดตัวเขียน Excel ไม่สำเร็จ'); return; }
+  const wb=XLSX.utils.book_new(), used=new Set(['สรุป']);
+  const sum=[['สินค้า','จำนวนรายการ','ต้นทุน RM บาท/กก.','ต้นทุนรวม บาท/กก.','ต้นทุนรวม บาท/กรัม','batch กก.','ต้นทุนต่อ batch','ราคาขาย บาท/กก.','ต้นทุน/ราคาขาย %','สถานะราคา']];
+  const sheets=[];
+  for(const p of list){
+    const {aoa,c}=productAoA(p);
+    sum.push([p.name, p.lines.length, +c.rm.toFixed(2), +c.total.toFixed(2), +c.perG.toFixed(4), c.batchKg, +c.batchCost.toFixed(2), c.sell||null, c.ratio!=null?+c.ratio.toFixed(2):null, c.complete?'ครบ':`ขาด ${c.missing} รายการ`]);
+    const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:24},{wch:18},{wch:44},{wch:22},{wch:11},{wch:12},{wch:12},{wch:16},{wch:12},{wch:18},{wch:20},{wch:40}];
+    sheets.push([sheetName(p.name,used), ws]);
+  }
+  const ws0=XLSX.utils.aoa_to_sheet(sum); ws0['!cols']=[{wch:34},{wch:10},{wch:16},{wch:16},{wch:14},{wch:9},{wch:14},{wch:14},{wch:14},{wch:16}];
+  XLSX.utils.book_append_sheet(wb, ws0, 'สรุป');
+  sheets.forEach(([n,ws])=>XLSX.utils.book_append_sheet(wb, ws, n));
+  const d=new Date(), stamp=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  const fname = list.length===1 ? `ต้นทุน_${list[0].name.replace(/[\\/:*?"<>|]/g,' ').slice(0,60)}_${stamp}.xlsx` : `ต้นทุนหัวน้ำหอม_${list.length}สินค้า_${stamp}.xlsx`;
+  saveFile(fname, XLSX.write(wb,{type:'array',bookType:'xlsx'}));
+}
+function exportTemplate(){
+  if(typeof XLSX==='undefined'){ toast('โหลดตัวเขียน Excel ไม่สำเร็จ'); return; }
+  const s=sampleProducts()[0];
+  const aoa=[['สินค้า','รหัส RM','ชื่อวัตถุดิบ (ไม่บังคับ)','% ในสูตร']];
+  s.lines.forEach(l=>{ const e=DB.byCode.get(l.code); aoa.push(['FO-ตัวอย่าง Woody Musk', l.code, e?e.name:'', l.amt]); });
+  [['RM-008-012-0537',40],['RM-008-010-0532',30],['RM-002-001-0192',20],['RM-002-001-0907',10]].forEach(([c,a])=>{ const e=DB.byCode.get(c); aoa.push(['FO-ตัวอย่าง Citrus', c, e?e.name:'', a]); });
+  const wb=XLSX.utils.book_new(); const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:26},{wch:18},{wch:46},{wch:10}];
+  XLSX.utils.book_append_sheet(wb, ws, 'สูตร');
+  const how=XLSX.utils.aoa_to_sheet([['วิธีกรอก'],['1. หนึ่งแถวต่อวัตถุดิบหนึ่งตัว'],['2. คอลัมน์ "สินค้า" ใช้แยกหลายสูตรในไฟล์เดียว (หรือแยกสินค้าละ 1 ชีต แล้วลบคอลัมน์นี้ออก)'],['3. ใส่เป็น % (รวม 100) หรือเปลี่ยนหัวคอลัมน์เป็น "กรัม" แล้วใส่น้ำหนักจริงก็ได้'],['4. ถ้าไม่มีรหัส RM ให้ใส่ชื่อวัตถุดิบให้ตรงกับฐานราคา'],['5. บันทึกแล้วลากไฟล์ไปวางในระบบคำนวณต้นทุนหัวน้ำหอม']]);
+  how['!cols']=[{wch:90}]; XLSX.utils.book_append_sheet(wb, how, 'วิธีใช้');
+  saveFile('แบบฟอร์มสูตรหัวน้ำหอม.xlsx', XLSX.write(wb,{type:'array',bookType:'xlsx'}));
+}
+
+/* ===== rendering ===== */
+function renderDbCard(){
+  const n=DB.entries.length, ok=DB.entries.filter(e=>e.status==='ok').length, re=DB.entries.filter(e=>e.status==='recheck').length;
+  const canEditPrices = can('editPrices');
+  $('#dbcard').innerHTML = `<div><b>ฐานราคา RM</b> · ${esc(DB.source.file)}${DB.custom?' <span class="sample-tag" style="color:#cea67d;border-color:#cea67d">อัปเดตแล้ว</span>':''}</div>
+    <div class="meta">อัปเดต ${esc(DB.source.updated)}<span id="dbBy"></span> · ${n.toLocaleString('th-TH')} รายการ · มีราคา ${ok.toLocaleString('th-TH')} · ต้อง recheck ${re.toLocaleString('th-TH')}</div>
+    ${canEditPrices?`<div class="acts"><button class="btn-ghost-dark" type="button" id="btnDbFile">อัปเดตราคาให้ทั้งทีมจากไฟล์ Excel</button>${DB.custom?'<button class="btn-ghost-dark" type="button" id="btnDbReset">กลับไปใช้ฐานราคา Summary RM เดิม</button>':''}</div>`:''}`;
+  if(canEditPrices){
+    $('#btnDbFile').onclick=()=>$('#fileDb').click();
+    if(DB.custom) $('#btnDbReset').onclick=async e=>{
+      const b=e.currentTarget; if(b.dataset.confirm!=='1'){ b.dataset.confirm='1'; b.textContent='กดอีกครั้งเพื่อยืนยัน (มีผลทั้งทีม)'; return; }
+      try{ applyPriceData(await api('resetPrices')); toast('กลับไปใช้ฐานราคาจาก Summary RM (12/10/2026) แล้ว'); }catch(err){ toast('ทำไม่สำเร็จ: '+errText(err)); } };
+  }
+  if(DB.source.by){ const el=$('#dbBy'); if(el) el.textContent=' โดย '+DB.source.by; }
+}
+function renderTabs(){
+  const a=active();
+  $('#ptabs').innerHTML = state.products.map(p=>{ const h=health(compute(p)); return `<button type="button" class="ptab ${p.id===a?.id?'on':''}" data-id="${p.id}"><span class="dot ${h==='ok'?'':h}"></span><span class="t">${esc(p.name)}</span></button>`; }).join('')
+    + `<button type="button" class="ptab" id="btnNewProd">+ สูตรใหม่</button>`;
+}
+function chip(status){ const s=STATUS[status]; return `<span class="chip ${s.c}">${s.t}</span>`; }
+function renderEditor(){
+  const p=active();
+  if(!p){ $('#editor').innerHTML=`<div class="empty">ยังไม่มีสูตร · ใส่ไฟล์ในขั้นตอนที่ 1 หรือกด "+ สูตรใหม่"</div>`; return; }
+  const c=compute(p);
+  const maxShare=Math.max(0.0001,...c.rows.map(r=>r.share));
+  const pctWarn = c.pctSum!=null && c.W>0 && Math.abs(c.pctSum-100)>0.01;
+  $('#editor').innerHTML = `
+    <div class="row" style="margin-bottom:10px;align-items:flex-end">
+      <div style="flex:1 1 260px;min-width:0"><label class="muted" for="pname" style="font-size:12px">ชื่อสินค้า / รหัสสูตร ${p.sample?'<span class="sample-tag">ตัวอย่าง</span>':''}</label>
+        <input class="pname" id="pname" value="${esc(p.name)}"></div>
+      <span class="muted" style="font-size:12.5px">${p.src?'ที่มา: '+esc(p.src):''}</span>
+    </div>
+    <div class="settings">
+      <div class="field"><label for="unit">หน่วยในสูตร</label><select id="unit"><option value="pct" ${p.unit==='pct'?'selected':''}>% (รวม 100)</option><option value="g" ${p.unit==='g'?'selected':''}>กรัม (น้ำหนักจริง)</option></select></div>
+      <div class="field"><label for="batchKg">ขนาด batch (กก.)</label><input id="batchKg" type="number" min="0" step="any" value="${esc(p.batchKg)}"></div>
+      <div class="field"><label for="lossPct">เผื่อสูญเสีย (%)</label><input id="lossPct" type="number" min="0" max="95" step="any" value="${esc(p.lossPct)}"></div>
+      <div class="field"><label for="overhead">ค่าแรง+โสหุ้ย (บาท/กก.)</label><input id="overhead" type="number" min="0" step="any" value="${esc(p.overhead)}"></div>
+      <div class="field"><label for="sell">ราคาขาย (บาท/กก.)</label><input id="sell" type="number" min="0" step="any" value="${esc(p.sell||'')}" placeholder="ไม่บังคับ"></div>
+    </div>
+    ${pctWarn?`<div class="msg warn" style="margin:0 0 12px">ผลรวม % ในสูตร = ${fmtP(c.pctSum)} ไม่ใช่ 100 · ระบบปรับสัดส่วนให้รวมเป็น 100% ก่อนคำนวณ ตรวจสอบสูตรอีกครั้ง</div>`:''}
+    <div class="tablebox"><table>
+      <thead><tr><th>#</th><th>รหัส RM</th><th>ชื่อวัตถุดิบ</th><th class="num">${p.unit==='pct'?'%':'กรัม'}</th><th class="num">% สูตร</th><th class="num">บาท/กรัม</th><th class="num">บาท/กก.</th><th>สัดส่วนต้นทุน</th><th class="num">กรัม/batch</th><th></th></tr></thead>
+      <tbody>${c.rows.map((r,k)=>{
+        const nm = r.e ? r.e.name : (r.ln.nameIn || '—');
+        const note = r.e && r.e.note ? `<span class="note">${esc(r.e.note)}</span>` : (r.status==='notfound' && r.ln.nameIn && r.ln.code ? `<span class="note">ชื่อในไฟล์: ${esc(r.ln.nameIn)}</span>`:'');
+        const needPrice = r.status!=='ok';
+        const priceCell = needPrice
+          ? `<input class="price" data-i="${r.i}" data-f="override" type="number" step="any" min="0" value="${esc(r.ln.override??'')}" placeholder="ใส่ราคา" aria-label="ใส่ราคาเอง บาท/กรัม">`
+          : `<span title="จากฐานราคา">${fmtP(r.price)}</span>`;
+        return `<tr>
+          <td class="muted">${k+1}</td>
+          <td><input class="code" data-i="${r.i}" data-f="code" value="${esc(r.ln.code)}" aria-label="รหัส RM"></td>
+          <td><div class="nm">${esc(nm)}<br>${chip(r.status)}${r.e&&r.e.disc?' <span class="chip bad">เลิกใช้/ห้ามใช้</span>':''}${note}</div></td>
+          <td class="num"><input class="amt" data-i="${r.i}" data-f="amt" type="number" step="any" min="0" value="${esc(r.ln.amt)}" aria-label="ปริมาณ"></td>
+          <td class="num">${fmt(r.pct,2)}</td>
+          <td class="num">${priceCell}</td>
+          <td class="num">${r.costKg!=null?fmt(r.costKg,2):'–'}</td>
+          <td><div class="share"><i style="width:${(r.share/maxShare*64).toFixed(1)}px"></i><span>${r.costKg!=null?fmt(r.share*100,1)+'%':''}</span></div></td>
+          <td class="num">${fmt(r.gBatch,1)}</td>
+          <td><button type="button" class="x" data-del="${r.i}" aria-label="ลบแถว">×</button></td></tr>`; }).join('')}</tbody>
+      <tfoot><tr><td></td><td colspan="2">รวม ${c.rows.length} รายการ</td><td class="num">${fmtP(c.W)}</td><td class="num">${c.W>0?'100.00':'–'}</td><td></td><td class="num">${c.complete?'':'≥ '}${fmt(c.rm,2)}</td><td></td><td class="num">${fmt(c.inputKg*1000,1)}</td><td></td></tr></tfoot>
+    </table></div>
+    <div class="row" style="margin-top:12px;justify-content:space-between">
+      <div class="row"><button class="btn small" type="button" id="btnAddRow">+ เพิ่มวัตถุดิบ</button><span class="muted" style="font-size:12.5px">หรือค้นหาในฐานราคาด้านล่างแล้วกด "เพิ่ม"</span></div>
+      <button class="btn link" type="button" id="btnDelProd">ลบสูตรนี้</button>
+    </div>`;
+}
+function renderSummary(){
+  const p=active();
+  if(!p){ $('#summary').innerHTML=''; return; }
+  const c=compute(p);
+  const top=[...c.rows].filter(r=>r.costKg!=null).sort((a,b)=>b.costKg-a.costKg).slice(0,4);
+  const cov=c.knownFrac*100;
+  const ratioCls = c.ratio==null ? '' : (c.ratio<=state.threshold?'ok':'bad');
+  $('#summary').innerHTML = `
+    <div class="card hero">
+      <h3>ต้นทุนรวมต่อ กก.</h3>
+      <div class="big">${c.complete?'':'≥ '}${fmt(c.total,2)}<small>บาท/กก.</small></div>
+      <div class="muted" style="font-size:13px">${esc(p.name)} · ${fmt(c.perG,4)} บาท/กรัม</div>
+      <dl class="kv">
+        <dt>ต้นทุนวัตถุดิบ (RM)</dt><dd>${fmt(c.rm,2)}</dd>
+        <dt>เผื่อสูญเสีย ${fmtP(c.loss*100)}%</dt><dd>${fmt(c.lossCost,2)}</dd>
+        <dt>ค่าแรง + โสหุ้ย</dt><dd>${fmt(c.overhead,2)}</dd>
+        <dt class="sum">ต้นทุนรวม บาท/กก.</dt><dd class="sum">${fmt(c.total,2)}</dd>
+        <dt>ต้นทุนต่อ batch ${fmtP(c.batchKg)} กก.</dt><dd>${fmt(c.batchCost,2)} บาท</dd>
+      </dl>
+    </div>
+    <div class="card">
+      <h3>ความครบของราคา</h3>
+      <div class="meter ${c.complete?'':'warn'}"><i style="width:${cov.toFixed(1)}%"></i></div>
+      <div style="font-size:13px;margin-top:6px">มีราคา ${c.rows.length-c.missing}/${c.rows.length} รายการ · ครอบคลุม ${fmt(cov,1)}% ของสูตร</div>
+      ${c.complete ? `<div class="alert ok">ทุกรายการมีราคา ต้นทุนนี้ใช้ได้</div>`
+        : `<div class="alert warn">ยังไม่รวม ${c.missing} รายการที่ไม่มีราคา ต้นทุนจริงจะสูงกว่านี้ · ใส่ราคาเองในช่อง "ใส่ราคา" หรือแจ้ง PC recheck</div>`}
+      ${c.disc?`<div class="alert bad">มี ${c.disc} รายการที่เลิกใช้หรือห้ามใช้ ดูหมายเหตุในตารางเพื่อเปลี่ยนรหัสทดแทน</div>`:''}
+    </div>
+    <div class="card">
+      <h3>ต้นทุนต่อราคาขาย</h3>
+      ${c.ratio==null ? `<div class="muted" style="font-size:13px;margin-top:6px">ใส่ราคาขายในขั้นตอนที่ 2 เพื่อดูสัดส่วนต้นทุน</div>`
+        : `<div class="big" style="font-size:34px">${fmt(c.ratio,1)}<small>%</small></div>
+           <div class="alert ${ratioCls}">${c.ratio<=state.threshold?'อยู่ในเกณฑ์':'เกินเกณฑ์'} ${state.threshold}% · กำไรขั้นต้น ${fmt(c.sell-c.total,2)} บาท/กก.</div>`}
+      <div class="row" style="margin-top:8px;font-size:12.5px"><label class="muted" for="threshold">เกณฑ์ต้นทุน (%)</label><input id="threshold" type="number" min="1" max="100" step="any" value="${state.threshold}" style="width:70px;border:1px solid var(--line-strong);border-radius:6px;padding:2px 6px;background:var(--input-bg)"></div>
+    </div>
+    <div class="card">
+      <h3>วัตถุดิบที่ดันต้นทุน</h3>
+      <ul class="drivers">${top.map(r=>`<li><div class="top"><span>${esc(r.e?r.e.name:r.ln.nameIn||r.ln.code)}</span><span class="num">${fmt(r.share*100,1)}%</span></div><div class="bar"><i style="width:${(r.share*100).toFixed(1)}%"></i></div></li>`).join('') || '<li class="muted">ยังไม่มีข้อมูล</li>'}</ul>
+    </div>
+    <div class="card exp">
+      <h3><span class="n" style="color:var(--accent);font-family:var(--f-display);font-size:18px;letter-spacing:0;margin-right:6px">3</span>ส่งออก</h3>
+      ${can('export') ? `<button class="btn primary" type="button" id="btnExpOne">ดาวน์โหลด Excel สินค้านี้</button>
+      <button class="btn" type="button" id="btnExpAll">ดาวน์โหลด Excel ทุกสินค้า (${state.products.length})</button>` : `<div class="muted" style="font-size:12.5px">บทบาทของคุณยังไม่มีสิทธิ์ดาวน์โหลด Excel</div>`}
+      <button class="btn" type="button" id="btnCopy">คัดลอกสรุปต้นทุน</button>
+    </div>`;
+}
+function renderOverview(){
+  const t=$('#overview');
+  if(!state.products.length){ t.innerHTML='<tbody><tr><td class="empty">ยังไม่มีสินค้า</td></tr></tbody>'; return; }
+  t.innerHTML = `<thead><tr><th>สินค้า</th><th class="num">รายการ</th><th class="num">ต้นทุน RM บาท/กก.</th><th class="num">ต้นทุนรวม บาท/กก.</th><th class="num">ต้นทุน/ราคาขาย</th><th>ราคาวัตถุดิบ</th></tr></thead>
+  <tbody>${state.products.map(p=>{ const c=compute(p), h=health(c); return `<tr>
+    <td><button type="button" class="btn link" data-open="${p.id}" style="text-align:left;color:var(--ink)">${esc(p.name)}</button>${p.sample?'<span class="sample-tag">ตัวอย่าง</span>':''}</td>
+    <td class="num">${p.lines.length}</td><td class="num">${c.complete?'':'≥ '}${fmt(c.rm,2)}</td><td class="num"><b>${c.complete?'':'≥ '}${fmt(c.total,2)}</b></td>
+    <td class="num">${c.ratio==null?'–':fmt(c.ratio,1)+'%'}</td>
+    <td>${c.complete && h==='ok' ? '<span class="chip ok">ครบ</span>' : (c.complete?'<span class="chip warn">ครบ · มีเตือน</span>':`<span class="chip warn">ขาด ${c.missing} รายการ</span>`)}</td></tr>`; }).join('')}</tbody>`;
+}
+function renderDbTable(){
+  const q=$('#dbq').value.trim().toLowerCase(), f=$('#dbf').value, cat=$('#dbc').value;
+  const list=DB.entries.filter(e=>(!f||e.status===f) && (!cat||e.code.split('-')[2]===cat) && (!q || e.code.toLowerCase().includes(q) || e.name.toLowerCase().includes(q)));
+  const shown=list.slice(0,60);
+  $('#dbtable').innerHTML = `<thead><tr><th>รหัส</th><th>รายละเอียด</th><th>หมวด</th><th class="num">บาท/กรัม</th><th>สถานะ</th><th></th></tr></thead>
+    <tbody>${shown.map(e=>`<tr><td class="mono">${esc(e.code)}</td><td><div class="nm">${esc(e.name)}${e.note?`<span class="note">${esc(e.note)}</span>`:''}</div></td><td class="muted" style="white-space:nowrap">${esc(catOf(e.code))}</td>
+      <td class="num">${e.price!=null?fmtP(e.price):'–'}</td><td>${chip(e.status)}</td><td>${can('calc')?`<button class="btn small" type="button" data-add="${esc(e.code)}" data-name="${esc(e.name)}">เพิ่ม</button>`:''}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">ไม่พบรายการที่ตรงกับคำค้น</td></tr>'}</tbody>`;
+  $('#dbcount').textContent = `แสดง ${shown.length.toLocaleString('th-TH')} จาก ${list.length.toLocaleString('th-TH')} รายการ` + (list.length>60?' · พิมพ์คำค้นเพิ่มเพื่อกรอง':'');
+  $('#dbHint').textContent = `${DB.entries.length.toLocaleString('th-TH')} รายการ · ราคาเป็น บาท/กรัม`;
+}
+function renderDbFilters(){
+  const cats=[...new Set(DB.entries.map(e=>e.code.split('-')[2]))].filter(c=>CAT[c]).sort();
+  $('#dbc').innerHTML = '<option value="">ทุกหมวด</option>'+cats.map(c=>`<option value="${c}">${c} · ${esc(CAT[c])}</option>`).join('');
+}
+function renderWork(){ if(!can('calc')) return; renderTabs(); renderEditor(); renderSummary(); renderOverview(); }
+function applyPermsToLayout(){
+  const calc=can('calc'), view=can('viewDb');
+  ['#stepsBar','#s1','#s2','#s4','#summary'].forEach(s=>$(s).hidden=!calc);
+  $('#s5').hidden=!view;
+  $('.layout').style.gridTemplateColumns = calc ? '' : 'minmax(0,1fr)';
+  let none=$('#noPerm');
+  if(!calc && !view){ if(!none){ none=document.createElement('div'); none.id='noPerm'; none.className='empty'; none.textContent='บทบาทของคุณยังไม่มีสิทธิ์ใช้งานส่วนใด ติดต่อแอดมินเพื่อเพิ่มสิทธิ์'; $('.layout .col').prepend(none); } }
+  else if(none) none.remove();
+}
+function renderAll(){ applyPermsToLayout(); renderUserBar(); renderDbCard(); renderDbFilters(); renderWork(); if(can('viewDb')) renderDbTable(); }
+
+/* ===== events ===== */
+const drop=$('#drop');
+['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over');}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over');}));
+drop.addEventListener('drop',e=>{ const fs=[...e.dataTransfer.files]; if(fs.length) importFormulaFiles(fs); });
+drop.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); $('#fileFormula').click(); } });
+$('#fileFormula').addEventListener('change',e=>{ const fs=[...e.target.files]; if(fs.length) importFormulaFiles(fs); e.target.value=''; });
+$('#fileDb').addEventListener('change',e=>{ const f=e.target.files[0]; if(f) importDbFile(f); e.target.value=''; });
+$('#btnTemplate').onclick=exportTemplate;
+$('#btnPaste').onclick=()=>{
+  const txt=$('#pasteBox').value; if(!txt.trim()){ showMsg('bad','ยังไม่มีข้อมูลที่วาง'); return; }
+  const rows=txt.split(/\r?\n/).map(l=>l.split(/\t|;|,(?=\s*[\d.]+\s*%?\s*$)/));
+  const r=rowsToProducts(rows, $('#pasteName').value.trim()||'สูตรจากการวาง');
+  r.products.forEach(p=>p.src='วางจาก Excel');
+  addProducts(r.products, r.error?[r.error]:[]);
+};
+$('#ptabs').addEventListener('click',e=>{
+  const b=e.target.closest('.ptab'); if(!b) return;
+  if(b.id==='btnNewProd'){ const p={id:newId(),name:'สูตรใหม่ '+(state.products.length+1),unit:'pct',src:'สร้างเอง',...defaults(),lines:[{code:'',nameIn:'',amt:''}]}; state.products.push(p); state.activeId=p.id; save(); renderWork(); return; }
+  state.activeId=b.dataset.id; save(); renderWork();
+});
+$('#editor').addEventListener('change',e=>{
+  const p=active(); if(!p) return; const t=e.target;
+  if(t.id==='pname'){ p.name=t.value.trim()||p.name; p.sample=false; }
+  else if(['unit','batchKg','lossPct','overhead','sell'].includes(t.id)){ p[t.id]= t.id==='unit' ? t.value : t.value; }
+  else if(t.dataset.f){ const ln=p.lines[+t.dataset.i]; if(!ln) return;
+    if(t.dataset.f==='code'){ ln.code=normCode(t.value); ln.nameIn=''; }
+    else if(t.dataset.f==='amt') ln.amt=t.value;
+    else if(t.dataset.f==='override') ln.override=t.value; }
+  else return;
+  save(); renderWork();
+});
+$('#editor').addEventListener('click',e=>{
+  const p=active(); if(!p) return;
+  if(e.target.id==='btnAddRow'){ p.lines.push({code:'',nameIn:'',amt:''}); save(); renderWork(); const ins=document.querySelectorAll('#editor input.code'); ins[ins.length-1]?.focus(); return; }
+  if(e.target.id==='btnDelProd'){
+    if(e.target.dataset.confirm!=='1'){ e.target.dataset.confirm='1'; e.target.textContent='กดอีกครั้งเพื่อยืนยันการลบ'; setTimeout(()=>{ if(e.target.isConnected){e.target.dataset.confirm='';e.target.textContent='ลบสูตรนี้';} },4000); return; }
+    state.products=state.products.filter(x=>x.id!==p.id); state.activeId=state.products[0]?.id||null; save(); renderWork(); return; }
+  const d=e.target.closest('[data-del]'); if(d){ p.lines.splice(+d.dataset.del,1); save(); renderWork(); }
+});
+$('#summary').addEventListener('click',e=>{
+  const p=active(); if(!p) return;
+  if(e.target.id==='btnExpOne') exportXlsx([p]);
+  if(e.target.id==='btnExpAll') exportXlsx(state.products);
+  if(e.target.id==='btnCopy'){
+    const c=compute(p);
+    const txt=[`ต้นทุนหัวน้ำหอม: ${p.name}`,`ต้นทุน RM: ${fmt(c.rm,2)} บาท/กก.`,`เผื่อสูญเสีย ${fmtP(c.loss*100)}%: ${fmt(c.lossCost,2)} บาท/กก.`,`ค่าแรง+โสหุ้ย: ${fmt(c.overhead,2)} บาท/กก.`,`ต้นทุนรวม: ${c.complete?'':'≥ '}${fmt(c.total,2)} บาท/กก. (${fmt(c.perG,4)} บาท/กรัม)`,`ต้นทุนต่อ batch ${fmtP(c.batchKg)} กก.: ${fmt(c.batchCost,2)} บาท`, c.ratio!=null?`ต้นทุน/ราคาขาย: ${fmt(c.ratio,1)}%`:'', c.complete?'ราคาครบทุกรายการ':`ยังขาดราคา ${c.missing} รายการ`,`ฐานราคา: ${DB.source.file} (อัปเดต ${DB.source.updated})`].filter(Boolean).join('\n');
+    const fallback=()=>{ let ta=$('#copyBox'); if(!ta){ ta=document.createElement('textarea'); ta.id='copyBox'; ta.readOnly=true; ta.style.cssText='width:100%;min-height:150px;border:1px solid var(--line-strong);border-radius:8px;padding:8px;background:var(--input-bg);font-size:12.5px'; e.target.after(ta); } ta.value=txt; ta.focus(); ta.select(); toast('เลือกข้อความไว้แล้ว กด Ctrl+C เพื่อคัดลอก'); };
+    try{ navigator.clipboard.writeText(txt).then(()=>toast('คัดลอกสรุปแล้ว'), fallback); }catch(err){ fallback(); }
+  }
+});
+$('#summary').addEventListener('change',e=>{ if(e.target.id==='threshold'){ const v=toNum(e.target.value); if(v>0){ state.threshold=v; save(); renderWork(); } } });
+$('#overview').addEventListener('click',e=>{ const b=e.target.closest('[data-open]'); if(!b) return; state.activeId=b.dataset.open; save(); renderWork(); $('#s2').scrollIntoView({behavior:'smooth'}); });
+$('#dbq').addEventListener('input',renderDbTable); $('#dbf').addEventListener('change',renderDbTable); $('#dbc').addEventListener('change',renderDbTable);
+$('#dbtable').addEventListener('click',e=>{
+  const b=e.target.closest('[data-add]'); if(!b) return;
+  let p=active();
+  if(!p){ p={id:newId(),name:'สูตรใหม่ 1',unit:'pct',src:'สร้างเอง',...defaults(),lines:[]}; state.products.push(p); state.activeId=p.id; }
+  const blank=p.lines.findIndex(l=>!l.code && !l.nameIn);
+  const ln={code:b.dataset.add,nameIn:'',amt:''};
+  if(blank>=0) p.lines[blank]=ln; else p.lines.push(ln);
+  save(); renderWork(); toast(`เพิ่ม ${b.dataset.name} ใน "${p.name}" แล้ว · ใส่ % ในตาราง`);
+});
+
+/* ===== ผู้ใช้และสิทธิ์ (Google Apps Script) =====
+   ตัวตน: บัญชี Google ของบริษัท ที่ Google ยืนยันแล้ว (Session.getActiveUser ฝั่งเซิร์ฟเวอร์)
+   สิทธิ์ทุกอย่างตรวจซ้ำที่เซิร์ฟเวอร์ หน้าเว็บใช้แค่ซ่อน/แสดงปุ่ม */
+const PERMS = [
+  ['calc','คำนวณต้นทุน','อัปโหลดสูตรและคำนวณต้นทุน'],
+  ['export','ส่งออก Excel','ดาวน์โหลดผลคำนวณเป็นไฟล์'],
+  ['viewDb','ดูฐานราคา','ค้นหาราคาวัตถุดิบ'],
+  ['editPrices','อัปเดตฐานราคา','อัปโหลดราคาใหม่ให้ทั้งทีม'],
+  ['manageUsers','จัดการผู้ใช้','เพิ่มผู้ใช้ กำหนดบทบาท ระงับ']
+];
+const DOMAINS = ['scentandsense.co.th','scentandsense.co'];
+const S = {me:null, roles:{}, order:[], access:{autoJoin:false, defaultRole:'costing'}, perms:{}, roleName:'',
+  inApp:false, gate:'loading', admin:false, adm:null, appUrl:'', requested:false};
+function can(p){ return !!S.perms[p]; }
+
+/* --- การเชื่อมต่อเซิร์ฟเวอร์: 2 โหมด ---
+   1) เปิดใน Apps Script: ใช้ google.script.run (Google ยืนยันตัวตนให้)
+   2) เปิดบน GitHub Pages: window.COSTING_CONFIG ถูกใส่ตอน build → เข้าสู่ระบบด้วย "Sign in with Google"
+      แล้วส่ง ID token ไปที่ Apps Script API (doPost) ซึ่งตรวจ token กับ Google ทุกครั้ง */
+const CFG = window.COSTING_CONFIG || null;
+const HTTP = !!CFG;
+const TOKEN_KEY = 'ss-cost-idtoken';
+function jwtExp(t){ try{ const p=JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); return Number(p.exp)||0; }catch(e){ return 0; } }
+function getToken(){ try{ const t=sessionStorage.getItem(TOKEN_KEY); return t && jwtExp(t)*1000 > Date.now()+60000 ? t : null; }catch(e){ return S.token && jwtExp(S.token)*1000 > Date.now()+60000 ? S.token : null; } }
+function setToken(t){ S.token=t; try{ sessionStorage.setItem(TOKEN_KEY, t); }catch(e){} }
+function clearToken(){ S.token=null; try{ sessionStorage.removeItem(TOKEN_KEY); }catch(e){} }
+async function httpApi(fn, ...args){
+  const tok=getToken();
+  if(!tok){ authLost(); throw new Error('AUTH_REQUIRED'); }
+  let j;
+  try{
+    const r=await fetch(CFG.apiUrl, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify({fn, args, idToken:tok})});
+    j=await r.json();
+  }catch(e){ throw new Error('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง'); }
+  if(!j.ok){ if(/^AUTH_/.test(j.error)) authLost(); throw new Error(j.error); }
+  return j.result;
+}
+function authLost(){ clearToken(); if(S.gate!=='signin'){ S.inApp=false; showGate('signin','เซสชันหมดอายุ เข้าสู่ระบบอีกครั้ง'); } }
+const api = (fn, ...args) => HTTP ? httpApi(fn, ...args)
+  : new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](...args));
+function renderGsi(msg){
+  const el=$('#gsiBtn'); if(!el) return;
+  let tries=0;
+  (function wait(){
+    if(window.google && google.accounts && google.accounts.id){
+      google.accounts.id.initialize({client_id:CFG.googleClientId, auto_select:true, cancel_on_tap_outside:false,
+        callback:r=>{ if(r && r.credential){ setToken(r.credential); boot(); } }});
+      google.accounts.id.renderButton(el, {theme:'outline', size:'large', text:'signin_with', shape:'pill', locale:'th', width:280});
+      if(!msg) google.accounts.id.prompt();
+    } else if(++tries<100) setTimeout(wait,100);
+    else el.innerHTML='<div class="msg bad">โหลดปุ่มเข้าสู่ระบบของ Google ไม่สำเร็จ ตรวจสอบอินเทอร์เน็ตแล้วรีเฟรช</div>';
+  })();
+}
+function errText(e){
+  const m = String((e && e.message) || e || '');
+  if(/FORBIDDEN/.test(m)) return 'บทบาทของคุณไม่มีสิทธิ์ทำรายการนี้';
+  if(/^AUTH_/.test(m)) return 'เซสชันหมดอายุ เข้าสู่ระบบอีกครั้ง';
+  if(/SETUP/.test(m)) return 'ระบบยังไม่ได้ตั้งค่า ให้ผู้ดูแลรันฟังก์ชัน setup() ใน Apps Script';
+  return m.replace(/^Error:\s*/,'') || 'เกิดข้อผิดพลาด ลองอีกครั้ง';
+}
+const nowIso = () => new Date().toISOString();
+const fmtDate = iso => { if(!iso) return '–'; const d=new Date(iso); return isNaN(d) ? '–' : d.toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}); };
+const fmtSeen = iso => { if(!iso) return '–'; const d=new Date(iso); return isNaN(d)?'–':d.toLocaleString('th-TH',{day:'numeric',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit'}); };
+const shortName = email => String(email||'').split('@')[0];
+function ava(email, cls){
+  const s=String(email||'?'); let h=0; for(const ch of s) h=(h*31+ch.charCodeAt(0))>>>0;
+  const colors=['#091e4b','#c46d4e','#494b74','#063b7c','#8a5a3c','#2f5d50'];
+  return `<span class="ava ${cls||''}" style="background:${colors[h%colors.length]}" aria-hidden="true">${esc(s.charAt(0).toUpperCase())}</span>`;
+}
+function computePerms(){ S.perms = Object.assign({}, S.me && S.me.perms); S.roleName = (S.me && S.me.roleName) || 'ยังไม่มีบทบาท'; }
+function applyBootstrap(b){
+  S.me=b.me; S.roles=b.roles||{}; S.order=b.order||[]; S.access=b.access||S.access; S.appUrl=b.appUrl||''; S.requested=!!b.requested;
+  computePerms(); applyPriceData(b.prices);
+}
+
+/* --- หน้าเข้าสู่ระบบ / สถานะสิทธิ์ --- */
+function whoBlock(){ return `<div class="who">${ava(S.me&&S.me.email,'lg')}<div><b>${esc(shortName(S.me&&S.me.email))}</b><span>${esc(S.me?S.me.email:'')}</span></div></div>`; }
+function showGate(kind, info){
+  S.gate=kind; S.inApp=false;
+  $('#app').hidden=true; $('#gate').hidden=false;
+  const head = `<div class="eyebrow">Scent &amp; Sense ✦ ระบบต้นทุนหัวน้ำหอม</div>`;
+  const domains = '@'+DOMAINS.join(' หรือ @');
+  let body='';
+  if(kind==='loading') body = `<div class="spin" role="status" aria-label="กำลังตรวจสอบสิทธิ์"></div><p>กำลังตรวจสอบบัญชี Google ของคุณ…</p>`;
+  else if(kind==='noPlatform') body = `<h1>เปิดผ่านลิงก์ของระบบ</h1><p>หน้านี้ต้องเปิดผ่านลิงก์ Google Apps Script ของบริษัท</p>`;
+  else if(kind==='noIdentity') body = `<h1>ไม่พบบัญชี Google</h1><p>เข้าสู่ระบบ Google ด้วยอีเมลบริษัท (${esc(domains)}) แล้วเปิดลิงก์อีกครั้ง</p>`;
+  else if(kind==='signin') body = `<h1>เข้าสู่ระบบ</h1><p>ใช้บัญชี Google ของบริษัท (${esc(domains)})</p><div id="gsiBtn" style="min-height:44px"></div><div class="gate-err" id="gateErr">${esc(info||'')}</div>`;
+  else if(kind==='domain') body = `<h1>อีเมลนี้ใช้ไม่ได้</h1><p>บัญชี <b>${esc(info||'')}</b> ไม่ใช่อีเมลบริษัท ${HTTP?'เลือกบัญชีอื่น':'ออกจากระบบ Google หรือสลับบัญชี แล้วเข้า'}ด้วย ${esc(domains)}</p>${HTTP?'<button class="btn primary" type="button" id="btnSwitch">ใช้บัญชีอื่น</button>':''}`;
+  else if(kind==='noAccess') body = `${whoBlock()}<h1>ยังไม่มีสิทธิ์ใช้งาน</h1><p>กดส่งคำขอ ระบบจะแจ้งผู้ดูแลทางอีเมล เมื่ออนุมัติแล้วคุณจะได้รับอีเมลแจ้ง แล้วเปิดลิงก์นี้อีกครั้ง</p>
+      <button class="btn primary" type="button" id="btnRequest" ${S.requested?'disabled':''}>${S.requested?'ส่งคำขอแล้ว · รอผู้ดูแลอนุมัติ':'ส่งคำขอสิทธิ์ใช้งาน'}</button><div class="gate-err" id="gateErr"></div>`;
+  else if(kind==='suspended') body = `${whoBlock()}<h1>บัญชีถูกระงับ</h1><p>บัญชีนี้ถูกระงับการใช้งานระบบต้นทุน ติดต่อผู้ดูแลระบบหากต้องการเปิดใช้อีกครั้ง</p>`;
+  else if(kind==='error') body = `<h1>เปิดระบบไม่สำเร็จ</h1><p>${esc(info||'')}</p><button class="btn primary" type="button" id="btnRetry">ลองอีกครั้ง</button>`;
+  $('#gateCard').innerHTML = head + body;
+  if(kind==='signin') renderGsi(info);
+}
+function signOut(){
+  clearToken(); S.inApp=false; S.admin=false;
+  try{ if(window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect(); }catch(e){}
+  showGate('signin','ออกจากระบบแล้ว');
+}
+$('#gateCard').addEventListener('click', async e=>{
+  if(e.target.id==='btnRetry'){ boot(); return; }
+  if(e.target.id==='btnSwitch'){ signOut(); return; }
+  if(e.target.id!=='btnRequest') return;
+  e.target.disabled=true;
+  try{ const r=await api('requestAccess'); if(r==='ALREADY'){ boot(); return; } S.requested=true; e.target.textContent='ส่งคำขอแล้ว · รอผู้ดูแลอนุมัติ'; }
+  catch(x){ e.target.disabled=false; $('#gateErr').textContent='ส่งคำขอไม่สำเร็จ: '+errText(x); }
+});
+function evaluate(){
+  computePerms();
+  if(!S.me.active){ showGate('suspended'); return; }
+  if(!S.me.role){ showGate('noAccess'); return; }
+  if(!S.inApp) enterApp(); else showView(S.admin && can('manageUsers') ? 'admin' : 'calc');
+}
+
+/* --- app shell --- */
+function enterApp(){
+  S.inApp=true; S.gate='app'; $('#gate').hidden=true; $('#app').hidden=false;
+  const s=store.get('ss-cost-state:'+S.me.email);
+  if(s && Array.isArray(s.products) && s.products.length) state=Object.assign({threshold:30}, s);
+  else if(!state.products.length){ state.products=sampleProducts(); state.activeId=state.products[0].id; }
+  showView(S.admin && can('manageUsers') ? 'admin' : 'calc');
+}
+function renderUserBar(){
+  $('#userbar').innerHTML = `${ava(S.me.email)}<span id="ubName"></span><span class="rolepill" id="ubRole"></span>
+    ${can('manageUsers')?`<button class="btn-ghost-dark" type="button" id="btnAdmin">${S.admin?'กลับไปหน้าคำนวณ':'จัดการผู้ใช้และบทบาท'}</button>`:''}
+    <button class="btn-ghost-dark" type="button" id="btnShare">แชร์ลิงก์</button>
+    <button class="btn-ghost-dark" type="button" id="btnReload" title="โหลดสิทธิ์และฐานราคาล่าสุด">รีเฟรช</button>
+    ${HTTP?'<button class="btn-ghost-dark" type="button" id="btnSignOut">ออกจากระบบ</button>':''}`;
+  $('#ubName').textContent=S.me.email; $('#ubRole').textContent=S.roleName+(S.me.auto?' (อัตโนมัติ)':'');
+}
+async function reloadAll(){
+  try{ applyBootstrap(await api('bootstrap')); evaluate(); if(S.inApp && !S.admin) renderAll(); toast('อัปเดตสิทธิ์และฐานราคาล่าสุดแล้ว'); }
+  catch(e){ toast(errText(e)); }
+}
+
+/* --- share link --- */
+let shareReturn=null;
+function openShare(){
+  shareReturn=document.activeElement;
+  const url=S.appUrl || '(ลิงก์ Web app จากเมนู Deploy)';
+  const role = S.access.autoJoin && S.roles[S.access.defaultRole] ? S.roles[S.access.defaultRole].name : null;
+  $('#shareUrl').value=url;
+  $('#shareMsg').value=`ระบบคำนวณต้นทุนหัวน้ำหอม (Scent & Sense)\n${url}\n\nเปิดลิงก์ด้วยบัญชี Google ของบริษัท (@scentandsense.co.th หรือ @scentandsense.co)`;
+  $('#shareNote').textContent = role
+    ? `บัญชี Google ของบริษัทเปิดลิงก์แล้วเข้าใช้ได้ทันทีในบทบาท "${role}" อีเมลอื่นเข้าไม่ได้`
+    : 'บัญชี Google ของบริษัทเปิดลิงก์แล้วกด "ส่งคำขอสิทธิ์ใช้งาน" ผู้ดูแลจะได้รับอีเมลแจ้ง อีเมลอื่นเข้าไม่ได้';
+  $('#shareOverlay').hidden=false; setTimeout(()=>$('#shareCopyUrl').focus(),20);
+}
+function closeShare(){ $('#shareOverlay').hidden=true; if(shareReturn && shareReturn.focus) shareReturn.focus(); }
+function copyField(el, okMsg){
+  const fallback=()=>{ el.focus(); el.select(); toast('เลือกข้อความไว้แล้ว กด Ctrl+C (หรือ ⌘+C) เพื่อคัดลอก'); };
+  try{ navigator.clipboard.writeText(el.value).then(()=>toast(okMsg), fallback); }catch(err){ fallback(); }
+}
+$('#shareClose').onclick=closeShare;
+$('#shareOverlay').addEventListener('click', e=>{ if(e.target.id==='shareOverlay') closeShare(); });
+$('#shareCopyUrl').onclick=()=>copyField($('#shareUrl'),'คัดลอกลิงก์แล้ว');
+$('#shareCopyMsg').onclick=()=>copyField($('#shareMsg'),'คัดลอกข้อความแล้ว พร้อมวางใน LINE หรืออีเมล');
+document.addEventListener('keydown', e=>{ if(e.key==='Escape' && !$('#shareOverlay').hidden) closeShare(); });
+
+$('#userbar').addEventListener('click', e=>{
+  if(e.target.id==='btnShare') openShare();
+  if(e.target.id==='btnReload') reloadAll();
+  if(e.target.id==='btnSignOut') signOut();
+  if(e.target.id==='btnAdmin') showView(S.admin ? 'calc' : 'admin');
+});
+async function showView(v){
+  S.admin = v==='admin' && can('manageUsers');
+  $('#adminView').hidden=!S.admin; $('#calcView').hidden=S.admin;
+  renderUserBar();
+  if(S.admin){
+    $('#adminView').innerHTML='<div class="empty">กำลังโหลดข้อมูลผู้ใช้…</div>'; window.scrollTo(0,0);
+    try{ setAdm(await api('adminData')); }catch(e){ $('#adminView').innerHTML=`<div class="msg bad">${esc(errText(e))}</div>`; }
+  } else renderAll();
+}
+
+/* --- admin --- */
+let adminTab='dir', dirQ='';
+function setAdm(d){ S.adm=d; S.roles=d.roles; S.order=d.order; S.access=d.access; renderAdmin(); }
+async function admCall(fn, args, okMsg, btn){
+  if(btn) btn.disabled=true;
+  try{ setAdm(await api(fn, ...args)); if(okMsg) toast(okMsg); }
+  catch(e){ toast(errText(e)); if(btn && btn.isConnected) btn.disabled=false; }
+}
+function roleOpts(sel){ return S.order.filter(id=>S.roles[id]).map(id=>`<option value="${esc(id)}" ${id===sel?'selected':''}>${esc(S.roles[id].name)}</option>`).join(''); }
+function defRole(){ return S.roles[S.access.defaultRole] ? S.access.defaultRole : (S.roles.costing?'costing':S.order[1]); }
+function dirPeople(){
+  const d=S.adm, map=new Map(); const add=(email,p)=>map.set(email, Object.assign(map.get(email)||{email}, p));
+  d.visitors.forEach(v=>add(v.email,{lastSeen:v.lastSeen}));
+  d.requests.forEach(r=>add(r.email,{requested:r.at}));
+  d.users.forEach(u=>add(u.email,{user:u}));
+  if(d.owner) add(d.owner,{owner:true});
+  return [...map.values()];
+}
+function personStatus(p){ return p.owner ? 'owner' : p.user ? 'member' : (S.access.autoJoin && S.roles[S.access.defaultRole]) ? 'auto' : p.requested ? 'req' : 'none'; }
+function tabLabels(){ const d=S.adm; return {dir:`รายชื่อองค์กร (${dirPeople().length})`, users:`ผู้ใช้ (${d.users.length})`, roles:`บทบาทและสิทธิ์ (${S.order.filter(id=>S.roles[id]).length})`}; }
+function renderAdmin(){
+  if(!S.adm) return;
+  $('#adminView').innerHTML = `<div class="bh"><h2>จัดการผู้ใช้และบทบาท</h2><span class="hint">ผู้ใช้เข้าสู่ระบบด้วยบัญชี Google ของบริษัท · ทุกการเปลี่ยนแปลงบันทึกในชีต Log</span></div>
+    <div class="atabs">${Object.entries(tabLabels()).map(([k,l])=>`<button type="button" class="ptab ${adminTab===k?'on':''}" data-tab="${k}">${esc(l)}</button>`).join('')}</div>
+    <div id="admBody"></div>`;
+  adminTab==='dir' ? renderDirTab() : adminTab==='users' ? renderUsersTab() : renderRolesTab();
+}
+function requestsBox(){
+  const rq=S.adm.requests.filter(r=>!S.adm.users.some(u=>u.email===r.email));
+  if(!rq.length) return '';
+  return `<div class="card hero" style="margin-bottom:20px"><h3>คำขอสิทธิ์ใช้งานที่รออนุมัติ (${rq.length})</h3>
+    <div class="tablebox" style="margin-top:10px"><table><tbody>${rq.map(r=>`<tr data-email="${esc(r.email)}">
+      <td><div class="person">${ava(r.email)}<div><span>${esc(r.email)}</span><small>ขอเมื่อ ${fmtSeen(r.at)}</small></div></div></td>
+      <td><select data-role aria-label="บทบาทที่จะให้">${roleOpts(defRole())}</select></td>
+      <td><div class="adm-actions"><button class="btn small primary" type="button" data-act="approve">อนุมัติ</button><button class="btn small" type="button" data-act="decline">ปฏิเสธ</button></div></td></tr>`).join('')}</tbody></table></div></div>`;
+}
+function renderDirTab(){
+  const A=S.access;
+  $('#admBody').innerHTML = `
+    <div class="card ${A.autoJoin?'hero':''}" style="margin-bottom:16px">
+      <h3>การเข้าใช้อัตโนมัติ</h3>
+      <label style="display:flex;gap:10px;align-items:flex-start;margin-top:10px;font-size:14px;cursor:pointer">
+        <input type="checkbox" id="accAuto" ${A.autoJoin?'checked':''} style="width:18px;height:18px;margin-top:3px;accent-color:var(--navy)">
+        <span><b>ให้ทุกบัญชี @scentandsense.co.th และ @scentandsense.co เข้าใช้ได้ทันที</b><br><span class="muted" style="font-size:13px">ไม่ต้องรออนุมัติ อีเมลอื่นเข้าไม่ได้เสมอ (ตรวจที่เซิร์ฟเวอร์ของ Google)</span></span>
+      </label>
+      <div class="row" style="margin-top:12px"><label class="muted" for="accRole" style="font-size:13px">บทบาทเริ่มต้น</label>
+        <select id="accRole" style="border:1px solid var(--line-strong);border-radius:7px;padding:5px 9px;background:var(--input-bg)">${roleOpts(A.defaultRole)}</select>
+        <span class="muted" style="font-size:12.5px">เปลี่ยนบทบาทหรือระงับรายคนได้ในตารางด้านล่าง</span></div>
+    </div>
+    ${requestsBox()}
+    <div class="search"><input id="dirQ" type="search" autocomplete="off" placeholder="ค้นหาอีเมล…" value="${esc(dirQ)}">
+      <select id="dirF" aria-label="กรองสถานะ"><option value="">ทุกสถานะ</option>${A.autoJoin?'<option value="auto">เข้าใช้อัตโนมัติ</option>':''}<option value="none">ยังไม่มีสิทธิ์</option><option value="req">รออนุมัติ</option><option value="member">กำหนดบทบาทแล้ว</option></select></div>
+    <div class="tablebox"><table><thead><tr><th>อีเมล</th><th>สถานะ</th><th>เปิดระบบล่าสุด</th><th>บทบาท</th><th></th></tr></thead><tbody id="dirRows"></tbody></table></div>
+    <div class="muted" id="dirCount" style="font-size:12.5px;margin-top:8px"></div>
+    <div class="note-box" style="margin-top:14px">รายชื่อนี้รวมทุกคนที่เคยเปิดระบบ ผู้ที่ส่งคำขอ และผู้ใช้ที่กำหนดบทบาทไว้ · เพิ่มคนที่ยังไม่เคยเปิดระบบได้ที่แท็บ "ผู้ใช้" โดยพิมพ์อีเมล</div>`;
+  renderDirRows();
+}
+function renderDirRows(){
+  const tb=$('#dirRows'); if(!tb) return;
+  const people=dirPeople(), q=dirQ.trim().toLowerCase(), f=($('#dirF')||{}).value||'';
+  let rows=people.filter(p=>(!q || p.email.includes(q)) && (!f || personStatus(p)===f || (f==='member' && personStatus(p)==='owner')));
+  const rank=p=>({req:0, none:1, auto:2, owner:3, member:3})[personStatus(p)];
+  rows.sort((a,b)=>rank(a)-rank(b) || String(b.lastSeen||'').localeCompare(String(a.lastSeen||'')) || a.email.localeCompare(b.email));
+  tb.innerHTML = rows.map(p=>{
+    const st=personStatus(p), u=p.user;
+    const chipHtml = st==='owner' ? '<span class="chip info">เจ้าของระบบ</span>'
+      : st==='member' ? (u.active ? '<span class="chip ok">กำหนดบทบาทแล้ว</span>' : '<span class="chip bad">ระงับ</span>')
+      : st==='auto' ? '<span class="chip ok">เข้าใช้อัตโนมัติ</span>'
+      : st==='req' ? `<span class="chip warn">รออนุมัติ</span><span class="note">ขอเมื่อ ${fmtDate(p.requested)}</span>`
+      : '<span class="chip info">ยังไม่มีสิทธิ์</span>';
+    const roleCell = st==='owner' ? esc(S.roles.admin?S.roles.admin.name:'ผู้ดูแลระบบ')
+      : st==='member' ? esc(S.roles[u.role]?S.roles[u.role].name:'บทบาทถูกลบ')
+      : `<select data-role aria-label="บทบาท">${roleOpts(defRole())}</select>`;
+    const self = p.email===S.adm.me;
+    const act = st==='owner' || st==='member' ? (self||st==='owner' ? '' : `<button class="btn small" type="button" data-tab="users">จัดการ</button>`)
+      : st==='auto' ? `<div class="adm-actions"><button class="btn small" type="button" data-act="approve">บันทึกบทบาท</button>${self?'':'<button class="btn small danger" type="button" data-act="suspendNew">ระงับ</button>'}</div>`
+      : `<button class="btn small primary" type="button" data-act="approve">${st==='req'?'อนุมัติ':'เพิ่มเป็นผู้ใช้'}</button>`;
+    return `<tr data-email="${esc(p.email)}"><td><div class="person">${ava(p.email)}<div><span>${esc(p.email)}</span>${self?'<small>คุณ</small>':''}</div></div></td>
+      <td>${chipHtml}</td><td class="muted" style="white-space:nowrap">${fmtSeen(p.lastSeen)}</td><td>${roleCell}</td><td>${act}</td></tr>`;
+  }).join('') || `<tr><td colspan="5" class="empty">${q?'ไม่พบอีเมลนี้ เพิ่มได้ที่แท็บ "ผู้ใช้"':'ยังไม่มีใครเปิดระบบ แชร์ลิงก์ให้ทีม แล้วรายชื่อจะขึ้นที่นี่'}</td></tr>`;
+  const cnt=k=>people.filter(p=>personStatus(p)===k).length;
+  $('#dirCount').textContent = `แสดง ${rows.length} จาก ${people.length} คน · ` + (S.access.autoJoin ? `เข้าใช้อัตโนมัติ ${cnt('auto')} · ` : `ยังไม่มีสิทธิ์ ${cnt('none')} · รออนุมัติ ${cnt('req')} · `) + `กำหนดบทบาทแล้ว ${S.adm.users.length}`;
+}
+function renderUsersTab(){
+  const d=S.adm;
+  const list=[...(d.owner && !d.users.some(u=>u.email===d.owner) ? [{email:d.owner, role:'admin', active:true, owner:true}] : []), ...d.users];
+  $('#admBody').innerHTML = `${requestsBox()}<div class="adm-grid">
+    <div class="tablebox"><table><thead><tr><th>อีเมล</th><th>บทบาท</th><th>สถานะ</th><th>เพิ่มเมื่อ</th><th></th></tr></thead><tbody>
+    ${list.map(u=>{ const self=u.email===d.me, locked=u.owner||self;
+      return `<tr data-email="${esc(u.email)}">
+        <td><div class="person">${ava(u.email)}<div><span>${esc(u.email)}</span>${u.owner?'<small>เจ้าของระบบ</small>':self?'<small>คุณ</small>':''}${u.addedBy&&!u.owner?`<small>เพิ่มโดย ${esc(shortName(u.addedBy))}</small>`:''}</div></div></td>
+        <td>${locked?`<span class="chip info">${esc(S.roles[u.role]?S.roles[u.role].name:u.role)}</span>`:`<select data-act="role" aria-label="บทบาท">${roleOpts(u.role)}</select>${S.roles[u.role]?'':' <span class="chip bad">บทบาทถูกลบ</span>'}`}</td>
+        <td>${u.active?'<span class="chip ok">ใช้งาน</span>':'<span class="chip bad">ระงับ</span>'}</td>
+        <td class="muted" style="white-space:nowrap">${fmtDate(u.addedAt)}</td>
+        <td>${locked?'':`<div class="adm-actions"><button class="btn small" type="button" data-act="toggle">${u.active?'ระงับ':'เปิดใช้งาน'}</button><button class="btn small danger" type="button" data-act="remove">ลบ</button></div>`}</td></tr>`; }).join('')}
+    </tbody></table></div>
+    <div class="card"><h3>เพิ่มผู้ใช้</h3>
+      <form id="addUserForm" style="display:flex;flex-direction:column;gap:12px;margin-top:10px" novalidate>
+        <div class="field"><label for="newEmail">อีเมลบริษัท</label><input id="newEmail" type="email" autocomplete="off" placeholder="name@scentandsense.co.th" required></div>
+        <div class="field"><label for="newRole">บทบาท</label><select id="newRole">${roleOpts(defRole())}</select></div>
+        <label style="display:flex;gap:8px;font-size:13px;align-items:center"><input type="checkbox" id="newNotify" checked> ส่งอีเมลแจ้งผู้ใช้พร้อมลิงก์</label>
+        <div class="gate-err" id="addErr"></div>
+        <button class="btn primary" type="submit" style="justify-content:center">เพิ่มผู้ใช้</button>
+      </form>
+      <div class="note-box" style="margin-top:12px">ใช้ได้เฉพาะ @scentandsense.co.th และ @scentandsense.co · ${S.access.autoJoin?'ตอนนี้เปิดเข้าใช้อัตโนมัติอยู่ "ลบ" จะทำให้คนนั้นกลับไปใช้บทบาทเริ่มต้น ถ้าต้องการกันออกให้ใช้ "ระงับ"':'คนที่ถูกลบจะต้องส่งคำขอใหม่'}</div>
+    </div></div>`;
+}
+function renderRolesTab(){
+  const ids=S.order.filter(id=>S.roles[id]), d=S.adm;
+  $('#admBody').innerHTML = `<div class="adm-grid">
+    <div class="tablebox"><table class="perm-grid"><thead><tr><th>บทบาท</th>${PERMS.map(p=>`<th title="${esc(p[2])}">${esc(p[1])}</th>`).join('')}<th class="num">ผู้ใช้</th><th></th></tr></thead><tbody>
+    ${ids.map(id=>{ const r=S.roles[id]; const n=d.users.filter(u=>u.role===id).length + (id==='admin'&&d.owner?1:0); const isDef=id===S.access.defaultRole;
+      return `<tr data-rid="${esc(id)}"><td>${r.system?`<b>${esc(r.name)}</b><span class="note">บทบาทหลัก มีทุกสิทธิ์</span>`:`<input class="rname" data-act="rename" value="${esc(r.name)}" maxlength="40" aria-label="ชื่อบทบาท">`}${isDef&&S.access.autoJoin?'<span class="note">บทบาทเริ่มต้น</span>':''}</td>
+        ${PERMS.map(([k,label])=>`<td><input type="checkbox" data-perm="${k}" ${(r.system||(r.perms&&r.perms[k]))?'checked':''} ${r.system?'disabled':''} aria-label="${esc(r.name)}: ${esc(label)}"></td>`).join('')}
+        <td class="num">${n}</td><td>${r.system?'':`<button class="btn small danger" type="button" data-act="delrole" ${n||isDef?'disabled title="ย้ายผู้ใช้ออก และเปลี่ยนบทบาทเริ่มต้นก่อน"':''}>ลบ</button>`}</td></tr>`; }).join('')}
+    </tbody></table></div>
+    <div class="card"><h3>สร้างบทบาทใหม่</h3>
+      <form id="newRoleForm" style="display:flex;flex-direction:column;gap:12px;margin-top:10px">
+        <div class="field"><label for="roleName">ชื่อบทบาท</label><input id="roleName" required maxlength="40" placeholder="เช่น ฝ่ายขาย"></div>
+        <div class="checks">${PERMS.map(([k,l,dd])=>`<label><input type="checkbox" name="perm" value="${k}" ${k==='viewDb'?'checked':''}><span><b>${esc(l)}</b><br><span class="muted">${esc(dd)}</span></span></label>`).join('')}</div>
+        <button class="btn primary" type="submit" style="justify-content:center">สร้างบทบาท</button>
+      </form>
+      <div class="note-box" style="margin-top:12px">สิทธิ์มีผลกับผู้ใช้เมื่อเปิดระบบครั้งถัดไปหรือกด "รีเฟรช" · ลบบทบาทได้เมื่อไม่มีผู้ใช้และไม่ใช่บทบาทเริ่มต้น</div>
+    </div></div>`;
+}
+function twoStep(btn, label){ if(btn.dataset.confirm==='1') return true; btn.dataset.confirm='1'; const t=btn.textContent; btn.textContent=label; setTimeout(()=>{ if(btn.isConnected){ btn.dataset.confirm=''; btn.textContent=t; } },4000); return false; }
+const adm=$('#adminView');
+adm.addEventListener('click', e=>{
+  const tab=e.target.closest('[data-tab]'); if(tab){ adminTab=tab.dataset.tab; renderAdmin(); return; }
+  const act=e.target.dataset.act; if(!act || e.target.tagName!=='BUTTON') return;
+  const row=e.target.closest('tr[data-email]'), email=row && row.dataset.email;
+  const u=email && S.adm.users.find(x=>x.email===email);
+  const roleSel=row && row.querySelector('[data-role]');
+  if(act==='approve') return admCall('setUser',[email, roleSel.value, true, true], `ให้สิทธิ์ ${email} แล้ว · ส่งอีเมลแจ้งแล้ว`, e.target);
+  if(act==='decline'){ if(!twoStep(e.target,'ยืนยันปฏิเสธ?')) return; return admCall('declineRequest',[email],'ปฏิเสธคำขอแล้ว', e.target); }
+  if(act==='suspendNew'){ if(!twoStep(e.target,'ยืนยันระงับ?')) return; return admCall('setUser',[email, roleSel.value, false, false],'ระงับผู้ใช้แล้ว', e.target); }
+  if(act==='toggle' && u) return admCall('setUser',[email, u.role, !u.active, false], u.active?'ระงับผู้ใช้แล้ว':'เปิดใช้งานแล้ว', e.target);
+  if(act==='remove'){ if(!twoStep(e.target,'ยืนยันลบ?')) return; return admCall('removeUser',[email], S.access.autoJoin?'ลบแล้ว · คนนี้ยังเข้าได้ด้วยบทบาทเริ่มต้น ใช้ "ระงับ" ถ้าต้องการกันออก':'ลบผู้ใช้แล้ว', e.target); }
+  const rr=e.target.closest('tr[data-rid]');
+  if(act==='delrole' && rr){ if(!twoStep(e.target,'ยืนยันลบ?')) return; return admCall('deleteRole',[rr.dataset.rid],'ลบบทบาทแล้ว', e.target); }
+});
+adm.addEventListener('input', e=>{ if(e.target.id==='dirQ'){ dirQ=e.target.value; renderDirRows(); } });
+adm.addEventListener('change', e=>{
+  const t=e.target;
+  if(t.id==='dirF'){ renderDirRows(); return; }
+  if(t.id==='accAuto' || t.id==='accRole'){ const on=$('#accAuto').checked, r=$('#accRole').value;
+    return admCall('saveAccess',[on, r], on?`เปิดเข้าใช้อัตโนมัติแล้ว · บทบาทเริ่มต้น "${S.roles[r].name}"`:'ปิดเข้าใช้อัตโนมัติแล้ว'); }
+  const row=t.closest('tr[data-email]');
+  if(row && t.dataset.act==='role'){ const u=S.adm.users.find(x=>x.email===row.dataset.email); return admCall('setUser',[row.dataset.email, t.value, u?u.active:true, false],'เปลี่ยนบทบาทแล้ว'); }
+  const rr=t.closest('tr[data-rid]'); if(!rr) return;
+  if(t.dataset.perm) return admCall('updateRole',[rr.dataset.rid, {perms:{[t.dataset.perm]:t.checked}}],'บันทึกสิทธิ์แล้ว');
+  if(t.dataset.act==='rename'){ const v=t.value.trim(); if(!v){ t.value=S.roles[rr.dataset.rid].name; return; } return admCall('updateRole',[rr.dataset.rid, {name:v}],'เปลี่ยนชื่อบทบาทแล้ว'); }
+});
+adm.addEventListener('submit', e=>{
+  e.preventDefault();
+  if(e.target.id==='addUserForm'){
+    const email=$('#newEmail').value.trim().toLowerCase(), m=email.match(/^[^@\s]+@([^@\s]+)$/);
+    if(!m || !DOMAINS.includes(m[1])){ $('#addErr').textContent='ใช้ได้เฉพาะอีเมล @scentandsense.co.th หรือ @scentandsense.co'; return; }
+    if(email===S.adm.owner || email===S.adm.me){ $('#addErr').textContent='บัญชีนี้เป็นผู้ดูแลระบบอยู่แล้ว'; return; }
+    return admCall('setUser',[email, $('#newRole').value, true, $('#newNotify').checked], `เพิ่ม ${email} แล้ว`, e.target.querySelector('button[type=submit]'));
+  }
+  if(e.target.id==='newRoleForm'){
+    const name=$('#roleName').value.trim(); if(!name) return;
+    const perms={}; e.target.querySelectorAll('input[name=perm]').forEach(c=>{ if(c.checked) perms[c.value]=true; });
+    return admCall('createRole',[name, perms], `สร้างบทบาท "${name}" แล้ว`, e.target.querySelector('button[type=submit]'));
+  }
+});
+
+/* ===== boot ===== */
+async function boot(){
+  showGate('loading');
+  if(HTTP){
+    if(!CFG.apiUrl || !CFG.googleClientId){ showGate('error','ยังไม่ได้ตั้งค่า apiUrl และ googleClientId ใน site.config.json แล้ว build ใหม่'); return; }
+    if(!getToken()){ showGate('signin'); return; }
+  } else if(typeof google==='undefined' || !google.script || !google.script.run){ showGate('noPlatform'); return; }
+  try{ applyBootstrap(await api('bootstrap')); }
+  catch(e){
+    const m=String((e&&e.message)||e);
+    if(/^AUTH_/.test(m)) return;           /* authLost() แสดงหน้าเข้าสู่ระบบแล้ว */
+    if(/NO_IDENTITY/.test(m)) showGate('noIdentity');
+    else if(/DOMAIN:/.test(m)){ if(HTTP) clearToken(); showGate('domain', m.split('DOMAIN:')[1]); }
+    else showGate('error', errText(e));
+    return;
+  }
+  evaluate();
+}
+boot();
+</script>
+
+</body>
+</html>

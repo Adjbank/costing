@@ -11,7 +11,7 @@ const HEAD = {
   Users:    ['email', 'role', 'active', 'addedBy', 'addedAt'],
   Roles:    ['id', 'name', 'perms', 'system', 'order'],
   Settings: ['key', 'value'],
-  Prices:   ['code', 'name', 'price', 'status', 'note'],
+  Prices:   ['code', 'name', 'price', 'status', 'note', 'updatedAt', 'updatedBy'],
   Requests: ['email', 'at'],
   Visitors: ['email', 'firstSeen', 'lastSeen'],
   Log:      ['at', 'email', 'action', 'detail'],
@@ -46,7 +46,7 @@ function doPost(e) {
     saveExport: saveExport, adminData: adminData, setUser: setUser, removeUser: removeUser, declineRequest: declineRequest,
     saveAccess: saveAccess, createRole: createRole, updateRole: updateRole, deleteRole: deleteRole,
     loadMyFormulas: loadMyFormulas, saveMyFormulas: saveMyFormulas, adminFormulas: adminFormulas,
-    loadPricing: loadPricing, savePricing: savePricing};
+    loadPricing: loadPricing, savePricing: savePricing, updatePrices: updatePrices};
   let out;
   try {
     const req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
@@ -259,14 +259,15 @@ function seedPrices_() {
   setSetting_('pricesCustom', 'false');
 }
 function writePrices_(rows) {
-  const s = sh_('Prices'), last = s.getLastRow();
-  if (last > 1) s.getRange(2, 1, last - 1, 5).clearContent();
-  if (rows.length) s.getRange(2, 1, rows.length, 5).setValues(rows);
+  const s = sh_('Prices'), last = s.getLastRow(), w = HEAD.Prices.length;
+  if (last > 1) s.getRange(2, 1, last - 1, w).clearContent();
+  if (rows.length) s.getRange(2, 1, rows.length, w).setValues(rows.map(function (r) { return r.concat(['', '']).slice(0, w); }));
 }
 function readPrices_() {
   const entries = rows_('Prices').map(function (r) {
     const n = Number(r.price);
-    return {c: String(r.code), n: String(r.name), p: r.price === '' || isNaN(n) ? null : n, s: String(r.status || ''), o: String(r.note || '')};
+    return {c: String(r.code), n: String(r.name), p: r.price === '' || isNaN(n) ? null : n, s: String(r.status || ''), o: String(r.note || ''),
+            u: iso_(r.updatedAt), b: String(r.updatedBy || '')};
   });
   return {entries: entries, custom: getSetting_('pricesCustom') === 'true',
           src: {file: getSetting_('pricesFile') || BUILTIN_SOURCE.file, updated: getSetting_('pricesUpdated') || '', by: getSetting_('pricesBy') || ''}};
@@ -288,6 +289,51 @@ function savePrices(body) {
     setSetting_('pricesCustom', 'true');
     log_(m.email, 'savePrices', body.file + ' · ' + list.length + ' รายการ');
     return readPrices_();
+  });
+}
+/** แก้ราคาทีละรายการ (หรือเพิ่มรหัสใหม่) — เจ้าของระบบ แอดมิน และจัดซื้อ (สิทธิ์ editPrices) · ทุกการเปลี่ยนแปลงบันทึกใน Log */
+function updatePrices(items) {
+  return withLock_(function () {
+    const m = need_('editPrices');
+    if (!Array.isArray(items) || !items.length || items.length > 300) throw new Error('บันทึกได้ครั้งละ 1–300 รายการ');
+    const okStatus = {ok: 1, recheck: 1, cancel: 1, rd: 1, none: 1};
+    const sheet = sh_('Prices'), w = HEAD.Prices.length;
+    if (!String(sheet.getRange(1, 6).getValue())) sheet.getRange(1, 6, 1, 2).setValues([['updatedAt', 'updatedBy']]).setFontWeight('bold');
+    const rows = {};
+    rows_('Prices').forEach(function (r) { const k = String(r.code).toUpperCase(); if (!rows[k]) rows[k] = r; });
+    const now = new Date(), notes = [];
+    let changed = 0, added = 0;
+    items.forEach(function (it) {
+      const code = String((it && it.c) || '').toUpperCase().trim();
+      if (!/^RM-[A-Z0-9]+-\d{3}-\d{1,4}$/.test(code)) throw new Error('รหัส RM ไม่ถูกต้อง: ' + code.slice(0, 30));
+      let price = it.p === null || it.p === undefined || it.p === '' ? '' : Number(it.p);
+      if (price !== '' && (isNaN(price) || price < 0 || price > 10000000)) throw new Error('ราคาไม่ถูกต้อง: ' + code);
+      if (price === 0) price = '';
+      let status = okStatus[it.s] ? it.s : 'none';
+      if (price !== '') status = 'ok'; else if (status === 'ok') status = 'none';
+      const note = String(it.o || '').slice(0, 500), cur = rows[code];
+      const name = cur ? String(cur.name) : String(it.n || '').trim().slice(0, 300);
+      if (!cur && !name) throw new Error('รหัสใหม่ต้องมีชื่อวัตถุดิบ: ' + code);
+      const vals = [code, name, price, status, note, now, m.email];
+      if (cur) {
+        const same = (cur.price === '' ? '' : Number(cur.price)) === price && String(cur.status) === status && String(cur.note || '') === note;
+        if (same) return;
+        sheet.getRange(cur._row, 1, 1, w).setValues([vals]);
+        notes.push(code + ': ' + (cur.price === '' ? '-' : cur.price) + ' → ' + (price === '' ? '-' : price) + (String(cur.status) !== status ? ' [' + cur.status + '→' + status + ']' : ''));
+      } else {
+        sheet.appendRow(vals);
+        rows[code] = {_row: sheet.getLastRow(), code: code, name: name, price: price, status: status, note: note};
+        added++;
+        notes.push(code + ': เพิ่มใหม่ ' + (price === '' ? '-' : price));
+      }
+      changed++;
+    });
+    const stamp = Utilities.formatDate(now, 'Asia/Bangkok', 'dd/MM/yyyy HH:mm');
+    if (changed) {
+      setSetting_('pricesUpdated', stamp); setSetting_('pricesBy', m.email); setSetting_('pricesCustom', 'true');
+      log_(m.email, 'updatePrices', (changed + ' รายการ · ' + notes.join('; ')).slice(0, 2000));
+    }
+    return {changed: changed, added: added, updated: stamp, by: m.email, at: now.toISOString()};
   });
 }
 function resetPrices() {

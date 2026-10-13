@@ -276,6 +276,7 @@ tfoot td{font-weight:700;border-top:1px solid var(--ink);background:var(--bg-sof
 <main class="wrap">
   <section id="adminView" hidden style="padding-block:24px 56px"></section>
   <section id="allView" hidden style="padding-block:24px 56px"></section>
+  <section id="priceView" hidden style="padding-block:24px 56px"></section>
   <div id="calcView">
   <div class="steps" id="stepsBar" aria-label="ขั้นตอน">
     <span><b>1</b>ใส่ไฟล์สูตร</span><span><b>2</b>ตรวจรายการ &amp; แก้ราคาที่ขาด</span><span><b>3</b>สรุปต้นทุน &amp; ส่งออก Excel</span>
@@ -674,18 +675,17 @@ function productAoA(p){
     ['เผื่อสูญเสียการผลิต %', +(c.loss*100).toFixed(2)], ['ต้นทุนส่วนสูญเสีย บาท/กก.', +c.lossCost.toFixed(2)],
     ['ค่าแรง + โสหุ้ย บาท/กก.', c.overhead], ['ต้นทุนรวม บาท/กก.', +c.total.toFixed(2)], ['ต้นทุนรวม บาท/กรัม', +c.perG.toFixed(4)],
     ['ขนาด batch (กก.)', c.batchKg], ['ต้นทุนต่อ batch (บาท)', +c.batchCost.toFixed(2)],
-    ['ราคาขาย บาท/กก.', c.sell||null], ['ต้นทุนต่อราคาขาย %', c.ratio!=null?+c.ratio.toFixed(2):null],
     ['ความครบถ้วนของราคา', c.complete ? 'ครบทุกรายการ' : `ขาดราคา ${c.missing} รายการ (${fmt((1-c.knownFrac)*100,2)}% ของสูตร) — ต้นทุนจริงสูงกว่านี้`]);
   return {aoa, c};
 }
 function exportXlsx(list){
   if(typeof XLSX==='undefined'){ toast('โหลดตัวเขียน Excel ไม่สำเร็จ'); return; }
   const wb=XLSX.utils.book_new(), used=new Set(['สรุป']);
-  const sum=[['สินค้า','จำนวนรายการ','ต้นทุน RM บาท/กก.','ต้นทุนรวม บาท/กก.','ต้นทุนรวม บาท/กรัม','batch กก.','ต้นทุนต่อ batch','ราคาขาย บาท/กก.','ต้นทุน/ราคาขาย %','สถานะราคา']];
+  const sum=[['สินค้า','จำนวนรายการ','ต้นทุน RM บาท/กก.','ต้นทุนรวม บาท/กก.','ต้นทุนรวม บาท/กรัม','batch กก.','ต้นทุนต่อ batch','สถานะราคา']];
   const sheets=[];
   for(const p of list){
     const {aoa,c}=productAoA(p);
-    sum.push([p.name, p.lines.length, +c.rm.toFixed(2), +c.total.toFixed(2), +c.perG.toFixed(4), c.batchKg, +c.batchCost.toFixed(2), c.sell||null, c.ratio!=null?+c.ratio.toFixed(2):null, c.complete?'ครบ':`ขาด ${c.missing} รายการ`]);
+    sum.push([p.name, p.lines.length, +c.rm.toFixed(2), +c.total.toFixed(2), +c.perG.toFixed(4), c.batchKg, +c.batchCost.toFixed(2), c.complete?'ครบ':`ขาด ${c.missing} รายการ`]);
     const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:24},{wch:18},{wch:44},{wch:22},{wch:11},{wch:12},{wch:12},{wch:16},{wch:12},{wch:18},{wch:20},{wch:40}];
     sheets.push([sheetName(p.name,used), ws]);
   }
@@ -746,9 +746,7 @@ function renderEditor(){
       <div class="field"><label for="unit">หน่วยในสูตร</label><select id="unit"><option value="pct" ${p.unit==='pct'?'selected':''}>% (รวม 100)</option><option value="g" ${p.unit==='g'?'selected':''}>กรัม (น้ำหนักจริง)</option></select></div>
       <div class="field"><label for="batchKg">ขนาด batch (กก.)</label><input id="batchKg" type="number" min="0" step="any" value="${esc(p.batchKg)}"></div>
       <div class="field"><label for="lossPct">เผื่อสูญเสีย (%)</label><input id="lossPct" type="number" min="0" max="95" step="any" value="${esc(p.lossPct)}"></div>
-      <div class="field"><label for="overhead">ค่าแรง+โสหุ้ย (บาท/กก.)</label><input id="overhead" type="number" min="0" step="any" value="${esc(p.overhead)}"></div>
-      <div class="field"><label for="sell">ราคาขาย (บาท/กก.)</label><input id="sell" type="number" min="0" step="any" value="${esc(p.sell||'')}" placeholder="ไม่บังคับ"></div>
-    </div>
+      <div class="field"><label for="overhead">ค่าแรง+โสหุ้ย (บาท/กก.)</label><input id="overhead" type="number" min="0" step="any" value="${esc(p.overhead)}"></div>    </div>
     ${pctWarn?`<div class="msg warn" style="margin:0 0 12px">ผลรวม % ในสูตร = ${fmtP(c.pctSum)} ไม่ใช่ 100 · ระบบปรับสัดส่วนให้รวมเป็น 100% ก่อนคำนวณ ตรวจสอบสูตรอีกครั้ง</div>`:''}
     <div class="tablebox"><table>
       <thead><tr><th>#</th><th>รหัส RM</th><th>ชื่อวัตถุดิบ</th><th class="num">${p.unit==='pct'?'%':'กรัม'}</th><th class="num">% สูตร</th><th class="num">บาท/กรัม</th><th class="num">บาท/กก.</th><th>สัดส่วนต้นทุน</th><th class="num">กรัม/batch</th><th></th></tr></thead>
@@ -783,7 +781,6 @@ function renderSummary(){
   const c=compute(p);
   const top=[...c.rows].filter(r=>r.costKg!=null).sort((a,b)=>b.costKg-a.costKg).slice(0,4);
   const cov=c.knownFrac*100;
-  const ratioCls = c.ratio==null ? '' : (c.ratio<=state.threshold?'ok':'bad');
   $('#summary').innerHTML = `
     <div class="card hero">
       <h3>ต้นทุนรวมต่อ กก.</h3>
@@ -806,13 +803,6 @@ function renderSummary(){
       ${c.disc?`<div class="alert bad">มี ${c.disc} รายการที่เลิกใช้หรือห้ามใช้ ดูหมายเหตุในตารางเพื่อเปลี่ยนรหัสทดแทน</div>`:''}
     </div>
     <div class="card">
-      <h3>ต้นทุนต่อราคาขาย</h3>
-      ${c.ratio==null ? `<div class="muted" style="font-size:13px;margin-top:6px">ใส่ราคาขายในขั้นตอนที่ 2 เพื่อดูสัดส่วนต้นทุน</div>`
-        : `<div class="big" style="font-size:34px">${fmt(c.ratio,1)}<small>%</small></div>
-           <div class="alert ${ratioCls}">${c.ratio<=state.threshold?'อยู่ในเกณฑ์':'เกินเกณฑ์'} ${state.threshold}% · กำไรขั้นต้น ${fmt(c.sell-c.total,2)} บาท/กก.</div>`}
-      <div class="row" style="margin-top:8px;font-size:12.5px"><label class="muted" for="threshold">เกณฑ์ต้นทุน (%)</label><input id="threshold" type="number" min="1" max="100" step="any" value="${state.threshold}" style="width:70px;border:1px solid var(--line-strong);border-radius:6px;padding:2px 6px;background:var(--input-bg)"></div>
-    </div>
-    <div class="card">
       <h3>วัตถุดิบที่ดันต้นทุน</h3>
       <ul class="drivers">${top.map(r=>`<li><div class="top"><span>${esc(r.e?r.e.name:r.ln.nameIn||r.ln.code)}</span><span class="num">${fmt(r.share*100,1)}%</span></div><div class="bar"><i style="width:${(r.share*100).toFixed(1)}%"></i></div></li>`).join('') || '<li class="muted">ยังไม่มีข้อมูล</li>'}</ul>
     </div>
@@ -826,11 +816,10 @@ function renderSummary(){
 function renderOverview(){
   const t=$('#overview');
   if(!state.products.length){ t.innerHTML='<tbody><tr><td class="empty">ยังไม่มีสินค้า</td></tr></tbody>'; return; }
-  t.innerHTML = `<thead><tr><th>สินค้า</th><th class="num">รายการ</th><th class="num">ต้นทุน RM บาท/กก.</th><th class="num">ต้นทุนรวม บาท/กก.</th><th class="num">ต้นทุน/ราคาขาย</th><th>ราคาวัตถุดิบ</th></tr></thead>
+  t.innerHTML = `<thead><tr><th>สินค้า</th><th class="num">รายการ</th><th class="num">ต้นทุน RM บาท/กก.</th><th class="num">ต้นทุนรวม บาท/กก.</th><th>ราคาวัตถุดิบ</th></tr></thead>
   <tbody>${state.products.map(p=>{ const c=compute(p), h=health(c); return `<tr>
     <td><button type="button" class="btn link" data-open="${p.id}" style="text-align:left;color:var(--ink)">${esc(p.name)}</button>${p.sample?'<span class="sample-tag">ตัวอย่าง</span>':''}</td>
     <td class="num">${p.lines.length}</td><td class="num">${c.complete?'':'≥ '}${fmt(c.rm,2)}</td><td class="num"><b>${c.complete?'':'≥ '}${fmt(c.total,2)}</b></td>
-    <td class="num">${c.ratio==null?'–':fmt(c.ratio,1)+'%'}</td>
     <td>${c.complete && h==='ok' ? '<span class="chip ok">ครบ</span>' : (c.complete?'<span class="chip warn">ครบ · มีเตือน</span>':`<span class="chip warn">ขาด ${c.missing} รายการ</span>`)}</td></tr>`; }).join('')}</tbody>`;
 }
 function renderDbTable(){
@@ -883,7 +872,7 @@ $('#ptabs').addEventListener('click',e=>{
 $('#editor').addEventListener('change',e=>{
   const p=active(); if(!p) return; const t=e.target;
   if(t.id==='pname'){ p.name=t.value.trim()||p.name; p.sample=false; }
-  else if(['unit','batchKg','lossPct','overhead','sell'].includes(t.id)){ p[t.id]= t.id==='unit' ? t.value : t.value; }
+  else if(['unit','batchKg','lossPct','overhead'].includes(t.id)){ p[t.id]= t.id==='unit' ? t.value : t.value; }
   else if(t.dataset.f){ const ln=p.lines[+t.dataset.i]; if(!ln) return;
     if(t.dataset.f==='code'){ ln.code=normCode(t.value); ln.nameIn=''; }
     else if(t.dataset.f==='amt') ln.amt=t.value;
@@ -905,12 +894,11 @@ $('#summary').addEventListener('click',e=>{
   if(e.target.id==='btnExpAll') exportXlsx(state.products);
   if(e.target.id==='btnCopy'){
     const c=compute(p);
-    const txt=[`ต้นทุนหัวน้ำหอม: ${p.name}`,`ต้นทุน RM: ${fmt(c.rm,2)} บาท/กก.`,`เผื่อสูญเสีย ${fmtP(c.loss*100)}%: ${fmt(c.lossCost,2)} บาท/กก.`,`ค่าแรง+โสหุ้ย: ${fmt(c.overhead,2)} บาท/กก.`,`ต้นทุนรวม: ${c.complete?'':'≥ '}${fmt(c.total,2)} บาท/กก. (${fmt(c.perG,4)} บาท/กรัม)`,`ต้นทุนต่อ batch ${fmtP(c.batchKg)} กก.: ${fmt(c.batchCost,2)} บาท`, c.ratio!=null?`ต้นทุน/ราคาขาย: ${fmt(c.ratio,1)}%`:'', c.complete?'ราคาครบทุกรายการ':`ยังขาดราคา ${c.missing} รายการ`,`ฐานราคา: ${DB.source.file} (อัปเดต ${DB.source.updated})`].filter(Boolean).join('\n');
+    const txt=[`ต้นทุนหัวน้ำหอม: ${p.name}`,`ต้นทุน RM: ${fmt(c.rm,2)} บาท/กก.`,`เผื่อสูญเสีย ${fmtP(c.loss*100)}%: ${fmt(c.lossCost,2)} บาท/กก.`,`ค่าแรง+โสหุ้ย: ${fmt(c.overhead,2)} บาท/กก.`,`ต้นทุนรวม: ${c.complete?'':'≥ '}${fmt(c.total,2)} บาท/กก. (${fmt(c.perG,4)} บาท/กรัม)`,`ต้นทุนต่อ batch ${fmtP(c.batchKg)} กก.: ${fmt(c.batchCost,2)} บาท`, c.complete?'ราคาครบทุกรายการ':`ยังขาดราคา ${c.missing} รายการ`,`ฐานราคา: ${DB.source.file} (อัปเดต ${DB.source.updated})`].filter(Boolean).join('\n');
     const fallback=()=>{ let ta=$('#copyBox'); if(!ta){ ta=document.createElement('textarea'); ta.id='copyBox'; ta.readOnly=true; ta.style.cssText='width:100%;min-height:150px;border:1px solid var(--line-strong);border-radius:8px;padding:8px;background:var(--input-bg);font-size:12.5px'; e.target.after(ta); } ta.value=txt; ta.focus(); ta.select(); toast('เลือกข้อความไว้แล้ว กด Ctrl+C เพื่อคัดลอก'); };
     try{ navigator.clipboard.writeText(txt).then(()=>toast('คัดลอกสรุปแล้ว'), fallback); }catch(err){ fallback(); }
   }
 });
-$('#summary').addEventListener('change',e=>{ if(e.target.id==='threshold'){ const v=toNum(e.target.value); if(v>0){ state.threshold=v; save(); renderWork(); } } });
 $('#overview').addEventListener('click',e=>{ const b=e.target.closest('[data-open]'); if(!b) return; state.activeId=b.dataset.open; save(); renderWork(); $('#s2').scrollIntoView({behavior:'smooth'}); });
 $('#dbq').addEventListener('input',renderDbTable); $('#dbf').addEventListener('change',renderDbTable); $('#dbc').addEventListener('change',renderDbTable);
 $('#dbtable').addEventListener('click',e=>{
@@ -1098,7 +1086,8 @@ function enterApp(){
 }
 function renderUserBar(){
   $('#userbar').innerHTML = `${ava(S.me.email)}<span id="ubName"></span><span class="rolepill" id="ubRole"></span>
-    ${isAdminRole()?`<button class="btn-ghost-dark" type="button" id="btnAll">${S.view==='all'?'กลับไปหน้าคำนวณ':'สูตรทั้งหมด'}</button>`:''}
+    ${isAdminRole()?`<button class="btn-ghost-dark" type="button" id="btnAll">${S.view==='all'?'กลับไปหน้าคำนวณ':'สูตรทั้งหมด'}</button>
+    <button class="btn-ghost-dark" type="button" id="btnPrice">${S.view==='price'?'กลับไปหน้าคำนวณ':'ทำราคาขาย'}</button>`:''}
     ${can('manageUsers')?`<button class="btn-ghost-dark" type="button" id="btnAdmin">${S.view==='admin'?'กลับไปหน้าคำนวณ':'จัดการผู้ใช้และบทบาท'}</button>`:''}
     <button class="btn-ghost-dark" type="button" id="btnShare">แชร์ลิงก์</button>
     <button class="btn-ghost-dark" type="button" id="btnReload" title="โหลดสิทธิ์และฐานราคาล่าสุด">รีเฟรช</button>
@@ -1140,14 +1129,17 @@ $('#userbar').addEventListener('click', e=>{
   if(e.target.id==='btnSignOut') signOut();
   if(e.target.id==='btnAdmin') showView(S.view==='admin' ? 'calc' : 'admin');
   if(e.target.id==='btnAll') showView(S.view==='all' ? 'calc' : 'all');
+  if(e.target.id==='btnPrice') showView(S.view==='price' ? 'calc' : 'price');
 });
 async function showView(v){
   if(v==='admin' && !can('manageUsers')) v='calc';
-  if(v==='all' && !isAdminRole()) v='calc';
+  if((v==='all' || v==='price') && !isAdminRole()) v='calc';
+  if(S.view==='price' && v!=='price') flushPrice();
   S.view=v; S.admin = v!=='calc';                 /* S.admin = ไม่ได้อยู่หน้าคำนวณ */
-  $('#adminView').hidden=v!=='admin'; $('#allView').hidden=v!=='all'; $('#calcView').hidden=v!=='calc';
+  $('#adminView').hidden=v!=='admin'; $('#allView').hidden=v!=='all'; $('#priceView').hidden=v!=='price'; $('#calcView').hidden=v!=='calc';
   renderUserBar();
   if(v==='all'){ window.scrollTo(0,0); renderAllView(); return; }
+  if(v==='price'){ window.scrollTo(0,0); renderPriceView(); return; }
   if(v==='admin'){
     $('#adminView').innerHTML='<div class="empty">กำลังโหลดข้อมูลผู้ใช้…</div>'; window.scrollTo(0,0);
     try{ setAdm(await api('adminData')); }catch(e){ $('#adminView').innerHTML=`<div class="msg bad">${esc(errText(e))}</div>`; }
@@ -1233,11 +1225,11 @@ function drawForms(){
 function exportAllForms(){
   if(typeof XLSX==='undefined'){ toast('โหลดตัวเขียน Excel ไม่สำเร็จ'); return; }
   const list=formsFiltered(); if(!list.length){ toast('ไม่มีสูตรให้ดาวน์โหลด'); return; }
-  const sum=[['เจ้าของ','ชื่อสูตร','จำนวนรายการ','ต้นทุน RM บาท/กก.','ต้นทุนรวม บาท/กก.','ต้นทุนรวม บาท/กรัม','batch กก.','ต้นทุนต่อ batch','ราคาขาย บาท/กก.','ต้นทุน/ราคาขาย %','สถานะราคา','อัปเดตล่าสุด']];
+  const sum=[['เจ้าของ','ชื่อสูตร','จำนวนรายการ','ต้นทุน RM บาท/กก.','ต้นทุนรวม บาท/กก.','ต้นทุนรวม บาท/กรัม','batch กก.','ต้นทุนต่อ batch','สถานะราคา','อัปเดตล่าสุด']];
   const det=[['เจ้าของ','ชื่อสูตร','#','รหัส RM','ชื่อวัตถุดิบ','ปริมาณ ('+'% หรือ กรัม'+')','% สูตร','บาท/กรัม','บาท/กก. ในสูตร','สถานะ']];
   for(const f of list){
     const c=safeCompute(f.p); if(!c) continue;
-    sum.push([f.owner, f.p.name, f.p.lines.length, +c.rm.toFixed(2), +c.total.toFixed(2), +c.perG.toFixed(4), c.batchKg, +c.batchCost.toFixed(2), c.sell||null, c.ratio!=null?+c.ratio.toFixed(2):null, c.complete?'ครบ':`ขาด ${c.missing} รายการ`, String(f.updatedAt||'')]);
+    sum.push([f.owner, f.p.name, f.p.lines.length, +c.rm.toFixed(2), +c.total.toFixed(2), +c.perG.toFixed(4), c.batchKg, +c.batchCost.toFixed(2), c.complete?'ครบ':`ขาด ${c.missing} รายการ`, String(f.updatedAt||'')]);
     c.rows.forEach((r,k)=>det.push([f.owner, f.p.name, k+1, r.e?r.e.code:normCode(r.ln.code), r.e?r.e.name:(r.ln.nameIn||''), r.amt, +r.pct.toFixed(4), r.price!=null?r.price:null, r.costKg!=null?+r.costKg.toFixed(2):null, STATUS[r.status].t]));
   }
   const wb=XLSX.utils.book_new();
@@ -1263,6 +1255,143 @@ function openForm(id, owner){
     <dl class="kv"><dt>ต้นทุนรวมต่อ กก. (รวมสูญเสีย + ค่าแรง/โสหุ้ย)</dt><dd>${c.complete?'':'≥ '}${fmt(c.total,2)} บาท</dd><dt>ต้นทุนต่อ batch</dt><dd>${fmt(c.batchCost,2)} บาท</dd>${c.missing?`<dt>ยังไม่มีราคา</dt><dd>${c.missing} รายการ</dd>`:''}</dl></div>`;
   box.dataset.id=id; box.dataset.owner=owner; box.scrollIntoView({behavior:'smooth', block:'start'});
 }
+/* --- ทำราคาขาย: เฉพาะเจ้าของระบบและบทบาท admin (เซิร์ฟเวอร์ตรวจสิทธิ์ซ้ำทุกครั้ง) --- */
+let PRC=null, prcQ='', prcOwner='', prcDirty={}, prcTimer=null;
+const prcKey=(o,id)=>o+'|'+id;
+function prcSell(f){ const r=PRC && PRC.map[prcKey(f.owner,f.id)]; if(r) return r.sell; const v=toNum(f.p.sell); return v>0 ? v : 0; }
+function prcCalc(f){
+  const c=safeCompute(f.p), thr=PRC.threshold, sell=prcSell(f), total=c ? c.total : null;
+  return {c, total, sell, ratio: total!=null && sell>0 ? total/sell*100 : null, profit: total!=null && sell>0 ? sell-total : null,
+    sug: total!=null && total>0 ? Math.ceil(total/(thr/100)) : null};
+}
+function prcStatus(x){
+  if(!x.c) return '<span class="chip warn">คำนวณไม่ได้</span>';
+  if(!(x.sell>0)) return '<span class="chip info">ยังไม่ตั้งราคา</span>';
+  return (x.ratio<=PRC.threshold ? '<span class="chip ok">อยู่ในเกณฑ์</span>' : '<span class="chip bad">เกินเกณฑ์</span>') + (x.c.complete ? '' : ' <span class="chip warn">ต้นทุนไม่ครบ</span>');
+}
+function setPrcSave(t){ const el=$('#prcSave'); if(el) el.textContent=t; }
+function prcFiltered(){
+  const q=prcQ.trim().toLowerCase();
+  return (ADM_FORMS||[]).filter(f=>(!prcOwner || f.owner===prcOwner) && (!q || f.p.name.toLowerCase().includes(q) || f.owner.includes(q)))
+    .sort((a,b)=>(a.p.name).localeCompare(b.p.name,'th'));
+}
+function renderPriceView(){
+  $('#priceView').innerHTML = `<div class="bh"><h2>ทำราคาขาย</h2><span class="hint">เฉพาะเจ้าของระบบและบทบาทผู้ดูแลระบบ · ตั้งราคาขายจากต้นทุนของทุกสูตร · บันทึกอัตโนมัติ</span></div>
+    <div id="prcStats" class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:16px"></div>
+    <div class="search"><input id="prcQ" type="search" autocomplete="off" placeholder="ค้นหาชื่อสูตรหรืออีเมลเจ้าของ…" value="${esc(prcQ)}">
+      <select id="prcOwner" aria-label="กรองเจ้าของสูตร"><option value="">ทุกคน</option></select>
+      <label class="muted" for="prcThr" style="font-size:13px;align-self:center">เกณฑ์ต้นทุน (%)</label>
+      <input id="prcThr" type="number" min="1" max="100" step="any" value="30" style="width:80px;border:1px solid var(--line-strong);border-radius:7px;padding:5px 9px;background:var(--input-bg)">
+      <button class="btn small" type="button" id="prcBulk" title="ตั้งราคาตามราคาแนะนำให้ทุกสูตรที่ยังไม่มีราคา (ตามตัวกรอง)">ใช้ราคาแนะนำกับสูตรที่ยังไม่ตั้งราคา</button>
+      <button class="btn small" type="button" id="prcRefresh">รีเฟรช</button>
+      <button class="btn small primary" type="button" id="prcDl">ดาวน์โหลด Excel</button></div>
+    <div id="prcBody"><div class="empty">กำลังโหลดสูตรและราคาขาย…</div></div>
+    <div class="muted" id="prcSave" aria-live="polite" style="font-size:12.5px;margin-top:8px"></div>
+    <div class="note-box" style="margin-top:14px">ราคาแนะนำ = ต้นทุนรวม ÷ เกณฑ์ต้นทุน (ปัดขึ้นเป็นบาท) · ต้นทุนคำนวณจากฐานราคาวัตถุดิบปัจจุบัน · สูตรที่ราคาวัตถุดิบไม่ครบจะมีป้าย "ต้นทุนไม่ครบ" ต้นทุนจริงสูงกว่าที่แสดง · ราคาขายเป็นของแต่ละสูตร ผู้ใช้ทั่วไปมองไม่เห็น</div>`;
+  Promise.all([loadAdminForms(), api('loadPricing')]).then(([, pr])=>{
+    PRC={threshold:pr.threshold, map:{}}; pr.items.forEach(i=>{ PRC.map[i.key]=i; });
+    if(S.view==='price'){ $('#prcThr').value=PRC.threshold; drawPrice(); }
+  }).catch(e=>{ if($('#prcBody')) $('#prcBody').innerHTML=`<div class="msg bad">${esc(errText(e))}</div>`; });
+}
+function drawPrcStats(){
+  const el=$('#prcStats'); if(!el || !PRC) return;
+  const xs=prcFiltered().map(prcCalc), priced=xs.filter(x=>x.sell>0 && x.c);
+  const avgR=priced.length ? priced.reduce((a,x)=>a+x.ratio,0)/priced.length : null;
+  const avgP=priced.length ? priced.reduce((a,x)=>a+x.profit,0)/priced.length : null;
+  const over=priced.filter(x=>x.ratio>PRC.threshold).length;
+  const stat=(k,v)=>`<div class="card" style="padding:12px 18px;min-width:150px"><div class="muted" style="font-size:12.5px">${k}</div><div style="font-family:var(--f-display);font-size:28px;line-height:1.2">${v}</div></div>`;
+  el.innerHTML = stat('ตั้งราคาแล้ว', `${priced.length} <span class="muted" style="font-size:14px">/ ${xs.length}</span>`)
+    + stat('ต้นทุน/ราคาขาย เฉลี่ย', avgR!=null ? fmt(avgR,1)+'%' : '–')
+    + stat('กำไรขั้นต้นเฉลี่ย บาท/กก.', avgP!=null ? fmt(avgP,2) : '–')
+    + stat('เกินเกณฑ์ '+PRC.threshold+'%', over);
+}
+function drawPrice(){
+  const body=$('#prcBody'); if(!body || !PRC || !ADM_FORMS) return;
+  const owners=[...new Set(ADM_FORMS.map(f=>f.owner))].sort();
+  const sel=$('#prcOwner'); sel.innerHTML='<option value="">ทุกคน ('+owners.length+')</option>'+owners.map(o=>`<option value="${esc(o)}" ${o===prcOwner?'selected':''}>${esc(o)}</option>`).join('');
+  const rows=prcFiltered();
+  body.innerHTML = `<div class="tablebox"><table><thead><tr><th>เจ้าของ</th><th>ชื่อสูตร</th><th class="num">ต้นทุนรวม บาท/กก.</th><th class="num">ราคาแนะนำ</th><th class="num">ราคาขาย บาท/กก.</th><th class="num">ต้นทุน/ราคาขาย</th><th class="num">กำไรขั้นต้น บาท/กก.</th><th>สถานะ</th></tr></thead><tbody>
+    ${rows.map(f=>{ const x=prcCalc(f);
+      return `<tr data-fid="${esc(f.id)}" data-owner="${esc(f.owner)}"><td><div class="person">${ava(f.owner)}<div><span>${esc(f.owner)}</span></div></div></td><td>${esc(f.p.name)}</td>
+        <td class="num">${x.c?(x.c.complete?'':'≥ ')+fmt(x.total,2):'–'}</td>
+        <td class="num">${x.sug!=null?`${fmt(x.sug,0)} <button class="btn small" type="button" data-use="1" title="ใช้ราคาแนะนำ">ใช้</button>`:'–'}</td>
+        <td class="num"><input class="prc-in" type="number" min="0" step="any" value="${x.sell>0?esc(x.sell):''}" placeholder="0" aria-label="ราคาขาย ${esc(f.p.name)}" style="width:110px;text-align:right;border:1px solid var(--line-strong);border-radius:7px;padding:5px 8px;background:var(--input-bg)"></td>
+        <td class="num" data-c="ratio">${x.ratio!=null?fmt(x.ratio,1)+'%':'–'}</td><td class="num" data-c="profit">${x.profit!=null?fmt(x.profit,2):'–'}</td>
+        <td data-c="st">${prcStatus(x)}</td></tr>`; }).join('') || '<tr><td colspan="8" class="empty">ยังไม่มีสูตรที่ผู้ใช้บันทึกไว้</td></tr>'}
+    </tbody></table></div><div class="muted" style="font-size:12.5px;margin-top:8px">แสดง ${rows.length} จาก ${ADM_FORMS.length} สูตร · ${owners.length} ผู้ใช้</div>`;
+  drawPrcStats();
+}
+function updPrcRow(tr){
+  const f=(ADM_FORMS||[]).find(x=>x.id===tr.dataset.fid && x.owner===tr.dataset.owner); if(!f) return;
+  const x=prcCalc(f);
+  tr.querySelector('[data-c=ratio]').textContent = x.ratio!=null ? fmt(x.ratio,1)+'%' : '–';
+  tr.querySelector('[data-c=profit]').textContent = x.profit!=null ? fmt(x.profit,2) : '–';
+  tr.querySelector('[data-c=st]').innerHTML = prcStatus(x);
+  drawPrcStats();
+}
+function setPrcSell(tr, v){
+  const owner=tr.dataset.owner, id=tr.dataset.fid, key=prcKey(owner,id);
+  v = v>0 ? v : 0;
+  PRC.map[key]={key, owner, formulaId:id, sell:v};
+  prcDirty[key]={owner, formulaId:id, sell:v};
+  updPrcRow(tr); setPrcSave('มีการแก้ไข · กำลังบันทึก…');
+  clearTimeout(prcTimer); prcTimer=setTimeout(flushPrice, 1200);
+}
+async function flushPrice(){
+  clearTimeout(prcTimer); prcTimer=null;
+  const items=Object.values(prcDirty); if(!items.length) return;
+  prcDirty={}; setPrcSave('กำลังบันทึก…');
+  try{ await api('savePricing', items); if(!Object.keys(prcDirty).length) setPrcSave('บันทึกแล้ว '+new Date().toLocaleTimeString('th-TH')); }
+  catch(e){ items.forEach(i=>{ const k=prcKey(i.owner,i.formulaId); if(!prcDirty[k]) prcDirty[k]=i; }); setPrcSave('บันทึกไม่สำเร็จ: '+errText(e)); toast(errText(e)); }
+}
+function exportPrice(){
+  if(typeof XLSX==='undefined'){ toast('โหลดตัวเขียน Excel ไม่สำเร็จ'); return; }
+  const list=prcFiltered(); if(!list.length){ toast('ไม่มีสูตรให้ดาวน์โหลด'); return; }
+  const aoa=[['เจ้าของ','ชื่อสูตร','ต้นทุนรวม บาท/กก.','ต้นทุนรวม บาท/กรัม','เกณฑ์ต้นทุน %','ราคาแนะนำ บาท/กก.','ราคาขาย บาท/กก.','ต้นทุน/ราคาขาย %','กำไรขั้นต้น บาท/กก.','สถานะ','สถานะราคาวัตถุดิบ']];
+  for(const f of list){
+    const x=prcCalc(f); if(!x.c) continue;
+    aoa.push([f.owner, f.p.name, +x.total.toFixed(2), +x.c.perG.toFixed(4), PRC.threshold, x.sug, x.sell>0?x.sell:null, x.ratio!=null?+x.ratio.toFixed(2):null, x.profit!=null?+x.profit.toFixed(2):null,
+      !(x.sell>0)?'ยังไม่ตั้งราคา':(x.ratio<=PRC.threshold?'อยู่ในเกณฑ์':'เกินเกณฑ์'), x.c.complete?'ครบ':`ขาด ${x.c.missing} รายการ`]);
+  }
+  const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:30},{wch:34},{wch:16},{wch:16},{wch:12},{wch:16},{wch:16},{wch:14},{wch:16},{wch:14},{wch:18}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'ทำราคาขาย');
+  const d=new Date(), stamp=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  saveFile(`ทำราคาขาย_${list.length}สูตร_${stamp}.xlsx`, XLSX.write(wb,{type:'array',bookType:'xlsx'}));
+  toast(`ดาวน์โหลด ${list.length} สูตรแล้ว`);
+}
+const prcv=$('#priceView');
+prcv.addEventListener('input', e=>{
+  if(e.target.id==='prcQ'){ prcQ=e.target.value; drawPrice(); return; }
+  if(e.target.classList.contains('prc-in')){ const tr=e.target.closest('tr'); const v=toNum(e.target.value); setPrcSell(tr, isFinite(v)?v:0); }
+});
+prcv.addEventListener('change', async e=>{
+  const t=e.target;
+  if(t.id==='prcOwner'){ prcOwner=t.value; drawPrice(); return; }
+  if(t.id==='prcThr'){
+    const v=toNum(t.value);
+    if(!(v>0 && v<=100)){ t.value=PRC.threshold; toast('เกณฑ์ต้นทุนต้องอยู่ระหว่าง 1–100'); return; }
+    try{ await flushPrice(); await api('savePricing', [], v); PRC.threshold=v; drawPrice(); setPrcSave('บันทึกเกณฑ์ต้นทุนแล้ว'); }
+    catch(err){ toast(errText(err)); t.value=PRC.threshold; }
+  }
+});
+prcv.addEventListener('click', async e=>{
+  const t=e.target;
+  if(t.dataset.use){ const tr=t.closest('tr'), f=(ADM_FORMS||[]).find(x=>x.id===tr.dataset.fid && x.owner===tr.dataset.owner); const x=prcCalc(f);
+    if(x.sug!=null){ tr.querySelector('.prc-in').value=x.sug; setPrcSell(tr, x.sug); } return; }
+  if(t.id==='prcBulk'){
+    let n=0; document.querySelectorAll('#prcBody tbody tr[data-fid]').forEach(tr=>{
+      const f=ADM_FORMS.find(x=>x.id===tr.dataset.fid && x.owner===tr.dataset.owner); if(!f) return;
+      const x=prcCalc(f); if(!(x.sell>0) && x.sug!=null){ tr.querySelector('.prc-in').value=x.sug; setPrcSell(tr, x.sug); n++; } });
+    toast(n ? `ตั้งราคาแนะนำให้ ${n} สูตรแล้ว` : 'ไม่มีสูตรที่ยังไม่ตั้งราคา'); return; }
+  if(t.id==='prcDl'){ exportPrice(); return; }
+  if(t.id==='prcRefresh'){
+    t.disabled=true;
+    try{ await flushPrice(); const [, pr]=await Promise.all([loadAdminForms(true), api('loadPricing')]);
+      PRC={threshold:pr.threshold, map:{}}; pr.items.forEach(i=>{ PRC.map[i.key]=i; }); $('#prcThr').value=PRC.threshold; drawPrice(); toast('โหลดข้อมูลล่าสุดแล้ว'); }
+    catch(err){ toast(errText(err)); } finally{ t.disabled=false; }
+  }
+});
+window.addEventListener('beforeunload', e=>{ if(Object.keys(prcDirty).length){ e.preventDefault(); e.returnValue=''; } });
 function renderAdmin(){
   if(!S.adm) return;
   if(adminTab==='forms') adminTab='dir';

@@ -275,6 +275,7 @@ tfoot td{font-weight:700;border-top:1px solid var(--ink);background:var(--bg-sof
 
 <main class="wrap">
   <section id="adminView" hidden style="padding-block:24px 56px"></section>
+  <section id="allView" hidden style="padding-block:24px 56px"></section>
   <div id="calcView">
   <div class="steps" id="stepsBar" aria-label="ขั้นตอน">
     <span><b>1</b>ใส่ไฟล์สูตร</span><span><b>2</b>ตรวจรายการ &amp; แก้ราคาที่ขาด</span><span><b>3</b>สรุปต้นทุน &amp; ส่งออก Excel</span>
@@ -1019,7 +1020,7 @@ function showGate(kind, info){
 }
 function signOut(){
   if(SYNC.dirty && !SYNC.busy && SYNC.loaded){ try{ syncNow(); }catch(e){} }   /* ส่งการแก้ไขที่ค้างก่อนออก */
-  clearToken(); S.inApp=false; S.admin=false; ADM_FORMS=null;
+  clearToken(); S.inApp=false; S.admin=false; S.view='calc'; ADM_FORMS=null;
   try{ if(window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect(); }catch(e){}
   showGate('signin','ออกจากระบบแล้ว');
 }
@@ -1035,7 +1036,7 @@ function evaluate(){
   computePerms();
   if(!S.me.active){ showGate('suspended'); return; }
   if(!S.me.role){ showGate('noAccess'); return; }
-  if(!S.inApp) enterApp(); else showView(S.admin && can('manageUsers') ? 'admin' : 'calc');
+  if(!S.inApp) enterApp(); else showView(S.view || 'calc');
 }
 
 /* --- สูตรของฉัน: เก็บบนเซิร์ฟเวอร์ (ชีต Formulas) เจ้าของเห็นของตัวเอง แอดมินเห็นทุกคนในหน้าจัดการ ---
@@ -1097,7 +1098,8 @@ function enterApp(){
 }
 function renderUserBar(){
   $('#userbar').innerHTML = `${ava(S.me.email)}<span id="ubName"></span><span class="rolepill" id="ubRole"></span>
-    ${can('manageUsers')?`<button class="btn-ghost-dark" type="button" id="btnAdmin">${S.admin?'กลับไปหน้าคำนวณ':'จัดการผู้ใช้และบทบาท'}</button>`:''}
+    ${isAdminRole()?`<button class="btn-ghost-dark" type="button" id="btnAll">${S.view==='all'?'กลับไปหน้าคำนวณ':'สูตรทั้งหมด'}</button>`:''}
+    ${can('manageUsers')?`<button class="btn-ghost-dark" type="button" id="btnAdmin">${S.view==='admin'?'กลับไปหน้าคำนวณ':'จัดการผู้ใช้และบทบาท'}</button>`:''}
     <button class="btn-ghost-dark" type="button" id="btnShare">แชร์ลิงก์</button>
     <button class="btn-ghost-dark" type="button" id="btnReload" title="โหลดสิทธิ์และฐานราคาล่าสุด">รีเฟรช</button>
     ${HTTP?'<button class="btn-ghost-dark" type="button" id="btnSignOut">ออกจากระบบ</button>':''}`;
@@ -1136,13 +1138,17 @@ $('#userbar').addEventListener('click', e=>{
   if(e.target.id==='btnShare') openShare();
   if(e.target.id==='btnReload') reloadAll();
   if(e.target.id==='btnSignOut') signOut();
-  if(e.target.id==='btnAdmin') showView(S.admin ? 'calc' : 'admin');
+  if(e.target.id==='btnAdmin') showView(S.view==='admin' ? 'calc' : 'admin');
+  if(e.target.id==='btnAll') showView(S.view==='all' ? 'calc' : 'all');
 });
 async function showView(v){
-  S.admin = v==='admin' && can('manageUsers');
-  $('#adminView').hidden=!S.admin; $('#calcView').hidden=S.admin;
+  if(v==='admin' && !can('manageUsers')) v='calc';
+  if(v==='all' && !isAdminRole()) v='calc';
+  S.view=v; S.admin = v!=='calc';                 /* S.admin = ไม่ได้อยู่หน้าคำนวณ */
+  $('#adminView').hidden=v!=='admin'; $('#allView').hidden=v!=='all'; $('#calcView').hidden=v!=='calc';
   renderUserBar();
-  if(S.admin){
+  if(v==='all'){ window.scrollTo(0,0); renderAllView(); return; }
+  if(v==='admin'){
     $('#adminView').innerHTML='<div class="empty">กำลังโหลดข้อมูลผู้ใช้…</div>'; window.scrollTo(0,0);
     try{ setAdm(await api('adminData')); }catch(e){ $('#adminView').innerHTML=`<div class="msg bad">${esc(errText(e))}</div>`; }
   } else renderAll();
@@ -1173,10 +1179,8 @@ let ADM_FORMS=null, formQ='', formOwner='';
 function tabLabels(){
   const d=S.adm;
   const L={dir:`รายชื่อองค์กร (${dirPeople().length})`, users:`ผู้ใช้ (${d.users.length})`, roles:`บทบาทและสิทธิ์ (${S.order.filter(id=>S.roles[id]).length})`};
-  if(isAdminRole()) L.forms = 'สูตรของทุกคน' + (ADM_FORMS ? ` (${ADM_FORMS.length})` : '');
   return L;
 }
-function refreshTabLabels(){ const L=tabLabels(); document.querySelectorAll('#adminView .atabs [data-tab]').forEach(b=>{ if(L[b.dataset.tab]) b.textContent=L[b.dataset.tab]; }); }
 async function loadAdminForms(force){
   if(ADM_FORMS && !force) return;
   const list = await api('adminFormulas');
@@ -1186,28 +1190,63 @@ async function loadAdminForms(force){
     p.name=r.name; return {id:r.id, owner:r.owner, updatedAt:r.updatedAt, p};
   });
 }
-function renderFormsTab(){
-  $('#admBody').innerHTML = `<div class="note-box" style="margin-bottom:14px">แสดงสูตรที่ผู้ใช้ทุกคนบันทึกไว้ (อ่านอย่างเดียว) เฉพาะเจ้าของระบบและบทบาทผู้ดูแลระบบเห็นหน้านี้ · การเปิดดูทุกครั้งบันทึกในชีต Log · ราคาที่ใช้คำนวณเป็นฐานราคาปัจจุบัน ไม่ใช่ราคา ณ วันที่ผู้ใช้บันทึก</div>
-    <div class="search"><input id="formQ" type="search" autocomplete="off" placeholder="ค้นหาชื่อสูตรหรืออีเมลเจ้าของ…" value="${esc(formQ)}">
+function renderAllView(){
+  $('#allView').innerHTML = `<div class="bh"><h2>สูตรทั้งหมด</h2><span class="hint">ภาพรวมสูตรที่ผู้ใช้ทุกคนบันทึกไว้ · อ่านอย่างเดียว · เฉพาะเจ้าของระบบและบทบาทผู้ดูแลระบบ · การโหลดข้อมูลบันทึกในชีต Log</span></div>
+    <div id="formStats" class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:16px"></div>
+    <div class="search"><input id="formQ" type="search" autocomplete="off" placeholder="ค้นหาชื่อสูตร รหัส/ชื่อวัตถุดิบ หรืออีเมลเจ้าของ…" value="${esc(formQ)}">
       <select id="formOwner" aria-label="กรองเจ้าของสูตร"><option value="">ทุกคน</option></select>
-      <button class="btn small" type="button" id="formRefresh">รีเฟรช</button></div>
-    <div id="formsBody"><div class="empty">กำลังโหลดสูตรของทุกคน…</div></div><div id="formDetail"></div>`;
-  loadAdminForms().then(()=>{ if(adminTab!=='forms') return; refreshTabLabels(); drawForms(); })
+      <button class="btn small" type="button" id="formRefresh">รีเฟรช</button>
+      <button class="btn small primary" type="button" id="formDlAll">ดาวน์โหลด Excel</button></div>
+    <div id="formsBody"><div class="empty">กำลังโหลดสูตรของทุกคน…</div></div><div id="formDetail"></div>
+    <div class="note-box" style="margin-top:14px">ไฟล์ Excel มี 2 ชีต: "สรุปทั้งหมด" (หนึ่งแถวต่อสูตร) และ "รายการวัตถุดิบ" (ทุกบรรทัดของทุกสูตร) ตามตัวกรองที่เลือกอยู่ · ราคาที่ใช้คำนวณเป็นฐานราคาปัจจุบัน ไม่ใช่ราคา ณ วันที่ผู้ใช้บันทึก</div>`;
+  loadAdminForms().then(()=>{ if(S.view==='all') drawForms(); })
     .catch(e=>{ if($('#formsBody')) $('#formsBody').innerHTML=`<div class="msg bad">${esc(errText(e))}</div>`; });
 }
+function formsFiltered(){
+  const q=formQ.trim().toLowerCase();
+  return (ADM_FORMS||[]).filter(f=>(!formOwner || f.owner===formOwner) && (!q || f.p.name.toLowerCase().includes(q) || f.owner.includes(q)
+      || f.p.lines.some(l=>String(l.code||'').toLowerCase().includes(q) || String(l.nameIn||'').toLowerCase().includes(q))))
+    .sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt)));
+}
+function safeCompute(p){ try{ return compute(p); }catch(e){ return null; } }
 function drawForms(){
   const body=$('#formsBody'); if(!body || !ADM_FORMS) return;
   const owners=[...new Set(ADM_FORMS.map(f=>f.owner))].sort();
   const sel=$('#formOwner'); sel.innerHTML='<option value="">ทุกคน ('+owners.length+')</option>'+owners.map(o=>`<option value="${esc(o)}" ${o===formOwner?'selected':''}>${esc(o)}</option>`).join('');
-  const q=formQ.trim().toLowerCase();
-  const rows=ADM_FORMS.filter(f=>(!formOwner || f.owner===formOwner) && (!q || f.p.name.toLowerCase().includes(q) || f.owner.includes(q)))
-    .sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt)));
-  body.innerHTML = `<div class="tablebox"><table><thead><tr><th>เจ้าของ</th><th>ชื่อสูตร</th><th class="num">รายการ</th><th class="num">ต้นทุน RM บาท/กก.</th><th>อัปเดตล่าสุด</th><th></th></tr></thead><tbody>
-    ${rows.map(f=>{ let c=null; try{ c=compute(f.p); }catch(e){}
+  const rows=formsFiltered();
+  const cs=rows.map(f=>safeCompute(f.p));
+  const rmVals=cs.filter(c=>c && c.W>0).map(c=>c.rm);
+  const avg=rmVals.length ? rmVals.reduce((a,b)=>a+b,0)/rmVals.length : null;
+  const incomplete=cs.filter(c=>c && !c.complete).length;
+  const stat=(k,v)=>`<div class="card" style="padding:12px 18px;min-width:150px"><div class="muted" style="font-size:12.5px">${k}</div><div style="font-family:var(--f-display);font-size:28px;line-height:1.2">${v}</div></div>`;
+  $('#formStats').innerHTML = stat('สูตรทั้งหมด', rows.length+(rows.length!==ADM_FORMS.length?` <span class="muted" style="font-size:14px">/ ${ADM_FORMS.length}</span>`:''))
+    + stat('ผู้ใช้ที่มีสูตร', new Set(rows.map(f=>f.owner)).size)
+    + stat('ต้นทุน RM เฉลี่ย บาท/กก.', avg!=null?fmt(avg,2):'–')
+    + stat('สูตรที่ราคาไม่ครบ', incomplete);
+  body.innerHTML = `<div class="tablebox"><table><thead><tr><th>เจ้าของ</th><th>ชื่อสูตร</th><th class="num">รายการ</th><th class="num">ต้นทุน RM บาท/กก.</th><th class="num">ต้นทุนรวม บาท/กก.</th><th>อัปเดตล่าสุด</th><th></th></tr></thead><tbody>
+    ${rows.map((f,i)=>{ const c=cs[i];
       return `<tr><td><div class="person">${ava(f.owner)}<div><span>${esc(f.owner)}</span></div></div></td><td>${esc(f.p.name)}</td><td class="num">${f.p.lines.length}</td>
-        <td class="num">${c?(c.complete?'':'≥ ')+fmt(c.rm,2):'–'}</td><td class="muted" style="white-space:nowrap">${fmtSeen(f.updatedAt)}</td>
-        <td><button class="btn small" type="button" data-formopen="${esc(f.id)}" data-formowner="${esc(f.owner)}">เปิดดู</button></td></tr>`; }).join('') || '<tr><td colspan="6" class="empty">ยังไม่มีสูตรที่ผู้ใช้บันทึกไว้</td></tr>'}
+        <td class="num">${c?(c.complete?'':'≥ ')+fmt(c.rm,2):'–'}</td><td class="num">${c?(c.complete?'':'≥ ')+fmt(c.total,2):'–'}</td><td class="muted" style="white-space:nowrap">${fmtSeen(f.updatedAt)}</td>
+        <td><div class="adm-actions"><button class="btn small" type="button" data-formopen="${esc(f.id)}" data-formowner="${esc(f.owner)}">เปิดดู</button></div></td></tr>`; }).join('') || '<tr><td colspan="7" class="empty">ยังไม่มีสูตรที่ผู้ใช้บันทึกไว้ (สูตรจะปรากฏเมื่อผู้ใช้เปิดเว็บเวอร์ชันนี้และบันทึกหรือแก้สูตร)</td></tr>'}
     </tbody></table></div><div class="muted" style="font-size:12.5px;margin-top:8px">แสดง ${rows.length} จาก ${ADM_FORMS.length} สูตร · ${owners.length} ผู้ใช้</div>`;
+}
+function exportAllForms(){
+  if(typeof XLSX==='undefined'){ toast('โหลดตัวเขียน Excel ไม่สำเร็จ'); return; }
+  const list=formsFiltered(); if(!list.length){ toast('ไม่มีสูตรให้ดาวน์โหลด'); return; }
+  const sum=[['เจ้าของ','ชื่อสูตร','จำนวนรายการ','ต้นทุน RM บาท/กก.','ต้นทุนรวม บาท/กก.','ต้นทุนรวม บาท/กรัม','batch กก.','ต้นทุนต่อ batch','ราคาขาย บาท/กก.','ต้นทุน/ราคาขาย %','สถานะราคา','อัปเดตล่าสุด']];
+  const det=[['เจ้าของ','ชื่อสูตร','#','รหัส RM','ชื่อวัตถุดิบ','ปริมาณ ('+'% หรือ กรัม'+')','% สูตร','บาท/กรัม','บาท/กก. ในสูตร','สถานะ']];
+  for(const f of list){
+    const c=safeCompute(f.p); if(!c) continue;
+    sum.push([f.owner, f.p.name, f.p.lines.length, +c.rm.toFixed(2), +c.total.toFixed(2), +c.perG.toFixed(4), c.batchKg, +c.batchCost.toFixed(2), c.sell||null, c.ratio!=null?+c.ratio.toFixed(2):null, c.complete?'ครบ':`ขาด ${c.missing} รายการ`, String(f.updatedAt||'')]);
+    c.rows.forEach((r,k)=>det.push([f.owner, f.p.name, k+1, r.e?r.e.code:normCode(r.ln.code), r.e?r.e.name:(r.ln.nameIn||''), r.amt, +r.pct.toFixed(4), r.price!=null?r.price:null, r.costKg!=null?+r.costKg.toFixed(2):null, STATUS[r.status].t]));
+  }
+  const wb=XLSX.utils.book_new();
+  const w1=XLSX.utils.aoa_to_sheet(sum); w1['!cols']=[{wch:30},{wch:34},{wch:10},{wch:16},{wch:16},{wch:14},{wch:9},{wch:14},{wch:14},{wch:14},{wch:16},{wch:22}];
+  const w2=XLSX.utils.aoa_to_sheet(det); w2['!cols']=[{wch:30},{wch:34},{wch:5},{wch:22},{wch:44},{wch:14},{wch:10},{wch:11},{wch:14},{wch:16}];
+  XLSX.utils.book_append_sheet(wb, w1, 'สรุปทั้งหมด'); XLSX.utils.book_append_sheet(wb, w2, 'รายการวัตถุดิบ');
+  const d=new Date(), stamp=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  saveFile(`สูตรทั้งหมด_${list.length}สูตร_${stamp}.xlsx`, XLSX.write(wb,{type:'array',bookType:'xlsx'}));
+  toast(`ดาวน์โหลด ${list.length} สูตรแล้ว`);
 }
 function openForm(id, owner){
   const f=(ADM_FORMS||[]).find(x=>x.id===id && x.owner===owner); const box=$('#formDetail'); if(!f||!box) return;
@@ -1226,11 +1265,11 @@ function openForm(id, owner){
 }
 function renderAdmin(){
   if(!S.adm) return;
-  if(adminTab==='forms' && !isAdminRole()) adminTab='dir';
+  if(adminTab==='forms') adminTab='dir';
   $('#adminView').innerHTML = `<div class="bh"><h2>จัดการผู้ใช้และบทบาท</h2><span class="hint">ผู้ใช้เข้าสู่ระบบด้วยบัญชี Google ของบริษัท · ทุกการเปลี่ยนแปลงบันทึกในชีต Log</span></div>
     <div class="atabs">${Object.entries(tabLabels()).map(([k,l])=>`<button type="button" class="ptab ${adminTab===k?'on':''}" data-tab="${k}">${esc(l)}</button>`).join('')}</div>
     <div id="admBody"></div>`;
-  adminTab==='dir' ? renderDirTab() : adminTab==='users' ? renderUsersTab() : adminTab==='forms' ? renderFormsTab() : renderRolesTab();
+  adminTab==='dir' ? renderDirTab() : adminTab==='users' ? renderUsersTab() : renderRolesTab();
 }
 function requestsBox(){
   const rq=S.adm.requests.filter(r=>!S.adm.users.some(u=>u.email===r.email));
@@ -1348,11 +1387,13 @@ adm.addEventListener('click', e=>{
 });
 adm.addEventListener('input', e=>{
   if(e.target.id==='dirQ'){ dirQ=e.target.value; renderDirRows(); }
-  if(e.target.id==='formQ'){ formQ=e.target.value; drawForms(); }
 });
-adm.addEventListener('click', async e=>{
+const allv=$('#allView');
+allv.addEventListener('input', e=>{ if(e.target.id==='formQ'){ formQ=e.target.value; drawForms(); } });
+allv.addEventListener('click', async e=>{
   const t=e.target;
   const fo=t.closest('[data-formopen]'); if(fo){ openForm(fo.dataset.formopen, fo.dataset.formowner); return; }
+  if(t.id==='formDlAll'){ exportAllForms(); return; }
   if(t.id==='formClose'){ $('#formDetail').innerHTML=''; return; }
   if(t.id==='formExport'){
     const box=$('#formDetail'), f=(ADM_FORMS||[]).find(x=>x.id===box.dataset.id && x.owner===box.dataset.owner);
@@ -1361,14 +1402,14 @@ adm.addEventListener('click', async e=>{
   }
   if(t.id==='formRefresh'){
     t.disabled=true;
-    try{ await loadAdminForms(true); refreshTabLabels(); drawForms(); $('#formDetail').innerHTML=''; toast('โหลดสูตรล่าสุดแล้ว'); }
+    try{ await loadAdminForms(true); drawForms(); $('#formDetail').innerHTML=''; toast('โหลดสูตรล่าสุดแล้ว'); }
     catch(err){ toast(errText(err)); } finally{ t.disabled=false; }
   }
 });
+allv.addEventListener('change', e=>{ if(e.target.id==='formOwner'){ formOwner=e.target.value; drawForms(); } });
 adm.addEventListener('change', e=>{
   const t=e.target;
   if(t.id==='dirF'){ renderDirRows(); return; }
-  if(t.id==='formOwner'){ formOwner=t.value; drawForms(); return; }
   if(t.id==='accAuto' || t.id==='accRole'){ const on=$('#accAuto').checked, r=$('#accRole').value;
     return admCall('saveAccess',[on, r], on?`เปิดเข้าใช้อัตโนมัติแล้ว · บทบาทเริ่มต้น "${S.roles[r].name}"`:'ปิดเข้าใช้อัตโนมัติแล้ว'); }
   const row=t.closest('tr[data-email]');

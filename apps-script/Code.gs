@@ -526,8 +526,8 @@ function adminFormulas() {
 }
 
 /* ===== เรื่องร้องเรียน: ผู้ใช้ที่มีสิทธิ์เข้าระบบทุกคนส่งเรื่องได้ และเห็นเฉพาะเรื่องของตัวเอง
-   เจ้าของระบบและบทบาท admin เห็นทุกเรื่อง ตอบกลับ และเปลี่ยนสถานะได้ (new = ยังไม่ได้รับเรื่อง · progress = กำลังดำเนินงาน · rejected = ปฏิเสธ) ===== */
-const CMP_LABEL = {new: 'ยังไม่ได้รับเรื่อง', progress: 'กำลังดำเนินงาน', rejected: 'ปฏิเสธ'};
+   เจ้าของระบบและบทบาท admin เห็นทุกเรื่อง ตอบกลับ และเปลี่ยนสถานะได้ (new = ยังไม่ได้รับเรื่อง · progress = กำลังดำเนินงาน · done = เสร็จสิ้น · rejected = ปฏิเสธ) ===== */
+const CMP_LABEL = {new: 'ยังไม่ได้รับเรื่อง', progress: 'กำลังดำเนินงาน', done: 'เสร็จสิ้น', rejected: 'ปฏิเสธ'};
 function cmpOut_(r) {
   const st = CMP_LABEL[String(r.status)] ? String(r.status) : 'new';
   return {id: String(r.id), email: String(r.email).toLowerCase(), subject: String(r.subject), detail: String(r.detail), status: st,

@@ -1605,7 +1605,7 @@ rmv.addEventListener('submit', async e=>{
 });
 window.addEventListener('beforeunload', e=>{ if(Object.keys(rmDirty).length){ e.preventDefault(); e.returnValue=''; } });
 /* --- เรื่องร้องเรียน: ทุกคนส่งเรื่องได้ · เฉพาะเจ้าของระบบและบทบาท admin ตอบกลับและเปลี่ยนสถานะได้ --- */
-const CMP_ST={new:{t:'ยังไม่ได้รับเรื่อง',c:'warn'}, progress:{t:'กำลังดำเนินงาน',c:'info'}, rejected:{t:'ปฏิเสธ',c:'bad'}};
+const CMP_ST={new:{t:'ยังไม่ได้รับเรื่อง',c:'warn'}, progress:{t:'กำลังดำเนินงาน',c:'info'}, done:{t:'เสร็จสิ้น',c:'ok'}, rejected:{t:'ปฏิเสธ',c:'bad'}};
 let CMP=null, cmpQ='', cmpSt='';
 const cmpChip=s=>{ const x=CMP_ST[s]||CMP_ST.new; return `<span class="chip ${x.c}">${x.t}</span>`; };
 async function loadCmp(){

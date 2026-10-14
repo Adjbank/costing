@@ -10,7 +10,7 @@
 <title>ระบบต้นทุนหัวน้ำหอม</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Noto+Sans+Thai:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Noto+Sans+Thai:wght@400;500;700&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* Layout: navy masthead, three-step costing flow on the left, a sticky cost summary on the right; stacks to one column on phones. Scent & Sense brand tokens. */
@@ -20,9 +20,11 @@
   --head-bg:#091e4b; --head-ink:#ffffff; --head-muted:#cea67d; --accent:#c46d4e; --accent-ink:#ffffff;
   --input-bg:#ffffff; --focus:#063b7c;
   --ok:#256b4b; --ok-bg:#e3f1e9; --warn:#93520f; --warn-bg:#fbecd9; --bad:#a3271f; --bad-bg:#f9e1de; --info:#063b7c; --info-bg:#e1e9f5;
-  --f-display:"Cormorant Garamond","Canela Deck",Georgia,serif;
+  /* Typography ตามคู่มือแบรนด์: Headline = Canela Deck (อังกฤษ) · Sub-headline = Noto Sans Thai Bold · Body = Noto Sans Thai Regular
+     Canela Deck เป็นฟอนต์เสียเงิน ถ้าเครื่องไม่มีใช้ Cormorant Garamond แทน · อักษรไทยในหัวข้อใช้ Noto Sans Thai เสมอ */
+  --f-display:"Canela Deck","Cormorant Garamond","Noto Sans Thai",Georgia,serif;
   --f-body:"Noto Sans Thai","Noto Sans",system-ui,sans-serif;
-  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  --f-mono:"Noto Sans Thai","Noto Sans",system-ui,sans-serif;
   --r-card:12px;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
@@ -40,21 +42,22 @@
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.6}
 .wrap{max-width:1280px;margin:0 auto;padding-inline:clamp(16px,4vw,48px)}
-.mono{font-family:var(--f-mono);font-size:12.5px;white-space:nowrap}
+.mono{font-family:var(--f-mono);font-size:12.5px;white-space:nowrap;font-variant-numeric:tabular-nums;letter-spacing:.02em}
 .num{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
 h1,h2,h3{text-wrap:balance;margin:0;font-weight:500}
+h3{font-weight:700}
 button,input,select,textarea{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 
 /* masthead */
-.mast{background:var(--head-bg);color:var(--head-ink)}
+.mast{background:var(--head-bg) linear-gradient(120deg,var(--head-bg) 0%,var(--head-bg) 58%,var(--cobalt) 100%);color:var(--head-ink)}
 .mast .wrap{padding-block:28px 22px;display:flex;flex-wrap:wrap;gap:16px 32px;align-items:flex-end;justify-content:space-between}
 .eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--head-muted)}
 .mast .wrap > div:first-child{flex:1 1 380px;min-width:0}
 .mast h1{font-family:var(--f-display);font-size:clamp(26px,3.6vw,40px);line-height:1.25;margin-top:6px;overflow-wrap:anywhere;line-break:auto}
 .mast h1 small{overflow-wrap:anywhere}
 .mast h1 small{display:block;font-family:var(--f-body);font-size:16px;font-weight:400;color:#ffffffcc;margin-top:6px}
-.mast .rule{height:1px;background:var(--copper);margin-top:14px;width:72px}
+.mast .rule{height:2px;background:linear-gradient(90deg,var(--copper),var(--sand));margin-top:14px;width:72px}
 .dbcard{min-width:0;max-width:440px;border:1px solid #ffffff33;border-radius:var(--r-card);padding:12px 14px;font-size:13px}
 .dbcard b{font-weight:700}
 .dbcard .meta{color:#ffffffb3}
@@ -188,7 +191,7 @@ tfoot td{font-weight:700;border-top:1px solid var(--ink);background:var(--bg-sof
 [hidden]{display:none!important}
 
 /* login gate */
-.gate{min-height:100vh;min-height:100dvh;background:var(--head-bg);display:flex;padding:32px 16px}
+.gate{min-height:100vh;min-height:100dvh;background:var(--head-bg) linear-gradient(135deg,var(--head-bg) 0%,var(--head-bg) 55%,var(--cobalt) 100%);display:flex;padding:32px 16px}
 .gate-card{margin:auto;width:100%;max-width:400px;background:var(--bg);color:var(--ink);border-radius:16px;padding:32px 28px;display:flex;flex-direction:column;gap:18px;box-shadow:0 20px 60px #0004}
 .gate-card .eyebrow{color:var(--accent)}
 .gate-card h1{font-family:var(--f-display);font-size:30px;line-height:1.2;margin-top:4px}
@@ -1027,7 +1030,7 @@ const fmtSeen = iso => { if(!iso) return '–'; const d=new Date(iso); return is
 const shortName = email => String(email||'').split('@')[0];
 function ava(email, cls){
   const s=String(email||'?'); let h=0; for(const ch of s) h=(h*31+ch.charCodeAt(0))>>>0;
-  const colors=['#091e4b','#c46d4e','#494b74','#063b7c','#8a5a3c','#2f5d50'];
+  const colors=['#091e4b','#c46d4e','#494b74','#063b7c'];
   return `<span class="ava ${cls||''}" style="background:${colors[h%colors.length]}" aria-hidden="true">${esc(s.charAt(0).toUpperCase())}</span>`;
 }
 function computePerms(){ S.perms = Object.assign({}, S.me && S.me.perms); S.roleName = (S.me && S.me.roleName) || 'ยังไม่มีบทบาท'; }

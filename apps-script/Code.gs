@@ -16,7 +16,8 @@ const HEAD = {
   Visitors: ['email', 'firstSeen', 'lastSeen'],
   Log:      ['at', 'email', 'action', 'detail'],
   Formulas: ['id', 'owner', 'name', 'updatedAt', 'data'],
-  Pricing:  ['key', 'owner', 'formulaId', 'sell', 'updatedAt', 'updatedBy']
+  Pricing:  ['key', 'owner', 'formulaId', 'sell', 'updatedAt', 'updatedBy'],
+  Complaints: ['id', 'email', 'subject', 'detail', 'status', 'reply', 'repliedBy', 'createdAt', 'updatedAt']
 };
 const PERM_KEYS = ['calc', 'export', 'viewDb', 'editPrices', 'manageUsers'];
 const DEFAULT_ROLES = [
@@ -46,7 +47,8 @@ function doPost(e) {
     saveExport: saveExport, adminData: adminData, setUser: setUser, removeUser: removeUser, declineRequest: declineRequest,
     saveAccess: saveAccess, createRole: createRole, updateRole: updateRole, deleteRole: deleteRole,
     loadMyFormulas: loadMyFormulas, saveMyFormulas: saveMyFormulas, adminFormulas: adminFormulas,
-    loadPricing: loadPricing, savePricing: savePricing, updatePrices: updatePrices};
+    loadPricing: loadPricing, savePricing: savePricing, updatePrices: updatePrices,
+    submitComplaint: submitComplaint, myComplaints: myComplaints, adminComplaints: adminComplaints, replyComplaint: replyComplaint};
   let out;
   try {
     const req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
@@ -122,7 +124,7 @@ function ss_() {
 function sh_(n) {
   const ss = ss_();
   let s = ss.getSheetByName(n);
-  if (!s && HEAD[n] && (n === 'Formulas' || n === 'Pricing')) {   // แท็บที่เพิ่มภายหลัง สร้างให้เองเมื่อยังไม่มี
+  if (!s && HEAD[n] && (n === 'Formulas' || n === 'Pricing' || n === 'Complaints')) {   // แท็บที่เพิ่มภายหลัง สร้างให้เองเมื่อยังไม่มี
     s = ss.insertSheet(n);
     s.getRange(1, 1, 1, HEAD[n].length).setValues([HEAD[n]]).setFontWeight('bold');
     s.setFrozenRows(1);
@@ -218,7 +220,8 @@ function bootstrap() {
     roles: m.roles, order: m.order, access: {autoJoin: m.autoJoin, defaultRole: m.defRole},
     prices: ok && (m.perms.calc || m.perms.viewDb || m.isOwner) ? readPrices_() : null,
     appUrl: appUrl_(),
-    requested: !!findRow_('Requests', 'email', m.email)
+    requested: !!findRow_('Requests', 'email', m.email),
+    complaintsNew: ok && isAdmin_(m) ? newComplaints_() : 0
   };
 }
 function touchVisitor_(email) {
@@ -520,6 +523,76 @@ function adminFormulas() {
   const list = rows_('Formulas').map(formulaOut_);
   log_(m.email, 'adminFormulas', list.length + ' สูตร');
   return list;
+}
+
+/* ===== เรื่องร้องเรียน: ผู้ใช้ที่มีสิทธิ์เข้าระบบทุกคนส่งเรื่องได้ และเห็นเฉพาะเรื่องของตัวเอง
+   เจ้าของระบบและบทบาท admin เห็นทุกเรื่อง ตอบกลับ และเปลี่ยนสถานะได้ (new = ยังไม่ได้รับเรื่อง · progress = กำลังดำเนินงาน · rejected = ปฏิเสธ) ===== */
+const CMP_LABEL = {new: 'ยังไม่ได้รับเรื่อง', progress: 'กำลังดำเนินงาน', rejected: 'ปฏิเสธ'};
+function cmpOut_(r) {
+  const st = CMP_LABEL[String(r.status)] ? String(r.status) : 'new';
+  return {id: String(r.id), email: String(r.email).toLowerCase(), subject: String(r.subject), detail: String(r.detail), status: st,
+          reply: String(r.reply || ''), repliedBy: String(r.repliedBy || ''), createdAt: iso_(r.createdAt), updatedAt: iso_(r.updatedAt)};
+}
+function cmpSort_(a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); }
+function newComplaints_() {
+  try { return rows_('Complaints').filter(function (r) { return !CMP_LABEL[String(r.status)] || String(r.status) === 'new'; }).length; } catch (e) { return 0; }
+}
+function activeMe_() {
+  const m = me_();
+  if (!m.role || !m.active) throw new Error('FORBIDDEN');
+  return m;
+}
+function myComplaints() {
+  const m = activeMe_();
+  return rows_('Complaints').filter(function (r) { return String(r.email).toLowerCase() === m.email; }).map(cmpOut_).sort(cmpSort_);
+}
+function adminComplaints() {
+  const m = me_();
+  if (!isAdmin_(m)) throw new Error('FORBIDDEN');
+  return rows_('Complaints').map(cmpOut_).sort(cmpSort_);
+}
+function submitComplaint(subject, detail) {
+  return withLock_(function () {
+    const m = activeMe_();
+    subject = String(subject || '').trim().slice(0, 120);
+    detail = String(detail || '').trim().slice(0, 2000);
+    if (!subject) throw new Error('ใส่หัวข้อเรื่อง');
+    if (detail.length < 5) throw new Error('อธิบายรายละเอียดอย่างน้อย 5 ตัวอักษร');
+    const since = Date.now() - 86400000;
+    const recent = rows_('Complaints').filter(function (r) {
+      return String(r.email).toLowerCase() === m.email && new Date(r.createdAt).getTime() > since;
+    }).length;
+    if (recent >= 5) throw new Error('ส่งเรื่องได้ไม่เกิน 5 เรื่องต่อวัน');
+    const id = 'c' + Utilities.getUuid().replace(/-/g, '').slice(0, 12), now = new Date();
+    sh_('Complaints').appendRow([id, m.email, subject, detail, 'new', '', '', now, now]);
+    log_(m.email, 'submitComplaint', id + ' · ' + subject.slice(0, 60));
+    try {
+      MailApp.sendEmail(m.owner, '[ระบบต้นทุนหัวน้ำหอม] เรื่องร้องเรียนใหม่จาก ' + m.email,
+        'หัวข้อ: ' + subject + '\n\n' + detail + '\n\nตอบกลับและเปลี่ยนสถานะได้ที่ปุ่ม "เรื่องร้องเรียน":\n' + appUrl_());
+    } catch (e) {}
+    return rows_('Complaints').filter(function (r) { return String(r.email).toLowerCase() === m.email; }).map(cmpOut_).sort(cmpSort_);
+  });
+}
+function replyComplaint(id, status, reply) {
+  return withLock_(function () {
+    const m = me_();
+    if (!isAdmin_(m)) throw new Error('FORBIDDEN');
+    if (!CMP_LABEL[String(status)]) throw new Error('สถานะไม่ถูกต้อง');
+    reply = String(reply || '').trim().slice(0, 2000);
+    if (status === 'rejected' && !reply) throw new Error('ใส่เหตุผลที่ปฏิเสธเพื่อแจ้งผู้ส่งเรื่อง');
+    const cur = findRow_('Complaints', 'id', String(id || ''));
+    if (!cur) throw new Error('ไม่พบเรื่องนี้');
+    const before = cmpOut_(cur);
+    if (before.status === status && before.reply === reply) return rows_('Complaints').map(cmpOut_).sort(cmpSort_);
+    const now = new Date();
+    sh_('Complaints').getRange(cur._row, 5, 1, 5).setValues([[status, reply, m.email, cur.createdAt, now]]);
+    log_(m.email, 'replyComplaint', before.id + ' · ' + before.status + '→' + status);
+    try {
+      MailApp.sendEmail(before.email, '[ระบบต้นทุนหัวน้ำหอม] อัปเดตเรื่องร้องเรียน: ' + before.subject.slice(0, 80),
+        'เรื่อง: ' + before.subject + '\nสถานะ: ' + CMP_LABEL[status] + (reply ? '\n\nข้อความจากผู้ดูแลระบบ:\n' + reply : '') + '\n\nดูรายละเอียดได้ที่ปุ่ม "เรื่องร้องเรียน":\n' + appUrl_());
+    } catch (e) {}
+    return rows_('Complaints').map(cmpOut_).sort(cmpSort_);
+  });
 }
 
 /* ===== ทำราคาขาย: เฉพาะเจ้าของระบบและบทบาทผู้ดูแลระบบ (admin) =====

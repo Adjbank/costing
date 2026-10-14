@@ -281,6 +281,7 @@ tfoot td{font-weight:700;border-top:1px solid var(--ink);background:var(--bg-sof
   <section id="allView" hidden style="padding-block:24px 56px"></section>
   <section id="priceView" hidden style="padding-block:24px 56px"></section>
   <section id="rmView" hidden style="padding-block:24px 56px"></section>
+  <section id="cmpView" hidden style="padding-block:24px 56px"></section>
   <div id="calcView">
   <div class="steps" id="stepsBar" aria-label="ขั้นตอน">
     <span><b>1</b>ใส่ไฟล์สูตร</span><span><b>2</b>ตรวจรายการ &amp; แก้ราคาที่ขาด</span><span><b>3</b>สรุปต้นทุน &amp; ส่งออก Excel</span>
@@ -1035,7 +1036,7 @@ function ava(email, cls){
 }
 function computePerms(){ S.perms = Object.assign({}, S.me && S.me.perms); S.roleName = (S.me && S.me.roleName) || 'ยังไม่มีบทบาท'; }
 function applyBootstrap(b){
-  S.me=b.me; S.roles=b.roles||{}; S.order=b.order||[]; S.access=b.access||S.access; S.appUrl=b.appUrl||''; S.requested=!!b.requested;
+  S.me=b.me; S.roles=b.roles||{}; S.order=b.order||[]; S.access=b.access||S.access; S.appUrl=b.appUrl||''; S.requested=!!b.requested; S.cNew=b.complaintsNew||0;
   computePerms(); applyPriceData(b.prices);
 }
 
@@ -1143,6 +1144,7 @@ function renderUserBar(){
     <button class="btn-ghost-dark" type="button" id="btnPrice">${S.view==='price'?'กลับไปหน้าคำนวณ':'ทำราคาขาย'}</button>`:''}
     ${can('editPrices')?`<button class="btn-ghost-dark" type="button" id="btnRm">${S.view==='rm'?'กลับไปหน้าคำนวณ':'ฐานราคาวัตถุดิบ'}</button>`:''}
     ${can('manageUsers')?`<button class="btn-ghost-dark" type="button" id="btnAdmin">${S.view==='admin'?'กลับไปหน้าคำนวณ':'จัดการผู้ใช้และบทบาท'}</button>`:''}
+    ${S.me&&S.me.role?`<button class="btn-ghost-dark" type="button" id="btnCmp">${S.view==='cmp'?'กลับไปหน้าคำนวณ':(isAdminRole()?'เรื่องร้องเรียน':'แจ้งเรื่องร้องเรียน')+(isAdminRole()&&S.cNew?` (${S.cNew})`:'')}</button>`:''}
     <button class="btn-ghost-dark" type="button" id="btnShare">แชร์ลิงก์</button>
     <button class="btn-ghost-dark" type="button" id="btnReload" title="โหลดสิทธิ์และฐานราคาล่าสุด">รีเฟรช</button>
     ${HTTP?'<button class="btn-ghost-dark" type="button" id="btnSignOut">ออกจากระบบ</button>':''}`;
@@ -1185,6 +1187,7 @@ $('#userbar').addEventListener('click', e=>{
   if(e.target.id==='btnAll') showView(S.view==='all' ? 'calc' : 'all');
   if(e.target.id==='btnPrice') showView(S.view==='price' ? 'calc' : 'price');
   if(e.target.id==='btnRm') showView(S.view==='rm' ? 'calc' : 'rm');
+  if(e.target.id==='btnCmp') showView(S.view==='cmp' ? 'calc' : 'cmp');
 });
 async function showView(v){
   if(v==='admin' && !can('manageUsers')) v='calc';
@@ -1192,9 +1195,11 @@ async function showView(v){
   if(v==='rm' && !can('editPrices')) v='calc';
   if(S.view==='price' && v!=='price') flushPrice();
   if(S.view==='rm' && v!=='rm') flushRm();
+  if(v==='cmp' && !(S.me && S.me.role)) v='calc';
   S.view=v; S.admin = v!=='calc';                 /* S.admin = ไม่ได้อยู่หน้าคำนวณ */
-  $('#adminView').hidden=v!=='admin'; $('#allView').hidden=v!=='all'; $('#priceView').hidden=v!=='price'; $('#rmView').hidden=v!=='rm'; $('#calcView').hidden=v!=='calc';
+  $('#adminView').hidden=v!=='admin'; $('#allView').hidden=v!=='all'; $('#priceView').hidden=v!=='price'; $('#rmView').hidden=v!=='rm'; $('#cmpView').hidden=v!=='cmp'; $('#calcView').hidden=v!=='calc';
   renderUserBar();
+  if(v==='cmp'){ window.scrollTo(0,0); renderCmpView(); return; }
   if(v==='rm'){ window.scrollTo(0,0); renderRmView(); return; }
   if(v==='all'){ window.scrollTo(0,0); renderAllView(); return; }
   if(v==='price'){ window.scrollTo(0,0); renderPriceView(); return; }
@@ -1599,6 +1604,80 @@ rmv.addEventListener('submit', async e=>{
   }catch(ex){ err.textContent=errText(ex); } finally{ btn.disabled=false; }
 });
 window.addEventListener('beforeunload', e=>{ if(Object.keys(rmDirty).length){ e.preventDefault(); e.returnValue=''; } });
+/* --- เรื่องร้องเรียน: ทุกคนส่งเรื่องได้ · เฉพาะเจ้าของระบบและบทบาท admin ตอบกลับและเปลี่ยนสถานะได้ --- */
+const CMP_ST={new:{t:'ยังไม่ได้รับเรื่อง',c:'warn'}, progress:{t:'กำลังดำเนินงาน',c:'info'}, rejected:{t:'ปฏิเสธ',c:'bad'}};
+let CMP=null, cmpQ='', cmpSt='';
+const cmpChip=s=>{ const x=CMP_ST[s]||CMP_ST.new; return `<span class="chip ${x.c}">${x.t}</span>`; };
+async function loadCmp(){
+  CMP = await api(isAdminRole() ? 'adminComplaints' : 'myComplaints');
+  if(isAdminRole()){ S.cNew=CMP.filter(c=>c.status==='new').length; renderUserBar(); }
+}
+function renderCmpView(){
+  const adm=isAdminRole();
+  $('#cmpView').innerHTML = `<div class="bh"><h2>เรื่องร้องเรียน</h2><span class="hint">${adm?'เรื่องที่ทุกคนส่งมา · ตอบกลับและเปลี่ยนสถานะได้ · ผู้ส่งได้รับอีเมลแจ้งเมื่อมีการตอบ':'ส่งเรื่องถึงผู้ดูแลระบบ แล้วติดตามสถานะและคำตอบได้ที่หน้านี้'}</span></div>
+    <details class="card" id="cmpNew" style="margin-bottom:16px" ${adm?'':'open'}>
+      <summary style="cursor:pointer;font-weight:700">ส่งเรื่องร้องเรียนใหม่</summary>
+      <form id="cmpForm" style="display:flex;flex-direction:column;gap:12px;margin-top:12px" novalidate>
+        <div class="field"><label for="cmpSubject">หัวข้อเรื่อง</label><input id="cmpSubject" maxlength="120" required placeholder="เช่น ราคา RM-002-001-0184 ไม่ตรงกับใบเสนอราคา"></div>
+        <div class="field"><label for="cmpDetail">รายละเอียด</label><textarea id="cmpDetail" maxlength="2000" required rows="5" placeholder="อธิบายปัญหา สูตรหรือรหัสที่เกี่ยวข้อง และสิ่งที่อยากให้ช่วย" style="width:100%;border:1px solid var(--line-strong);border-radius:8px;padding:10px;background:var(--input-bg);resize:vertical"></textarea></div>
+        <div class="row"><button class="btn primary" type="submit">ส่งเรื่อง</button><span id="cmpErr" role="alert" style="color:var(--bad);font-size:13px"></span></div>
+        <div class="muted" style="font-size:12.5px">ส่งได้ไม่เกิน 5 เรื่องต่อวัน · ผู้ดูแลระบบได้รับอีเมลแจ้งทันที</div>
+      </form>
+    </details>
+    ${adm?`<div id="cmpStats" class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:16px"></div>
+    <div class="search"><input id="cmpQ" type="search" autocomplete="off" placeholder="ค้นหาหัวข้อ รายละเอียด หรืออีเมลผู้ส่ง…" value="${esc(cmpQ)}">
+      <select id="cmpStSel" aria-label="กรองสถานะ"><option value="">ทุกสถานะ</option>${Object.entries(CMP_ST).map(([k,v])=>`<option value="${k}" ${cmpSt===k?'selected':''}>${v.t}</option>`).join('')}</select>
+      <button class="btn small" type="button" id="cmpRefresh">รีเฟรช</button></div>`
+      :`<div class="bh" style="margin-top:8px"><h2 style="font-size:20px">เรื่องของฉัน</h2><button class="btn small" type="button" id="cmpRefresh">รีเฟรช</button></div>`}
+    <div id="cmpList"><div class="empty">กำลังโหลด…</div></div>`;
+  loadCmp().then(()=>{ if(S.view==='cmp') drawCmp(); }).catch(e=>{ if($('#cmpList')) $('#cmpList').innerHTML=`<div class="msg bad">${esc(errText(e))}</div>`; });
+}
+function drawCmp(){
+  const box=$('#cmpList'); if(!box || !CMP) return;
+  const adm=isAdminRole(), q=cmpQ.trim().toLowerCase();
+  if(adm){
+    const n=s=>CMP.filter(c=>c.status===s).length, stat=(k,v)=>`<div class="card" style="padding:12px 18px;min-width:150px"><div class="muted" style="font-size:12.5px">${k}</div><div style="font-family:var(--f-display);font-size:28px;line-height:1.2">${v}</div></div>`;
+    $('#cmpStats').innerHTML = Object.entries(CMP_ST).map(([k,v])=>stat(v.t, n(k))).join('') + stat('ทั้งหมด', CMP.length);
+  }
+  const list=CMP.filter(c=>(!cmpSt||c.status===cmpSt) && (!q || c.subject.toLowerCase().includes(q) || c.detail.toLowerCase().includes(q) || c.email.includes(q)));
+  box.innerHTML = list.map(c=>`<article class="card" data-id="${esc(c.id)}" style="margin-bottom:12px">
+      <div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px">
+        <div style="min-width:0"><h3 style="overflow-wrap:anywhere">${esc(c.subject)}</h3>
+          <div class="muted" style="font-size:12.5px">${adm?`${ava(c.email)} ${esc(c.email)} · `:''}ส่งเมื่อ ${fmtSeen(c.createdAt)}</div></div>
+        ${cmpChip(c.status)}</div>
+      <p style="white-space:pre-wrap;margin:10px 0;overflow-wrap:anywhere">${esc(c.detail)}</p>
+      ${c.reply ? `<div class="note-box" style="margin-top:8px"><b>คำตอบจากผู้ดูแลระบบ</b>${c.repliedBy?` <span class="muted">(${esc(shortName(c.repliedBy))} · ${fmtSeen(c.updatedAt)})</span>`:''}<div style="white-space:pre-wrap;margin-top:4px;overflow-wrap:anywhere">${esc(c.reply)}</div></div>`
+        : (adm ? '' : `<div class="muted" style="font-size:13px">${c.status==='new'?'ผู้ดูแลระบบยังไม่ได้รับเรื่อง':'ยังไม่มีข้อความตอบกลับ'}</div>`)}
+      ${adm ? `<div class="row" style="margin-top:12px;gap:10px;align-items:flex-start;flex-wrap:wrap">
+          <select class="cmp-st" aria-label="สถานะ" style="border:1px solid var(--line-strong);border-radius:7px;padding:6px 9px;background:var(--input-bg)">${Object.entries(CMP_ST).map(([k,v])=>`<option value="${k}" ${c.status===k?'selected':''}>${v.t}</option>`).join('')}</select>
+          <textarea class="cmp-reply" rows="2" maxlength="2000" placeholder="ข้อความตอบกลับผู้ส่ง (ต้องใส่เหตุผลเมื่อเลือก ปฏิเสธ)" aria-label="ข้อความตอบกลับ" style="flex:1 1 280px;min-width:0;border:1px solid var(--line-strong);border-radius:8px;padding:8px;background:var(--input-bg);resize:vertical">${esc(c.reply)}</textarea>
+          <button class="btn small primary" type="button" data-cmpsave="1">บันทึกการตอบกลับ</button></div>` : ''}
+    </article>`).join('') || `<div class="empty">${adm?'ไม่พบเรื่องที่ตรงกับตัวกรอง':'ยังไม่มีเรื่องที่คุณส่ง'}</div>`;
+}
+const cmpv=$('#cmpView');
+cmpv.addEventListener('input', e=>{ if(e.target.id==='cmpQ'){ cmpQ=e.target.value; drawCmp(); } });
+cmpv.addEventListener('change', e=>{ if(e.target.id==='cmpStSel'){ cmpSt=e.target.value; drawCmp(); } });
+cmpv.addEventListener('click', async e=>{
+  const t=e.target;
+  if(t.id==='cmpRefresh'){ t.disabled=true; try{ await loadCmp(); drawCmp(); toast('โหลดล่าสุดแล้ว'); }catch(err){ toast(errText(err)); } finally{ t.disabled=false; } return; }
+  if(t.dataset.cmpsave){
+    const card=t.closest('article[data-id]'), status=card.querySelector('.cmp-st').value, reply=card.querySelector('.cmp-reply').value.trim();
+    if(status==='rejected' && !reply){ toast('ใส่เหตุผลที่ปฏิเสธก่อนบันทึก'); card.querySelector('.cmp-reply').focus(); return; }
+    t.disabled=true;
+    try{ CMP=await api('replyComplaint', card.dataset.id, status, reply); S.cNew=CMP.filter(c=>c.status==='new').length; renderUserBar(); drawCmp(); toast('บันทึกการตอบกลับแล้ว · ผู้ส่งได้รับอีเมลแจ้ง'); }
+    catch(err){ toast(errText(err)); t.disabled=false; }
+  }
+});
+cmpv.addEventListener('submit', async e=>{
+  e.preventDefault();
+  if(e.target.id!=='cmpForm') return;
+  const subject=$('#cmpSubject').value.trim(), detail=$('#cmpDetail').value.trim(), err=$('#cmpErr'), btn=e.target.querySelector('button[type=submit]');
+  if(!subject){ err.textContent='ใส่หัวข้อเรื่อง'; return; }
+  if(detail.length<5){ err.textContent='อธิบายรายละเอียดอย่างน้อย 5 ตัวอักษร'; return; }
+  err.textContent=''; btn.disabled=true;
+  try{ await api('submitComplaint', subject, detail); e.target.reset(); await loadCmp(); drawCmp(); toast('ส่งเรื่องแล้ว ผู้ดูแลระบบได้รับแจ้งทางอีเมล'); }
+  catch(ex){ err.textContent=errText(ex); } finally{ btn.disabled=false; }
+});
 function renderAdmin(){
   if(!S.adm) return;
   if(adminTab==='forms') adminTab='dir';

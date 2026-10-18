@@ -10,57 +10,68 @@
 <title>ระบบต้นทุนหัวน้ำหอม</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Noto+Sans+Thai:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* Layout: navy masthead, three-step costing flow on the left, a sticky cost summary on the right; stacks to one column on phones. Scent & Sense brand tokens. */
 :root{
-  --navy:#091e4b; --copper:#c46d4e; --cream:#f0e0ca; --sand:#cea67d; --dusk:#494b74; --cobalt:#063b7c;
-  --bg:#ffffff; --bg-soft:#faf6f0; --tint:#f0e0ca; --ink:#091e4b; --ink-muted:#494b74; --line:#091e4b26; --line-strong:#494b74;
-  --head-bg:#091e4b; --head-ink:#ffffff; --head-muted:#cea67d; --accent:#c46d4e; --accent-ink:#ffffff;
-  --input-bg:#ffffff; --focus:#063b7c;
-  --ok:#256b4b; --ok-bg:#e3f1e9; --warn:#93520f; --warn-bg:#fbecd9; --bad:#a3271f; --bad-bg:#f9e1de; --info:#063b7c; --info-bg:#e1e9f5;
-  /* Typography ตามคู่มือแบรนด์: Headline = Canela Deck (อังกฤษ) · Sub-headline = Noto Sans Thai Bold · Body = Noto Sans Thai Regular
-     Canela Deck เป็นฟอนต์เสียเงิน ถ้าเครื่องไม่มีใช้ Cormorant Garamond แทน · อักษรไทยในหัวข้อใช้ Noto Sans Thai เสมอ */
-  --f-display:"Canela Deck","Cormorant Garamond","Noto Sans Thai",Georgia,serif;
-  --f-body:"Noto Sans Thai","Noto Sans",system-ui,sans-serif;
-  --f-mono:"Noto Sans Thai","Noto Sans",system-ui,sans-serif;
-  --r-card:12px;
+  /* โทนสีและฟอนต์ตามภาพอ้างอิง: พื้นครีมอุ่น · การ์ดขาว · น้ำเงินเข้มสำหรับการ์ดเน้น · ส้มอิฐเป็นสีเน้น · ม่วง/น้ำเงินสำหรับสีรอง */
+  --navy:#13214a; --copper:#b9735a; --cream:#f3e8d3; --sand:#d8c3a0; --dusk:#666b7d; --cobalt:#3b5fb0; --purple:#7c5fb0;
+  --bg:#f8f3ea; --card:#fffdf8; --bg-soft:#f3ebdc; --tint:#efe3cd; --ink:#1c2540; --ink-muted:#666b7d; --line:#e4d8c3; --line-strong:#cbbd9f;
+  --head-bg:#f8f3ea; --head-ink:#1c2540; --head-muted:#666b7d; --accent:#b9735a; --accent-ink:#ffffff;
+  --hero-bg:#13214a; --primary:#13214a; --primary-ink:#ffffff;
+  --input-bg:#fffdf8; --focus:#3b5fb0;
+  --ok:#2f7a55; --ok-bg:#e1f0e7; --warn:#a8641b; --warn-bg:#fbead2; --bad:#b4472f; --bad-bg:#f9e2db; --info:#3b5fb0; --info-bg:#e3e9f6;
+  --f-display:"Anuphan","Noto Sans Thai",system-ui,sans-serif;
+  --f-body:"Anuphan","Noto Sans Thai",system-ui,sans-serif;
+  --f-mono:"Anuphan","Noto Sans Thai",system-ui,sans-serif;
+  --r-card:14px;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#091e4b; --bg-soft:#0d2558; --tint:#063b7c; --ink:#ffffff; --ink-muted:#cea67d; --line:#ffffff26; --line-strong:#cea67d;
-  --head-bg:#061638; --head-ink:#ffffff; --head-muted:#cea67d; --accent:#d9825f; --accent-ink:#091e4b;
-  --input-bg:#071a42; --focus:#f0e0ca;
-  --ok:#86d6ae; --ok-bg:#12403a; --warn:#f2b878; --warn-bg:#47331f; --bad:#ff9d93; --bad-bg:#4a2230; --info:#a9c4f0; --info-bg:#123a72;
+  --bg:#0f1730; --card:#172142; --bg-soft:#1d2a52; --tint:#22325f; --ink:#f3ebdd; --ink-muted:#b9b3c8; --line:#ffffff22; --line-strong:#5d6a98;
+  --head-bg:#0f1730; --head-ink:#f3ebdd; --head-muted:#b9b3c8; --accent:#df8b70; --accent-ink:#13214a;
+  --hero-bg:#2b3d75; --primary:#df8b70; --primary-ink:#13214a;
+  --input-bg:#121b38; --focus:#f3e8d3;
+  --ok:#86d6ae; --ok-bg:#12403a; --warn:#f2b878; --warn-bg:#47331f; --bad:#ff9d93; --bad-bg:#4a2230; --info:#a9c4f0; --info-bg:#1d3a72;
   color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#091e4b; --bg-soft:#0d2558; --tint:#063b7c; --ink:#ffffff; --ink-muted:#cea67d; --line:#ffffff26; --line-strong:#cea67d;
-  --head-bg:#061638; --head-ink:#ffffff; --head-muted:#cea67d; --accent:#d9825f; --accent-ink:#091e4b;
-  --input-bg:#071a42; --focus:#f0e0ca;
-  --ok:#86d6ae; --ok-bg:#12403a; --warn:#f2b878; --warn-bg:#47331f; --bad:#ff9d93; --bad-bg:#4a2230; --info:#a9c4f0; --info-bg:#123a72;
+  --bg:#0f1730; --card:#172142; --bg-soft:#1d2a52; --tint:#22325f; --ink:#f3ebdd; --ink-muted:#b9b3c8; --line:#ffffff22; --line-strong:#5d6a98;
+  --head-bg:#0f1730; --head-ink:#f3ebdd; --head-muted:#b9b3c8; --accent:#df8b70; --accent-ink:#13214a;
+  --hero-bg:#2b3d75; --primary:#df8b70; --primary-ink:#13214a;
+  --input-bg:#121b38; --focus:#f3e8d3;
+  --ok:#86d6ae; --ok-bg:#12403a; --warn:#f2b878; --warn-bg:#47331f; --bad:#ff9d93; --bad-bg:#4a2230; --info:#a9c4f0; --info-bg:#1d3a72;
   color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.6}
 .wrap{max-width:1280px;margin:0 auto;padding-inline:clamp(16px,4vw,48px)}
 .mono{font-family:var(--f-mono);font-size:12.5px;white-space:nowrap;font-variant-numeric:tabular-nums;letter-spacing:.02em}
 .num{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
-h1,h2,h3{text-wrap:balance;margin:0;font-weight:500}
-h3{font-weight:700}
+h1,h2,h3{text-wrap:balance;margin:0;font-weight:700}
 button,input,select,textarea{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 
-/* masthead */
-.mast{background:var(--head-bg) linear-gradient(120deg,var(--head-bg) 0%,var(--head-bg) 58%,var(--cobalt) 100%);color:var(--head-ink)}
-.mast .wrap{padding-block:28px 22px;display:flex;flex-wrap:wrap;gap:16px 32px;align-items:flex-end;justify-content:space-between}
-.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--head-muted)}
-.mast .wrap > div:first-child{flex:1 1 380px;min-width:0}
-.mast h1{font-family:var(--f-display);font-size:clamp(26px,3.6vw,40px);line-height:1.25;margin-top:6px;overflow-wrap:anywhere;line-break:auto}
-.mast h1 small{overflow-wrap:anywhere}
-.mast h1 small{display:block;font-family:var(--f-body);font-size:16px;font-weight:400;color:#ffffffcc;margin-top:6px}
-.mast .rule{height:2px;background:linear-gradient(90deg,var(--copper),var(--sand));margin-top:14px;width:72px}
-.dbcard{min-width:0;max-width:440px;border:1px solid #ffffff33;border-radius:var(--r-card);padding:12px 14px;font-size:13px}
+/* top bar: แบรนด์ · เมนูแบบแท็บ · ปุ่มด้านขวา (ตามภาพอ้างอิง) */
+.mast{background:var(--head-bg);color:var(--head-ink);border-bottom:1px solid var(--line)}
+.mast .wrap{padding-block:14px;display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:19px;white-space:nowrap}
+.brand i{width:30px;height:30px;background:var(--accent);border-radius:50% 50% 50% 50% / 62% 62% 38% 38%;flex:none}
+.navtabs{display:flex;gap:4px;background:var(--tint);border-radius:14px;padding:6px;max-width:100%;overflow-x:auto}
+.navtabs button{border:none;background:transparent;border-radius:10px;padding:8px 16px;color:var(--ink-muted);cursor:pointer;font-weight:500;white-space:nowrap;font-size:14px}
+.navtabs button:hover{color:var(--ink)}
+.navtabs button.on{background:var(--card);color:var(--ink);font-weight:700;box-shadow:0 1px 3px #0002}
+.navtabs .badge{display:inline-block;min-width:18px;padding:0 6px;border-radius:999px;background:var(--accent);color:var(--accent-ink);font-size:11.5px;font-weight:700;line-height:18px;text-align:center;margin-left:4px}
+.topright{margin-left:auto;display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;justify-content:flex-end;font-size:13px}
+.topright img{width:28px;height:28px;border-radius:50%;object-fit:cover}
+.tbtn{background:var(--card);border:1px solid var(--line-strong);color:var(--ink);border-radius:10px;padding:6px 13px;cursor:pointer;font-size:13px;font-weight:600}
+.tbtn:hover{border-color:var(--accent)}
+@media (max-width:1100px){.navtabs{order:3;width:100%}}
+.eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--head-muted)}
+.pagehead{padding-block:22px 4px}
+.pagehead h1{font-size:clamp(24px,3vw,32px);line-height:1.25;font-weight:700}
+.pagehead p{margin:4px 0 0;color:var(--ink-muted);font-size:14px}
+.dbcard{min-width:0;max-width:560px;background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);padding:12px 16px;font-size:13px;margin-top:12px}
 .dbcard b{font-weight:700}
-.dbcard .meta{color:#ffffffb3}
+.dbcard .meta{color:var(--ink-muted)}
 .dbcard .acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .btn-ghost-dark{background:transparent;border:1px solid #ffffff66;color:#fff;border-radius:8px;padding:5px 11px;cursor:pointer;font-size:13px}
 .btn-ghost-dark:hover{border-color:var(--copper);color:#fff;background:#ffffff12}
@@ -73,17 +84,15 @@ button,input,select,textarea{font:inherit;color:inherit}
 @media (max-width:980px){.layout{grid-template-columns:minmax(0,1fr)}}
 .col{display:flex;flex-direction:column;gap:28px;min-width:0}
 section.block{min-width:0}
-.bh{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 16px;border-bottom:1px solid var(--ink);padding-bottom:8px;margin-bottom:14px}
-.bh h2{font-family:var(--f-display);font-size:26px;line-height:1.2}
+.bh{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 16px;border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:14px}
+.bh h2{font-family:var(--f-display);font-size:24px;line-height:1.25;font-weight:700}
 .bh h2 .n{color:var(--accent);margin-right:10px}
 .bh .hint{color:var(--ink-muted);font-size:13px}
 
 /* buttons */
-.btn{display:inline-flex;align-items:center;gap:6px;border-radius:8px;padding:7px 14px;cursor:pointer;border:1px solid var(--line-strong);background:var(--bg);font-size:13.5px;line-height:1.3}
+.btn{display:inline-flex;align-items:center;gap:6px;border-radius:10px;padding:7px 14px;cursor:pointer;border:1px solid var(--line-strong);background:var(--card);font-size:13.5px;font-weight:500;line-height:1.3}
 .btn:hover{border-color:var(--accent)}
-.btn.primary{background:var(--navy);color:#fff;border-color:var(--navy)}
-:root[data-theme="dark"] .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}}
+.btn.primary{background:var(--primary);color:var(--primary-ink);border-color:var(--primary);font-weight:600}
 .btn.primary:hover{filter:brightness(1.1)}
 .btn.small{padding:4px 10px;font-size:12.5px}
 .btn.link{border:none;background:none;padding:2px 4px;color:var(--ink-muted);text-decoration:underline;text-underline-offset:3px}
@@ -107,11 +116,9 @@ details.paste textarea{width:100%;min-height:110px;margin-top:8px;border:1px sol
 
 /* product tabs */
 .ptabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
-.ptab{border:1px solid var(--line-strong);border-radius:999px;padding:5px 14px;background:var(--bg);cursor:pointer;font-size:13px;display:inline-flex;gap:8px;align-items:center;max-width:100%}
+.ptab{border:1px solid var(--line-strong);border-radius:999px;padding:5px 14px;background:var(--card);cursor:pointer;font-size:13px;display:inline-flex;gap:8px;align-items:center;max-width:100%}
 .ptab .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px}
-.ptab.on{background:var(--navy);border-color:var(--navy);color:#fff}
-:root[data-theme="dark"] .ptab.on{background:var(--cream);border-color:var(--cream);color:var(--navy)}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .ptab.on{background:var(--cream);border-color:var(--cream);color:var(--navy)}}
+.ptab.on{background:var(--primary);border-color:var(--primary);color:var(--primary-ink)}
 .dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--ok)}
 .dot.warn{background:var(--warn)} .dot.bad{background:var(--bad)}
 .sample-tag{display:inline-block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--accent);border:1px solid var(--accent);border-radius:4px;padding:0 6px;margin-left:6px;vertical-align:middle}
@@ -125,7 +132,7 @@ details.paste textarea{width:100%;min-height:110px;margin-top:8px;border:1px sol
 .pname:hover{border-bottom-color:var(--line-strong)}
 
 /* table */
-.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r-card)}
+.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r-card);background:var(--card)}
 table{border-collapse:collapse;width:100%;font-size:13px}
 th{font-size:11.5px;font-weight:700;letter-spacing:.04em;color:var(--ink-muted);text-align:left;padding:9px 10px;border-bottom:1px solid var(--line-strong);white-space:nowrap;background:var(--bg-soft);position:sticky;top:0}
 td{padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
@@ -155,10 +162,13 @@ tfoot td{font-weight:700;border-top:1px solid var(--ink);background:var(--bg-sof
 /* summary */
 .summary{position:sticky;top:calc(env(safe-area-inset-top,0px) + 16px);display:flex;flex-direction:column;gap:16px}
 @media (max-width:980px){.summary{position:static}}
-.card{border:1px solid var(--line);border-radius:var(--r-card);padding:18px}
+.card{border:1px solid var(--line);border-radius:var(--r-card);padding:18px;background:var(--card)}
 .card.hero{background:var(--tint);border-color:transparent}
-.card h3{font-size:12px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--ink-muted)}
-.big{font-family:var(--f-display);font-size:44px;line-height:1.05;margin-top:6px;font-variant-numeric:tabular-nums;font-weight:600}
+.card.hero.dark{background:var(--hero-bg);color:#fff}
+.card.hero.dark h3,.card.hero.dark .muted,.card.hero.dark .kv dt,.card.hero.dark .big small{color:#ffffffb8}
+.card.hero.dark .kv .sum{border-top-color:#ffffff4d;color:#fff}
+.card h3{font-size:13.5px;letter-spacing:0;text-transform:none;font-weight:600;color:var(--ink-muted)}
+.big{font-family:var(--f-display);font-size:42px;line-height:1.1;margin-top:6px;font-variant-numeric:tabular-nums;font-weight:700}
 .big small{font-family:var(--f-body);font-size:14px;font-weight:400;color:var(--ink-muted);margin-left:4px}
 .kv{display:grid;grid-template-columns:1fr auto;gap:5px 12px;margin-top:12px;font-size:13.5px}
 .kv dt{color:var(--ink-muted)} .kv dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
@@ -191,8 +201,8 @@ tfoot td{font-weight:700;border-top:1px solid var(--ink);background:var(--bg-sof
 [hidden]{display:none!important}
 
 /* login gate */
-.gate{min-height:100vh;min-height:100dvh;background:var(--head-bg) linear-gradient(135deg,var(--head-bg) 0%,var(--head-bg) 55%,var(--cobalt) 100%);display:flex;padding:32px 16px}
-.gate-card{margin:auto;width:100%;max-width:400px;background:var(--bg);color:var(--ink);border-radius:16px;padding:32px 28px;display:flex;flex-direction:column;gap:18px;box-shadow:0 20px 60px #0004}
+.gate{min-height:100vh;min-height:100dvh;background:var(--bg);display:flex;padding:32px 16px}
+.gate-card{margin:auto;width:100%;max-width:400px;background:var(--card);border:1px solid var(--line);color:var(--ink);border-radius:16px;padding:32px 28px;display:flex;flex-direction:column;gap:18px;box-shadow:0 20px 60px #0004}
 .gate-card .eyebrow{color:var(--accent)}
 .gate-card h1{font-family:var(--f-display);font-size:30px;line-height:1.2;margin-top:4px}
 .gate-card p{margin:0;color:var(--ink-muted);font-size:13.5px}
@@ -212,10 +222,7 @@ tfoot td{font-weight:700;border-top:1px solid var(--ink);background:var(--bg-sof
 @keyframes sp{to{transform:rotate(360deg)}}
 
 /* user bar in masthead */
-.userbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;justify-content:flex-end;margin-bottom:12px;font-size:13px}
-.userbar img{width:28px;height:28px;border-radius:50%;object-fit:cover}
-.rolepill{border:1px solid var(--copper);color:#f0e0ca;border-radius:999px;padding:1px 9px;font-size:12px}
-.mast-right{display:flex;flex-direction:column;align-items:flex-end;min-width:0;max-width:100%}
+.rolepill{border:1px solid var(--accent);color:var(--accent);border-radius:999px;padding:1px 9px;font-size:12px;font-weight:600}
 
 /* share dialog */
 .overlay{position:fixed;inset:0;background:#091e4b99;display:flex;padding:24px 16px;z-index:30;overflow-y:auto}
@@ -252,6 +259,7 @@ tfoot td{font-weight:700;border-top:1px solid var(--ink);background:var(--bg-sof
 .checks label{display:flex;gap:8px;align-items:flex-start}
 .note-box{font-size:12.5px;color:var(--ink-muted);background:var(--bg-soft);border-radius:10px;padding:10px 12px;line-height:1.55}
 </style>
+<script>try{var __t=JSON.parse(localStorage.getItem('ss-theme')); if(__t==='dark'||__t==='light') document.documentElement.setAttribute('data-theme',__t);}catch(e){}</script>
 
 <div class="gate" id="gate">
   <div class="gate-card" id="gateCard" aria-live="polite">
@@ -264,15 +272,9 @@ tfoot td{font-weight:700;border-top:1px solid var(--ink);background:var(--bg-sof
 <div id="app" hidden>
 <header class="mast">
   <div class="wrap">
-    <div>
-      <div class="eyebrow">Scent &amp; Sense ✦ ทีมต้นทุนสินค้า</div>
-      <h1>ระบบคำนวณต้นทุนหัวน้ำหอม<small>Fragrance Oil Costing · ราคาวัตถุดิบ บาท/กรัม จากไฟล์ Summary RM</small></h1>
-      <div class="rule"></div>
-    </div>
-    <div class="mast-right">
-      <div class="userbar" id="userbar"></div>
-      <div class="dbcard" id="dbcard"></div>
-    </div>
+    <div class="brand"><i aria-hidden="true"></i><span>ระบบต้นทุนหัวน้ำหอม</span></div>
+    <nav class="navtabs" id="navtabs" aria-label="เมนูหลัก"></nav>
+    <div class="topright" id="userbar"></div>
   </div>
 </header>
 
@@ -283,6 +285,8 @@ tfoot td{font-weight:700;border-top:1px solid var(--ink);background:var(--bg-sof
   <section id="rmView" hidden style="padding-block:24px 56px"></section>
   <section id="cmpView" hidden style="padding-block:24px 56px"></section>
   <div id="calcView">
+  <div class="pagehead"><h1>คำนวณต้นทุนหัวน้ำหอม</h1><p>Scent &amp; Sense ✦ ทีมต้นทุนสินค้า · Fragrance Oil Costing · ราคาวัตถุดิบ บาท/กรัม จากไฟล์ Summary RM</p></div>
+  <div class="dbcard" id="dbcard"></div>
   <div class="steps" id="stepsBar" aria-label="ขั้นตอน">
     <span><b>1</b>ใส่ไฟล์สูตร</span><span><b>2</b>ตรวจรายการ &amp; แก้ราคาที่ขาด</span><span><b>3</b>สรุปต้นทุน &amp; ส่งออก Excel</span>
   </div>
@@ -763,7 +767,7 @@ function renderDbCard(){
   const canEditPrices = can('editPrices');
   $('#dbcard').innerHTML = `<div><b>ฐานราคา RM</b> · ${esc(DB.source.file)}${DB.custom?' <span class="sample-tag" style="color:#cea67d;border-color:#cea67d">อัปเดตแล้ว</span>':''}</div>
     <div class="meta">อัปเดต ${esc(DB.source.updated)}<span id="dbBy"></span> · ${n.toLocaleString('th-TH')} รายการ · มีราคา ${ok.toLocaleString('th-TH')} · ต้อง recheck ${re.toLocaleString('th-TH')}</div>
-    ${canEditPrices?`<div class="acts"><button class="btn-ghost-dark" type="button" id="btnDbFile">อัปเดตราคาให้ทั้งทีมจากไฟล์ Excel</button>${DB.custom?'<button class="btn-ghost-dark" type="button" id="btnDbReset">กลับไปใช้ฐานราคา Summary RM เดิม</button>':''}</div>`:''}`;
+    ${canEditPrices?`<div class="acts"><button class="tbtn" type="button" id="btnDbFile">อัปเดตราคาให้ทั้งทีมจากไฟล์ Excel</button>${DB.custom?'<button class="tbtn" type="button" id="btnDbReset">กลับไปใช้ฐานราคา Summary RM เดิม</button>':''}</div>`:''}`;
   if(canEditPrices){
     $('#btnDbFile').onclick=()=>$('#fileDb').click();
     if(DB.custom) $('#btnDbReset').onclick=async e=>{
@@ -833,7 +837,7 @@ function renderSummary(){
   const top=[...c.rows].filter(r=>r.costKg!=null).sort((a,b)=>b.costKg-a.costKg).slice(0,4);
   const cov=c.knownFrac*100;
   $('#summary').innerHTML = `
-    <div class="card hero">
+    <div class="card hero dark">
       <h3>ต้นทุนรวมต่อ กก.</h3>
       <div class="big">${c.complete?'':'≥ '}${fmt(c.total,2)}<small>บาท/กก.</small></div>
       <div class="muted" style="font-size:13px">${esc(p.name)} · ${fmt(c.perG,4)} บาท/กรัม</div>
@@ -1138,17 +1142,23 @@ function enterApp(){
   showView(S.admin && can('manageUsers') ? 'admin' : 'calc');
   if(can('calc') && !SYNC.loaded) loadFromServer();
 }
+/* โหมดสว่าง/มืด: จำค่าที่เลือกไว้ ถ้ายังไม่เลือกจะตามระบบของเครื่อง */
+function effTheme(){ const t=document.documentElement.getAttribute('data-theme'); if(t==='dark'||t==='light') return t; return window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; }
+function toggleTheme(){ const n=effTheme()==='dark'?'light':'dark'; document.documentElement.setAttribute('data-theme', n); store.set('ss-theme', n); renderUserBar(); }
 function renderUserBar(){
-  $('#userbar').innerHTML = `${ava(S.me.email)}<span id="ubName"></span><span class="rolepill" id="ubRole"></span>
-    ${isAdminRole()?`<button class="btn-ghost-dark" type="button" id="btnAll">${S.view==='all'?'กลับไปหน้าคำนวณ':'สูตรทั้งหมด'}</button>
-    <button class="btn-ghost-dark" type="button" id="btnPrice">${S.view==='price'?'กลับไปหน้าคำนวณ':'ทำราคาขาย'}</button>`:''}
-    ${can('editPrices')?`<button class="btn-ghost-dark" type="button" id="btnRm">${S.view==='rm'?'กลับไปหน้าคำนวณ':'ฐานราคาวัตถุดิบ'}</button>`:''}
-    ${can('manageUsers')?`<button class="btn-ghost-dark" type="button" id="btnAdmin">${S.view==='admin'?'กลับไปหน้าคำนวณ':'จัดการผู้ใช้และบทบาท'}</button>`:''}
-    ${S.me&&S.me.role?`<button class="btn-ghost-dark" type="button" id="btnCmp">${S.view==='cmp'?'กลับไปหน้าคำนวณ':(isAdminRole()?'เรื่องร้องเรียน':'แจ้งเรื่องร้องเรียน')+(isAdminRole()&&S.cNew?` (${S.cNew})`:'')}</button>`:''}
-    <button class="btn-ghost-dark" type="button" id="btnShare">แชร์ลิงก์</button>
-    <button class="btn-ghost-dark" type="button" id="btnReload" title="โหลดสิทธิ์และฐานราคาล่าสุด">รีเฟรช</button>
-    ${HTTP?'<button class="btn-ghost-dark" type="button" id="btnSignOut">ออกจากระบบ</button>':''}`;
-  $('#ubName').textContent=S.me.email; $('#ubRole').textContent=S.roleName+(S.me.auto?' (อัตโนมัติ)':'');
+  const v=S.view||'calc', adm=isAdminRole();
+  const tab=(id,view,label)=>`<button type="button" id="${id}" class="${v===view?'on':''}" ${v===view?'aria-current="page"':''}>${label}</button>`;
+  $('#navtabs').innerHTML = tab('btnCalc','calc','คำนวณ')
+    + (can('editPrices') ? tab('btnRm','rm','ฐานราคาวัตถุดิบ') : '')
+    + (adm ? tab('btnAll','all','สูตรทั้งหมด') + tab('btnPrice','price','ทำราคาขาย') : '')
+    + (S.me&&S.me.role ? tab('btnCmp','cmp', (adm?'เรื่องร้องเรียน':'แจ้งเรื่องร้องเรียน') + (adm&&S.cNew ? ` <span class="badge">${S.cNew}</span>` : '')) : '')
+    + (can('manageUsers') ? tab('btnAdmin','admin','ผู้ใช้และบทบาท') : '');
+  $('#userbar').innerHTML = `<button class="tbtn" type="button" id="btnTheme" aria-label="สลับโหมดสว่าง/มืด">${effTheme()==='dark'?'☀ โหมดสว่าง':'☾ โหมดมืด'}</button>
+    <button class="tbtn" type="button" id="btnShare">แชร์ลิงก์</button>
+    <button class="tbtn" type="button" id="btnReload" title="โหลดสิทธิ์และฐานราคาล่าสุด">รีเฟรช</button>
+    ${ava(S.me.email)}<span id="ubName"></span><span class="rolepill" id="ubRole"></span>
+    ${HTTP?'<button class="tbtn" type="button" id="btnSignOut">ออกจากระบบ</button>':''}`;
+  $('#ubName').textContent=shortName(S.me.email); $('#ubName').title=S.me.email; $('#ubRole').textContent=S.roleName+(S.me.auto?' (อัตโนมัติ)':'');
 }
 async function reloadAll(){
   try{ applyBootstrap(await api('bootstrap')); evaluate(); if(S.inApp && !S.admin) renderAll(); toast('อัปเดตสิทธิ์และฐานราคาล่าสุดแล้ว'); }
@@ -1183,11 +1193,12 @@ $('#userbar').addEventListener('click', e=>{
   if(e.target.id==='btnShare') openShare();
   if(e.target.id==='btnReload') reloadAll();
   if(e.target.id==='btnSignOut') signOut();
-  if(e.target.id==='btnAdmin') showView(S.view==='admin' ? 'calc' : 'admin');
-  if(e.target.id==='btnAll') showView(S.view==='all' ? 'calc' : 'all');
-  if(e.target.id==='btnPrice') showView(S.view==='price' ? 'calc' : 'price');
-  if(e.target.id==='btnRm') showView(S.view==='rm' ? 'calc' : 'rm');
-  if(e.target.id==='btnCmp') showView(S.view==='cmp' ? 'calc' : 'cmp');
+  if(e.target.id==='btnTheme') toggleTheme();
+});
+$('#navtabs').addEventListener('click', e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  const view={btnCalc:'calc', btnRm:'rm', btnAll:'all', btnPrice:'price', btnCmp:'cmp', btnAdmin:'admin'}[b.id];
+  if(view) showView(view);
 });
 async function showView(v){
   if(v==='admin' && !can('manageUsers')) v='calc';
@@ -1274,7 +1285,7 @@ function drawForms(){
   const rmVals=cs.filter(c=>c && c.W>0).map(c=>c.rm);
   const avg=rmVals.length ? rmVals.reduce((a,b)=>a+b,0)/rmVals.length : null;
   const incomplete=cs.filter(c=>c && !c.complete).length;
-  const stat=(k,v)=>`<div class="card" style="padding:12px 18px;min-width:150px"><div class="muted" style="font-size:12.5px">${k}</div><div style="font-family:var(--f-display);font-size:28px;line-height:1.2">${v}</div></div>`;
+  const stat=(k,v)=>`<div class="card" style="padding:12px 18px;min-width:150px"><div class="muted" style="font-size:12.5px">${k}</div><div style="font-family:var(--f-display);font-size:28px;font-weight:700;line-height:1.2">${v}</div></div>`;
   $('#formStats').innerHTML = stat('สูตรทั้งหมด', rows.length+(rows.length!==ADM_FORMS.length?` <span class="muted" style="font-size:14px">/ ${ADM_FORMS.length}</span>`:''))
     + stat('ผู้ใช้ที่มีสูตร', new Set(rows.map(f=>f.owner)).size)
     + stat('ต้นทุน RM เฉลี่ย บาท/กก.', avg!=null?fmt(avg,2):'–')
@@ -1364,7 +1375,7 @@ function drawPrcStats(){
   const avgR=priced.length ? priced.reduce((a,x)=>a+x.ratio,0)/priced.length : null;
   const avgP=priced.length ? priced.reduce((a,x)=>a+x.profit,0)/priced.length : null;
   const over=priced.filter(x=>x.ratio>PRC.threshold).length;
-  const stat=(k,v)=>`<div class="card" style="padding:12px 18px;min-width:150px"><div class="muted" style="font-size:12.5px">${k}</div><div style="font-family:var(--f-display);font-size:28px;line-height:1.2">${v}</div></div>`;
+  const stat=(k,v)=>`<div class="card" style="padding:12px 18px;min-width:150px"><div class="muted" style="font-size:12.5px">${k}</div><div style="font-family:var(--f-display);font-size:28px;font-weight:700;line-height:1.2">${v}</div></div>`;
   el.innerHTML = stat('ตั้งราคาแล้ว', `${priced.length} <span class="muted" style="font-size:14px">/ ${xs.length}</span>`)
     + stat('ต้นทุน/ราคาขาย เฉลี่ย', avgR!=null ? fmt(avgR,1)+'%' : '–')
     + stat('กำไรขั้นต้นเฉลี่ย บาท/กก.', avgP!=null ? fmt(avgP,2) : '–')
@@ -1494,7 +1505,7 @@ function renderRmView(){
 function drawRmStats(){
   const el=$('#rmStats'); if(!el) return;
   const n=DB.entries.length, c=s=>DB.entries.filter(e=>e.status===s).length;
-  const stat=(k,v,sub)=>`<div class="card" style="padding:12px 18px;min-width:150px"><div class="muted" style="font-size:12.5px">${k}</div><div style="font-family:var(--f-display);font-size:28px;line-height:1.2">${v}</div>${sub?`<div class="muted" style="font-size:12px">${sub}</div>`:''}</div>`;
+  const stat=(k,v,sub)=>`<div class="card" style="padding:12px 18px;min-width:150px"><div class="muted" style="font-size:12.5px">${k}</div><div style="font-family:var(--f-display);font-size:28px;font-weight:700;line-height:1.2">${v}</div>${sub?`<div class="muted" style="font-size:12px">${sub}</div>`:''}</div>`;
   el.innerHTML = stat('วัตถุดิบทั้งหมด', n.toLocaleString('th-TH'))
     + stat('มีราคา', c('ok').toLocaleString('th-TH'))
     + stat('ต้อง recheck', c('recheck').toLocaleString('th-TH'))
@@ -1636,7 +1647,7 @@ function drawCmp(){
   const box=$('#cmpList'); if(!box || !CMP) return;
   const adm=isAdminRole(), q=cmpQ.trim().toLowerCase();
   if(adm){
-    const n=s=>CMP.filter(c=>c.status===s).length, stat=(k,v)=>`<div class="card" style="padding:12px 18px;min-width:150px"><div class="muted" style="font-size:12.5px">${k}</div><div style="font-family:var(--f-display);font-size:28px;line-height:1.2">${v}</div></div>`;
+    const n=s=>CMP.filter(c=>c.status===s).length, stat=(k,v)=>`<div class="card" style="padding:12px 18px;min-width:150px"><div class="muted" style="font-size:12.5px">${k}</div><div style="font-family:var(--f-display);font-size:28px;font-weight:700;line-height:1.2">${v}</div></div>`;
     $('#cmpStats').innerHTML = Object.entries(CMP_ST).map(([k,v])=>stat(v.t, n(k))).join('') + stat('ทั้งหมด', CMP.length);
   }
   const list=CMP.filter(c=>(!cmpSt||c.status===cmpSt) && (!q || c.subject.toLowerCase().includes(q) || c.detail.toLowerCase().includes(q) || c.email.includes(q)));

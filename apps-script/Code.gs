@@ -17,7 +17,9 @@ const HEAD = {
   Log:      ['at', 'email', 'action', 'detail'],
   Formulas: ['id', 'owner', 'name', 'updatedAt', 'data'],
   Pricing:  ['key', 'owner', 'formulaId', 'sell', 'updatedAt', 'updatedBy'],
-  Complaints: ['id', 'email', 'subject', 'detail', 'status', 'reply', 'repliedBy', 'createdAt', 'updatedAt']
+  Complaints: ['id', 'email', 'subject', 'detail', 'status', 'reply', 'repliedBy', 'createdAt', 'updatedAt'],
+  Compliance: ['id', 'source', 'name', 'cas', 'type', 'limits', 'note', 'updatedAt'],
+  RmMap:      ['code', 'cas', 'name', 'pct']
 };
 const PERM_KEYS = ['calc', 'export', 'viewDb', 'editPrices', 'manageUsers'];
 const DEFAULT_ROLES = [
@@ -48,7 +50,8 @@ function doPost(e) {
     saveAccess: saveAccess, createRole: createRole, updateRole: updateRole, deleteRole: deleteRole,
     loadMyFormulas: loadMyFormulas, saveMyFormulas: saveMyFormulas, adminFormulas: adminFormulas,
     loadPricing: loadPricing, savePricing: savePricing, updatePrices: updatePrices,
-    submitComplaint: submitComplaint, myComplaints: myComplaints, adminComplaints: adminComplaints, replyComplaint: replyComplaint};
+    submitComplaint: submitComplaint, myComplaints: myComplaints, adminComplaints: adminComplaints, replyComplaint: replyComplaint,
+    loadCompliance: loadCompliance, saveComplianceRules: saveComplianceRules, saveRmMap: saveRmMap};
   let out;
   try {
     const req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
@@ -124,7 +127,7 @@ function ss_() {
 function sh_(n) {
   const ss = ss_();
   let s = ss.getSheetByName(n);
-  if (!s && HEAD[n] && (n === 'Formulas' || n === 'Pricing' || n === 'Complaints')) {   // แท็บที่เพิ่มภายหลัง สร้างให้เองเมื่อยังไม่มี
+  if (!s && HEAD[n] && (n === 'Formulas' || n === 'Pricing' || n === 'Complaints' || n === 'Compliance' || n === 'RmMap')) {   // แท็บที่เพิ่มภายหลัง สร้างให้เองเมื่อยังไม่มี
     s = ss.insertSheet(n);
     s.getRange(1, 1, 1, HEAD[n].length).setValues([HEAD[n]]).setFontWeight('bold');
     s.setFrozenRows(1);
@@ -523,6 +526,83 @@ function adminFormulas() {
   const list = rows_('Formulas').map(formulaOut_);
   log_(m.email, 'adminFormulas', list.length + ' สูตร');
   return list;
+}
+
+/* ===== ตรวจตามข้อกำหนด IFRA / อย. =====
+   ระบบไม่มีข้อมูลข้อกำหนดติดมาเอง: ผู้ดูแลระบบอัปโหลดตารางข้อกำหนด (Compliance) จากเอกสารทางการของ IFRA และ อย. เอง
+   ผู้มีสิทธิ์แก้ราคา (จัดซื้อ/แอดมิน) อัปโหลดตารางองค์ประกอบวัตถุดิบ (RmMap: รหัส RM → CAS + % ในวัตถุดิบ)
+   ผู้ใช้ที่มีสิทธิ์คำนวณอ่านทั้งสองตารางเพื่อตรวจสูตรของตัวเอง (คำนวณที่หน้าเว็บ) */
+const COMPLIANCE_MAX = 4000, RMMAP_MAX = 12000;
+function casNorm_(s) { return String(s || '').replace(/[^0-9\-]/g, '').slice(0, 20); }
+function loadCompliance() {
+  const m = need_('calc');
+  const rules = rows_('Compliance').map(function (r) {
+    let limits = {};
+    try { limits = JSON.parse(r.limits || '{}'); } catch (e) {}
+    return {id: String(r.id), source: String(r.source), name: String(r.name), cas: casNorm_(r.cas), type: String(r.type), limits: limits, note: String(r.note || '')};
+  });
+  const map = rows_('RmMap').map(function (r) {
+    const p = Number(r.pct);
+    return {code: String(r.code).toUpperCase(), cas: casNorm_(r.cas), name: String(r.name || ''), pct: isNaN(p) || r.pct === '' ? 100 : p};
+  });
+  return {rules: rules, map: map,
+    updated: {rules: getSetting_('complianceUpdated') || '', rulesBy: getSetting_('complianceBy') || '', map: getSetting_('rmMapUpdated') || '', mapBy: getSetting_('rmMapBy') || ''},
+    canEditRules: isAdmin_(m), canEditMap: !!m.isOwner || !!m.perms.editPrices};
+}
+/** แทนที่ข้อกำหนดของแหล่งที่มา (IFRA / FDA) ที่อยู่ในไฟล์ — เฉพาะเจ้าของระบบและ admin */
+function saveComplianceRules(items) {
+  return withLock_(function () {
+    const m = me_();
+    if (!isAdmin_(m)) throw new Error('FORBIDDEN');
+    if (!Array.isArray(items) || !items.length || items.length > COMPLIANCE_MAX) throw new Error('ไฟล์ต้องมี 1–' + COMPLIANCE_MAX + ' รายการ');
+    const sources = {}, now = new Date(), out = [];
+    items.forEach(function (it, i) {
+      const source = String((it && it.source) || '');
+      if (source !== 'IFRA' && source !== 'FDA') throw new Error('แหล่งที่มาต้องเป็น IFRA หรือ FDA (แถว ' + (i + 1) + ')');
+      const cas = casNorm_(it.cas), name = String(it.name || '').trim().slice(0, 200);
+      if (!cas || !name) throw new Error('ทุกแถวต้องมีชื่อสารและเลข CAS (แถว ' + (i + 1) + ')');
+      const type = it.type === 'prohibited' ? 'prohibited' : 'restricted';
+      const limits = {};
+      Object.keys(it.limits || {}).slice(0, 40).forEach(function (k) {
+        const v = Number(it.limits[k]);
+        if (!isNaN(v) && v >= 0 && v <= 100) limits[String(k).slice(0, 6)] = v;
+      });
+      sources[source] = true;
+      out.push(['k' + i + Utilities.getUuid().replace(/-/g, '').slice(0, 6), source, name, cas, type, JSON.stringify(limits), String(it.note || '').slice(0, 500), now]);
+    });
+    const keep = rows_('Compliance').filter(function (r) { return !sources[String(r.source)]; })
+      .map(function (r) { return [r.id, r.source, r.name, r.cas, r.type, r.limits, r.note, r.updatedAt]; });
+    const all = keep.concat(out), sheet = sh_('Compliance'), w = HEAD.Compliance.length, last = sheet.getLastRow();
+    if (last > 1) sheet.getRange(2, 1, last - 1, w).clearContent();
+    sheet.getRange(2, 1, all.length, w).setValues(all);
+    setSetting_('complianceUpdated', Utilities.formatDate(now, 'Asia/Bangkok', 'dd/MM/yyyy HH:mm'));
+    setSetting_('complianceBy', m.email);
+    log_(m.email, 'saveComplianceRules', Object.keys(sources).join('+') + ' · ' + out.length + ' รายการ');
+    return {saved: out.length, sources: Object.keys(sources)};
+  });
+}
+/** แทนที่ตารางองค์ประกอบวัตถุดิบทั้งชุด (รหัส RM → CAS) — ผู้มีสิทธิ์แก้ราคา */
+function saveRmMap(items) {
+  return withLock_(function () {
+    const m = need_('editPrices');
+    if (!Array.isArray(items) || !items.length || items.length > RMMAP_MAX) throw new Error('ไฟล์ต้องมี 1–' + RMMAP_MAX + ' รายการ');
+    const rows = items.map(function (it, i) {
+      const code = String((it && it.code) || '').toUpperCase().trim();
+      if (!/^RM-[A-Z0-9]+-\d{3}-\d{1,4}$/.test(code)) throw new Error('รหัส RM ไม่ถูกต้อง (แถว ' + (i + 1) + '): ' + code.slice(0, 30));
+      const cas = casNorm_(it.cas);
+      if (!cas) throw new Error('ต้องมีเลข CAS (แถว ' + (i + 1) + ')');
+      let pct = it.pct === undefined || it.pct === null || it.pct === '' ? 100 : Number(it.pct);
+      if (isNaN(pct) || pct < 0 || pct > 100) throw new Error('% ในวัตถุดิบต้องอยู่ระหว่าง 0–100 (แถว ' + (i + 1) + ')');
+      return [code, cas, String(it.name || '').trim().slice(0, 200), pct];
+    });
+    const sheet = sh_('RmMap'), w = HEAD.RmMap.length, last = sheet.getLastRow();
+    if (last > 1) sheet.getRange(2, 1, last - 1, w).clearContent();
+    sheet.getRange(2, 1, rows.length, w).setValues(rows);
+    setSetting_('rmMapUpdated', Utilities.formatDate(new Date(), 'Asia/Bangkok', 'dd/MM/yyyy HH:mm'));
+    setSetting_('rmMapBy', m.email);
+    log_(m.email, 'saveRmMap', rows.length + ' แถว');
+    return {saved: rows.length};
+  });
 }
 
 /* ===== เรื่องร้องเรียน: ผู้ใช้ที่มีสิทธิ์เข้าระบบทุกคนส่งเรื่องได้ และเห็นเฉพาะเรื่องของตัวเอง

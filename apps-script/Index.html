@@ -284,6 +284,7 @@ tfoot td{font-weight:700;border-top:1px solid var(--ink);background:var(--bg-sof
   <section id="priceView" hidden style="padding-block:24px 56px"></section>
   <section id="rmView" hidden style="padding-block:24px 56px"></section>
   <section id="cmpView" hidden style="padding-block:24px 56px"></section>
+  <section id="chkView" hidden style="padding-block:24px 56px"></section>
   <div id="calcView">
   <div class="pagehead"><h1>คำนวณต้นทุนหัวน้ำหอม</h1><p>Scent &amp; Sense ✦ ทีมต้นทุนสินค้า · Fragrance Oil Costing · ราคาวัตถุดิบ บาท/กรัม จากไฟล์ Summary RM</p></div>
   <div class="dbcard" id="dbcard"></div>
@@ -1149,6 +1150,7 @@ function renderUserBar(){
   const v=S.view||'calc', adm=isAdminRole();
   const tab=(id,view,label)=>`<button type="button" id="${id}" class="${v===view?'on':''}" ${v===view?'aria-current="page"':''}>${label}</button>`;
   $('#navtabs').innerHTML = tab('btnCalc','calc','คำนวณ')
+    + (can('calc') ? tab('btnChk','chk','ตรวจ IFRA / อย.') : '')
     + (can('editPrices') ? tab('btnRm','rm','ฐานราคาวัตถุดิบ') : '')
     + (adm ? tab('btnAll','all','สูตรทั้งหมด') + tab('btnPrice','price','ทำราคาขาย') : '')
     + (S.me&&S.me.role ? tab('btnCmp','cmp', (adm?'เรื่องร้องเรียน':'แจ้งเรื่องร้องเรียน') + (adm&&S.cNew ? ` <span class="badge">${S.cNew}</span>` : '')) : '')
@@ -1197,7 +1199,7 @@ $('#userbar').addEventListener('click', e=>{
 });
 $('#navtabs').addEventListener('click', e=>{
   const b=e.target.closest('button'); if(!b) return;
-  const view={btnCalc:'calc', btnRm:'rm', btnAll:'all', btnPrice:'price', btnCmp:'cmp', btnAdmin:'admin'}[b.id];
+  const view={btnCalc:'calc', btnChk:'chk', btnRm:'rm', btnAll:'all', btnPrice:'price', btnCmp:'cmp', btnAdmin:'admin'}[b.id];
   if(view) showView(view);
 });
 async function showView(v){
@@ -1207,9 +1209,11 @@ async function showView(v){
   if(S.view==='price' && v!=='price') flushPrice();
   if(S.view==='rm' && v!=='rm') flushRm();
   if(v==='cmp' && !(S.me && S.me.role)) v='calc';
+  if(v==='chk' && !can('calc')) v='calc';
   S.view=v; S.admin = v!=='calc';                 /* S.admin = ไม่ได้อยู่หน้าคำนวณ */
-  $('#adminView').hidden=v!=='admin'; $('#allView').hidden=v!=='all'; $('#priceView').hidden=v!=='price'; $('#rmView').hidden=v!=='rm'; $('#cmpView').hidden=v!=='cmp'; $('#calcView').hidden=v!=='calc';
+  $('#adminView').hidden=v!=='admin'; $('#allView').hidden=v!=='all'; $('#priceView').hidden=v!=='price'; $('#rmView').hidden=v!=='rm'; $('#cmpView').hidden=v!=='cmp'; $('#chkView').hidden=v!=='chk'; $('#calcView').hidden=v!=='calc';
   renderUserBar();
+  if(v==='chk'){ window.scrollTo(0,0); renderChkView(); return; }
   if(v==='cmp'){ window.scrollTo(0,0); renderCmpView(); return; }
   if(v==='rm'){ window.scrollTo(0,0); renderRmView(); return; }
   if(v==='all'){ window.scrollTo(0,0); renderAllView(); return; }
@@ -1688,6 +1692,191 @@ cmpv.addEventListener('submit', async e=>{
   err.textContent=''; btn.disabled=true;
   try{ await api('submitComplaint', subject, detail); e.target.reset(); await loadCmp(); drawCmp(); toast('ส่งเรื่องแล้ว ผู้ดูแลระบบได้รับแจ้งทางอีเมล'); }
   catch(ex){ err.textContent=errText(ex); } finally{ btn.disabled=false; }
+});
+/* --- ตรวจตามข้อกำหนด IFRA / อย. ---
+   ข้อมูลข้อกำหนดและองค์ประกอบวัตถุดิบ (CAS) ต้องอัปโหลดเข้าระบบเอง ระบบคำนวณระดับสารในสูตรแล้วเทียบกับข้อกำหนดที่โหลดไว้
+   เป็นเครื่องมือคัดกรองเบื้องต้น ไม่ใช่ใบรับรอง */
+const IFRA_CATS=[['1','หมวด 1 · ผลิตภัณฑ์ริมฝีปาก'],['2','หมวด 2 · ระงับกลิ่นกาย/ใต้วงแขน'],['3','หมวด 3 · รอบดวงตา/ผิวหน้า'],['4','หมวด 4 · น้ำหอม (Fine fragrance)'],
+  ['5A','หมวด 5A · โลชั่นทาตัว'],['5B','หมวด 5B · ครีมบำรุงผิวหน้า'],['5C','หมวด 5C · ครีมทามือ'],['5D','หมวด 5D · ครีมเด็ก'],['6','หมวด 6 · ผลิตภัณฑ์ช่องปาก'],
+  ['7A','หมวด 7A · ผลิตภัณฑ์ผม (ล้างออก)'],['7B','หมวด 7B · ผลิตภัณฑ์ผม (ไม่ล้างออก)'],['8','หมวด 8 · ผลิตภัณฑ์ส่วนตัว'],['9','หมวด 9 · ผลิตภัณฑ์ล้างออก (สบู่ ครีมอาบน้ำ)'],
+  ['10A','หมวด 10A · ทำความสะอาดบ้าน'],['10B','หมวด 10B · สเปรย์ปรับอากาศ/กลิ่นบ้าน'],['11A','หมวด 11A'],['11B','หมวด 11B'],['12','หมวด 12 · ไม่สัมผัสผิว (เทียนหอม ฯลฯ)']];
+let CHK=null, chkPid=null, chkDose='100', chkCat='4', chkPending=null;
+const CHK_ST={fail:{t:'ไม่ผ่าน',c:'bad'}, review:{t:'ต้องตรวจเพิ่ม',c:'warn'}, pass:{t:'ผ่าน',c:'ok'}};
+async function loadChk(force){ if(CHK && !force) return; CHK = await api('loadCompliance'); }
+function chkEval(p){
+  const c=compute(p), dose=Math.max(0, toNum(chkDose)||0)/100;
+  const mapBy=new Map(); CHK.map.forEach(r=>{ if(!mapBy.has(r.code)) mapBy.set(r.code,[]); mapBy.get(r.code).push(r); });
+  const byCas=new Map(), unmapped=[]; let covered=0, total=0;
+  c.rows.forEach(r=>{
+    if(!(r.pct>0)) return; total+=r.pct;
+    const code=r.e ? r.e.code : normCode(r.ln.code), nm=r.e ? r.e.name : (r.ln.nameIn||''), rows=mapBy.get(code);
+    if(!rows){ unmapped.push({code, name:nm, pct:r.pct}); return; }
+    covered+=r.pct;
+    rows.forEach(m=>{ const o=byCas.get(m.cas)||{level:0, via:[]}; const lvl=r.pct*m.pct/100; o.level+=lvl; o.via.push({code, name:nm, lvl}); byCas.set(m.cas,o); });
+  });
+  const findings=[];
+  for(const rule of CHK.rules){
+    const o=byCas.get(rule.cas); if(!o || !(o.level>0)) continue;
+    const fin=o.level*dose, lim=rule.limits||{}, keys=Object.keys(lim);
+    let status, limit=null, note='';
+    if(rule.type==='prohibited') status='fail';
+    else if(rule.source==='IFRA'){
+      if(!keys.length) status='review', note='ไม่มีค่าจำกัดในข้อมูลที่โหลด';
+      else if(chkCat in lim){ limit=lim[chkCat]; status = fin>limit+1e-12 ? 'fail' : 'pass'; }
+      else if('*' in lim){ limit=lim['*']; status = fin>limit+1e-12 ? 'fail' : 'pass'; }
+      else status='pass', note='ไม่จำกัดในหมวดนี้';
+    } else {
+      if('*' in lim){ limit=lim['*']; status = fin>limit+1e-12 ? 'fail' : 'pass'; }
+      else status='review', note='ไม่มีค่าจำกัดในข้อมูลที่โหลด';
+    }
+    findings.push({rule, level:o.level, fin, limit, status, note, via:o.via});
+  }
+  const rank={fail:0, review:1, pass:2};
+  findings.sort((a,b)=>rank[a.status]-rank[b.status] || a.rule.source.localeCompare(b.rule.source) || a.rule.name.localeCompare(b.rule.name));
+  return {findings, unmapped, coverage: total>0 ? covered/total*100 : 0, total};
+}
+const fmtLvl=n=>n==null ? '–' : (n>=0.01 ? fmt(n,3) : n.toPrecision(2));
+function renderChkView(){
+  CHK=null; chkPending=null;                                  /* โหลดใหม่ทุกครั้งที่เปิดหน้า (กันค้างข้ามผู้ใช้) */
+  $('#chkView').innerHTML = `<div class="bh"><h2>ตรวจตามข้อกำหนด IFRA และ อย.ไทย</h2><span class="hint">คัดกรองเบื้องต้นจากข้อมูลที่อัปโหลดไว้ในระบบ</span></div>
+    <div class="note-box" style="margin-bottom:14px"><b>โปรดทราบ:</b> ผลนี้เป็นการคำนวณเทียบกับตารางข้อกำหนดและองค์ประกอบวัตถุดิบที่ทีมอัปโหลดเอง ระบบไม่มีข้อมูลข้อกำหนดติดมา และไม่ใช่ใบรับรองจาก IFRA หรือ อย. ก่อนจำหน่ายจริงควรยืนยันกับเอกสารฉบับล่าสุดและ Certificate ของวัตถุดิบทุกครั้ง</div>
+    <div id="chkBody"><div class="empty">กำลังโหลดข้อมูลข้อกำหนด…</div></div>`;
+  loadChk().then(()=>{ if(S.view==='chk') drawChk(); }).catch(e=>{ if($('#chkBody')) $('#chkBody').innerHTML=`<div class="msg bad">${esc(errText(e))}</div>`; });
+}
+function drawChk(){
+  const box=$('#chkBody'); if(!box || !CHK) return;
+  const canR=CHK.canEditRules, canM=CHK.canEditMap, u=CHK.updated;
+  const nI=CHK.rules.filter(r=>r.source==='IFRA').length, nF=CHK.rules.filter(r=>r.source==='FDA').length;
+  const prods=state.products.filter(p=>p.lines && p.lines.length);
+  if(!prods.find(p=>p.id===chkPid)) chkPid=(state.activeId && prods.find(p=>p.id===state.activeId)) ? state.activeId : (prods[0]&&prods[0].id);
+  box.innerHTML = `<div class="card" style="margin-bottom:16px">
+      <div class="row" style="gap:14px;align-items:flex-end">
+        <div class="field" style="flex:1 1 260px"><label for="chkProd">สูตรที่จะตรวจ</label><select id="chkProd">${prods.map(p=>`<option value="${esc(p.id)}" ${p.id===chkPid?'selected':''}>${esc(p.name)}</option>`).join('')||'<option value="">ยังไม่มีสูตร</option>'}</select></div>
+        <div class="field" style="flex:0 0 190px"><label for="chkDose">สูตรนี้อยู่ในสินค้าสำเร็จกี่ %</label><input id="chkDose" type="number" min="0" max="100" step="any" value="${esc(chkDose)}"></div>
+        <div class="field" style="flex:1 1 260px"><label for="chkCat">หมวดผลิตภัณฑ์ IFRA</label><select id="chkCat">${IFRA_CATS.map(([k,l])=>`<option value="${k}" ${k===chkCat?'selected':''}>${esc(l)}</option>`).join('')}</select></div>
+      </div>
+      <div class="muted" style="font-size:12.5px;margin-top:8px">ถ้าสูตรนี้คือสินค้าสำเร็จรูปทั้งหมด ใส่ 100 · ถ้าเป็นหัวน้ำหอมที่จะผสมลงในสินค้า (เช่น 20% ในน้ำหอมสเปรย์) ใส่สัดส่วนที่ผสม</div></div>
+    <div id="chkResult"></div>
+    <details class="card" style="margin-top:16px" ${nI+nF+CHK.map.length===0?'open':''}>
+      <summary style="cursor:pointer;font-weight:700">ข้อมูลอ้างอิงในระบบ</summary>
+      <dl class="kv" style="grid-template-columns:auto 1fr;justify-items:start"><dt>ข้อกำหนด IFRA</dt><dd style="text-align:left">${nI.toLocaleString('th-TH')} สาร</dd>
+        <dt>ข้อกำหนด อย.</dt><dd style="text-align:left">${nF.toLocaleString('th-TH')} สาร</dd>
+        <dt>องค์ประกอบวัตถุดิบ (CAS)</dt><dd style="text-align:left">${CHK.map.length.toLocaleString('th-TH')} แถว · ${new Set(CHK.map.map(r=>r.code)).size.toLocaleString('th-TH')} รหัส RM</dd>
+        <dt>อัปเดตข้อกำหนดล่าสุด</dt><dd style="text-align:left">${esc(u.rules||'–')}${u.rulesBy?' · '+esc(shortName(u.rulesBy)):''}</dd>
+        <dt>อัปเดตองค์ประกอบล่าสุด</dt><dd style="text-align:left">${esc(u.map||'–')}${u.mapBy?' · '+esc(shortName(u.mapBy)):''}</dd></dl>
+      <div class="row" style="margin-top:10px">
+        ${canR?`<button class="btn small" type="button" data-chkup="IFRA">อัปโหลดข้อกำหนด IFRA</button><button class="btn small" type="button" data-chkup="FDA">อัปโหลดข้อกำหนด อย.</button><button class="btn small" type="button" data-chktpl="rules">ไฟล์ตัวอย่างข้อกำหนด</button>`:''}
+        ${canM?`<button class="btn small" type="button" data-chkup="MAP">อัปโหลดองค์ประกอบวัตถุดิบ (CAS)</button><button class="btn small" type="button" data-chktpl="map">ไฟล์ตัวอย่างองค์ประกอบ</button>`:''}
+        ${!canR&&!canM?'<span class="muted" style="font-size:13px">ผู้ดูแลระบบและจัดซื้ออัปโหลดข้อมูลอ้างอิงได้</span>':''}
+      </div>
+      <input type="file" id="chkFile" accept=".xlsx,.xls,.csv" hidden>
+      <div id="chkImport"></div>
+      <div class="note-box" style="margin-top:12px">ข้อกำหนด: ไฟล์ต้องมีคอลัมน์ ชื่อสาร · CAS · ประเภท (ห้ามใช้/จำกัด) · หมวด 1…12 (IFRA ใส่เปอร์เซ็นต์สูงสุดในสินค้าสำเร็จ ช่องว่าง = ไม่จำกัดในหมวดนั้น) หรือ ปริมาณสูงสุด % (อย.) · หมายเหตุ/อ้างอิง<br>องค์ประกอบ: รหัส RM · CAS · ชื่อสาร · % ในวัตถุดิบ (วัตถุดิบที่เป็นสารเดี่ยวใส่ 100 วัตถุดิบธรรมชาติใส่สารองค์ประกอบทีละแถว) · การอัปโหลดแต่ละครั้งแทนที่ข้อมูลเดิมของแหล่งนั้นทั้งชุด</div>
+    </details>`;
+  drawChkResult();
+}
+function drawChkResult(){
+  const box=$('#chkResult'); if(!box || !CHK) return;
+  const p=state.products.find(x=>x.id===chkPid);
+  if(!p){ box.innerHTML='<div class="empty">ยังไม่มีสูตรให้ตรวจ นำเข้าสูตรที่หน้าคำนวณก่อน</div>'; return; }
+  if(!CHK.rules.length || !CHK.map.length){
+    box.innerHTML=`<div class="msg warn">ยังตรวจไม่ได้: ${!CHK.rules.length?'ยังไม่มีข้อกำหนด IFRA/อย. ในระบบ (ให้ผู้ดูแลระบบอัปโหลด)':''}${!CHK.rules.length&&!CHK.map.length?' และ ':''}${!CHK.map.length?'ยังไม่มีตารางองค์ประกอบวัตถุดิบ (CAS) (ให้จัดซื้อหรือผู้ดูแลระบบอัปโหลด)':''}</div>`; return; }
+  const r=chkEval(p), n=s=>r.findings.filter(f=>f.status===s).length;
+  const verdict = n('fail') ? ['bad', `ไม่ผ่าน ${n('fail')} รายการ — ต้องปรับสูตรหรือยืนยันกับเอกสารต้นทาง`]
+    : (r.unmapped.length || n('review')) ? ['warn', 'ยังไม่พบรายการเกินข้อกำหนด แต่ตรวจได้ไม่ครบ ดูรายการ "ต้องตรวจเพิ่ม" และวัตถุดิบที่ไม่มีข้อมูล CAS ด้านล่าง']
+    : ['ok', 'ไม่พบสารเกินข้อกำหนดตามข้อมูลที่โหลดไว้ (วัตถุดิบมีข้อมูลองค์ประกอบครบทุกรายการ)'];
+  const stat=(k,v)=>`<div class="card" style="padding:12px 18px;min-width:140px"><div class="muted" style="font-size:12.5px">${k}</div><div style="font-family:var(--f-display);font-size:28px;font-weight:700;line-height:1.2">${v}</div></div>`;
+  const row=f=>`<tr><td><span class="chip ${f.rule.source==='IFRA'?'info':'warn'}">${f.rule.source==='IFRA'?'IFRA':'อย.'}</span></td><td>${esc(f.rule.name)}<div class="muted mono" style="font-size:11.5px">${esc(f.rule.cas)}${f.rule.note?' · '+esc(f.rule.note):''}</div></td>
+      <td>${f.rule.type==='prohibited'?'ห้ามใช้':'จำกัด'}</td><td class="num">${fmtLvl(f.level)}</td><td class="num">${fmtLvl(f.fin)}</td><td class="num">${f.rule.type==='prohibited'?'0':(f.limit!=null?fmtLvl(f.limit):'–')}</td>
+      <td><span class="chip ${CHK_ST[f.status].c}">${CHK_ST[f.status].t}</span>${f.note?`<div class="muted" style="font-size:11.5px">${esc(f.note)}</div>`:''}</td>
+      <td class="muted" style="font-size:12px">${f.via.map(v=>esc(v.code)).join(', ')}</td></tr>`;
+  box.innerHTML = `<div class="msg ${verdict[0]}" style="margin:0 0 14px;font-weight:600">${esc(verdict[1])}</div>
+    <div class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:16px">${stat('ไม่ผ่าน',n('fail'))}${stat('ต้องตรวจเพิ่ม',n('review'))}${stat('ผ่าน',n('pass'))}${stat('วัตถุดิบมีข้อมูล CAS', fmt(r.coverage,1)+'%')}</div>
+    <div class="tablebox"><table><thead><tr><th>แหล่ง</th><th>สาร</th><th>ประเภท</th><th class="num">% ในสูตร</th><th class="num">% ในสินค้าสำเร็จ</th><th class="num">ค่าสูงสุด %</th><th>ผลตรวจ</th><th>มาจากวัตถุดิบ</th></tr></thead><tbody>
+      ${r.findings.map(row).join('') || '<tr><td colspan="8" class="empty">ไม่พบสารที่อยู่ในรายการข้อกำหนดในสูตรนี้ (เฉพาะวัตถุดิบที่มีข้อมูล CAS)</td></tr>'}</tbody></table></div>
+    ${r.unmapped.length ? `<div class="card" style="margin-top:16px"><h3>วัตถุดิบที่ยังไม่มีข้อมูลองค์ประกอบ (CAS) — ตรวจไม่ได้ ${r.unmapped.length} รายการ</h3>
+      <div class="tablebox" style="margin-top:8px"><table><tbody>${r.unmapped.map(u=>`<tr><td class="mono">${esc(u.code||'–')}</td><td>${esc(u.name)}</td><td class="num">${fmt(u.pct,2)}%</td></tr>`).join('')}</tbody></table></div></div>` : ''}`;
+}
+/* --- อ่านไฟล์ Excel ข้อกำหนด / องค์ประกอบ --- */
+function parseRulesRows(rows, source){
+  const hi=rows.findIndex(r=>r && r.some(c=>/cas/i.test(cellStr(c))));
+  if(hi<0) throw new Error('ไม่พบคอลัมน์ CAS ในไฟล์');
+  const h=rows[hi].map(cellStr), col=re=>h.findIndex(x=>re.test(x));
+  const cCas=col(/cas/i), cName=h.findIndex((x,j)=>j!==cCas && /ชื่อ|name|substance|สาร/i.test(x)), cType=col(/ประเภท|type/i), cMax=col(/ปริมาณสูงสุด|max/i), cNote=col(/หมายเหตุ|อ้างอิง|ref|note|remark/i);
+  if(cName<0) throw new Error('ไม่พบคอลัมน์ชื่อสาร');
+  const cats=h.map((x,j)=>{ const m=x.replace(/\s/g,'').match(/^(?:cat(?:egory)?\.?|หมวด)?(\d{1,2}[AB]?)$/i); return m ? [j, m[1].toUpperCase()] : null; }).filter(Boolean);
+  const items=[]; let skipped=0;
+  for(const r of rows.slice(hi+1)){
+    const cas=cellStr(r[cCas]), name=cellStr(r[cName]);
+    if(!cas && !name) continue;
+    if(!/\d/.test(cas) || !name){ skipped++; continue; }
+    const t=cType>=0 ? cellStr(r[cType]) : '', limits={};
+    cats.forEach(([j,k])=>{ const v=cellStr(r[j]); if(!v) return; if(/ห้าม|prohibit/i.test(v)){ limits[k]=0; return; } const n=toNum(v); if(isFinite(n) && n>=0) limits[k]=n; });
+    if(cMax>=0){ const n=toNum(r[cMax]); if(isFinite(n) && n>=0) limits['*']=n; }
+    items.push({source, name, cas, type:/ห้าม|prohibit/i.test(t)?'prohibited':'restricted', limits, note:cNote>=0?cellStr(r[cNote]):''});
+  }
+  return {items, skipped};
+}
+function parseMapRows(rows){
+  const hi=rows.findIndex(r=>r && r.some(c=>/cas/i.test(cellStr(c))) && r.some(c=>/รหัส|code|rm/i.test(cellStr(c))));
+  if(hi<0) throw new Error('ไม่พบคอลัมน์ รหัส RM และ CAS ในไฟล์');
+  const h=rows[hi].map(cellStr), col=re=>h.findIndex(x=>re.test(x));
+  const cCas=col(/cas/i), cCode=h.findIndex((x,j)=>j!==cCas && /รหัส|code|rm/i.test(x)), cName=h.findIndex((x,j)=>j!==cCas && j!==cCode && /ชื่อ|name|สาร/i.test(x)), cPct=col(/%|เปอร์เซ็น|pct|ปริมาณ|content/i);
+  const items=[]; let skipped=0;
+  for(const r of rows.slice(hi+1)){
+    const code=normCode(r[cCode]), cas=cellStr(r[cCas]);
+    if(!cellStr(r[cCode]) && !cas) continue;
+    if(!RM_RE.test(code) || !/\d/.test(cas)){ skipped++; continue; }
+    const n=cPct>=0 ? toNum(r[cPct]) : NaN;
+    items.push({code, cas, name:cName>=0?cellStr(r[cName]):'', pct:isFinite(n)?n:100});
+  }
+  return {items, skipped};
+}
+async function chkReadFile(kind, file){
+  if(typeof XLSX==='undefined'){ toast('โหลดตัวอ่าน Excel ไม่สำเร็จ'); return; }
+  const out=$('#chkImport');
+  try{
+    const wb=await readWorkbook(file); let res=null, err=null;
+    for(const sn of wb.SheetNames){
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:true,defval:null,blankrows:false});
+      try{ const r = kind==='MAP' ? parseMapRows(rows) : parseRulesRows(rows, kind); if(r.items.length){ res=r; break; } }catch(e){ err=e; }
+    }
+    if(!res){ out.innerHTML=`<div class="msg bad">${esc(err?err.message:'ไม่พบรายการที่อ่านได้ในไฟล์')}</div>`; chkPending=null; return; }
+    chkPending={kind, items:res.items};
+    const label = kind==='MAP' ? 'องค์ประกอบวัตถุดิบ (แทนที่ทั้งชุด)' : (kind==='IFRA'?'ข้อกำหนด IFRA':'ข้อกำหนด อย.')+' (แทนที่ข้อมูลเดิมของแหล่งนี้ทั้งชุด)';
+    out.innerHTML=`<div class="msg ok">อ่านไฟล์ ${esc(file.name)} ได้ ${res.items.length.toLocaleString('th-TH')} รายการ${res.skipped?` · ข้าม ${res.skipped} แถวที่ข้อมูลไม่ครบ`:''} → ${label}
+      <div class="row" style="margin-top:8px"><button class="btn small primary" type="button" id="chkConfirm">ยืนยันนำเข้า</button><button class="btn small" type="button" id="chkCancel">ยกเลิก</button></div></div>`;
+  }catch(e){ out.innerHTML=`<div class="msg bad">อ่านไฟล์ไม่ได้: ${esc(errText(e))}</div>`; }
+}
+function chkTemplate(kind){
+  if(typeof XLSX==='undefined'){ toast('โหลดตัวเขียน Excel ไม่สำเร็จ'); return; }
+  const cats=['1','2','3','4','5A','5B','5C','5D','6','7A','7B','8','9','10A','10B','11A','11B','12'];
+  const aoa = kind==='map'
+    ? [['รหัส RM','CAS','ชื่อสาร','% ในวัตถุดิบ'], ['RM-000-000-0000','0000-00-0','(ตัวอย่างรูปแบบ — แทนที่ด้วยข้อมูลจริง)',100]]
+    : [['ชื่อสาร','CAS','ประเภท (ห้ามใช้/จำกัด)', ...cats.map(c=>'หมวด '+c), 'ปริมาณสูงสุด % (อย.)', 'หมายเหตุ/อ้างอิง'],
+       ['(ตัวอย่างรูปแบบ — แทนที่ด้วยข้อมูลจริงจากเอกสาร IFRA/อย.)','0000-00-0','จำกัด', ...cats.map(()=>''), '', 'ช่องหมวดใส่ % สูงสุดในสินค้าสำเร็จ ช่องว่าง = ไม่จำกัด · ช่องปริมาณสูงสุดสำหรับข้อกำหนด อย.']];
+  const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=aoa[0].map((_,i)=>({wch:i<3?34:12}));
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, kind==='map'?'องค์ประกอบ':'ข้อกำหนด');
+  saveFile(kind==='map'?'แบบฟอร์มองค์ประกอบวัตถุดิบ_CAS.xlsx':'แบบฟอร์มข้อกำหนด_IFRA_อย.xlsx', XLSX.write(wb,{type:'array',bookType:'xlsx'}));
+}
+const chkv=$('#chkView');
+chkv.addEventListener('change', e=>{
+  const t=e.target;
+  if(t.id==='chkProd'){ chkPid=t.value; drawChkResult(); }
+  else if(t.id==='chkCat'){ chkCat=t.value; drawChkResult(); }
+  else if(t.id==='chkFile'){ const f=t.files[0]; if(f && t.dataset.kind) chkReadFile(t.dataset.kind, f); t.value=''; }
+});
+chkv.addEventListener('input', e=>{ if(e.target.id==='chkDose'){ chkDose=e.target.value; drawChkResult(); } });
+chkv.addEventListener('click', async e=>{
+  const t=e.target;
+  if(t.dataset.chkup){ const fi=$('#chkFile'); fi.dataset.kind=t.dataset.chkup; fi.click(); return; }
+  if(t.dataset.chktpl){ chkTemplate(t.dataset.chktpl); return; }
+  if(t.id==='chkCancel'){ chkPending=null; $('#chkImport').innerHTML=''; return; }
+  if(t.id==='chkConfirm' && chkPending){
+    t.disabled=true; const p=chkPending;
+    try{ const r=await api(p.kind==='MAP' ? 'saveRmMap' : 'saveComplianceRules', p.items); chkPending=null; await loadChk(true); drawChk(); toast(`นำเข้าแล้ว ${r.saved.toLocaleString('th-TH')} รายการ`); }
+    catch(err){ t.disabled=false; $('#chkImport').insertAdjacentHTML('afterbegin', `<div class="msg bad">${esc(errText(err))}</div>`); }
+  }
 });
 function renderAdmin(){
   if(!S.adm) return;

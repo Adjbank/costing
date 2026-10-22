@@ -4,7 +4,46 @@
 <base target="_top">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<style>body{margin:0}img{max-width:100%}</style>
+<style>body{margin:0}img{max-width:100%}/* document preview / print (SDS, IFRA) */
+.doc-wrap{margin:auto;width:100%;max-width:860px;display:flex;flex-direction:column;gap:10px}
+.doc-tools{display:flex;gap:10px;align-items:center;justify-content:space-between;color:#fff;font-size:14px}
+.doc-sheet{background:#fff;color:#111;border-radius:6px;padding:40px 48px;font-family:"Noto Sans Thai","Anuphan",Arial,sans-serif;font-size:12.5px;line-height:1.6;max-height:80vh;overflow:auto;position:relative}
+.doc-sheet h1{font-size:20px;line-height:1.3;margin:0;font-weight:700}
+.doc-sheet p{margin:8px 0}
+.doc-sheet hr{border:0;border-top:1px solid #333;margin:16px 0}
+.doc-sheet ul{margin:4px 0 8px;padding-left:22px}
+.doc-sheet .dh{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:22px}
+.doc-sheet .dlogo{font-family:"Cormorant Garamond",Georgia,serif;font-size:30px;line-height:.95;color:#13214a;letter-spacing:.06em;display:flex;flex-direction:column}
+.doc-sheet .dlogo .dl2{padding-left:26px}
+.doc-sheet .dtitle{text-align:right}
+.doc-sheet .dtitle h1{font-size:24px}
+.doc-sheet .dsub{font-size:11.5px;color:#444;margin-top:4px}
+.doc-sheet .dsmall{font-size:11px;color:#333}
+.doc-sheet .dlab{font-weight:700;font-size:11.5px}
+.doc-sheet .dsec{background:#13214a;color:#fff;font-weight:700;padding:4px 10px;margin:18px 0 10px;font-size:12.5px;break-after:avoid}
+.doc-sheet table{border-collapse:collapse;width:100%;font-size:12px}
+.doc-sheet .dt th,.doc-sheet .dt td{border:1px solid #444;padding:5px 8px;vertical-align:top}
+.doc-sheet .dt th{background:#e8e8e8;font-weight:700;text-align:center}
+.doc-sheet .dkv td{padding:3px 8px;vertical-align:top;border:0}
+.doc-sheet .dkv td:first-child{width:30%}
+.doc-sheet .dkv td.dn{width:36px;color:#333}
+.doc-sheet .dkv td.dcode{width:150px;white-space:nowrap}
+.doc-sheet .dnum td:nth-child(2){width:44%}
+.doc-sheet .dpict{display:flex;gap:12px;margin:10px 0}
+.doc-sheet .dfoot{margin-top:24px;border-top:1px solid #999;padding-top:6px;color:#555}
+.doc-sheet .ddraft{position:absolute;top:40%;left:50%;transform:translate(-50%,-50%) rotate(-28deg);font-size:120px;font-weight:700;color:#d1131322;pointer-events:none;letter-spacing:.2em}
+@media print{
+  body.doc-open > *:not(#docOverlay){display:none!important}
+  #docOverlay{position:static!important;padding:0!important;background:none!important;display:block!important;overflow:visible!important}
+  .doc-wrap{max-width:none}
+  .doc-tools{display:none!important}
+  .doc-sheet{max-height:none;overflow:visible;padding:0;border-radius:0;box-shadow:none;font-size:11.5px}
+  .doc-sheet .dsec{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .doc-sheet .dt th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .doc-sheet tr,.doc-sheet li{break-inside:avoid}
+  @page{size:A4;margin:16mm 14mm}
+}
+</style>
 </head>
 <body>
 <title>ระบบต้นทุนหัวน้ำหอม</title>
@@ -285,6 +324,7 @@ tfoot td{font-weight:700;border-top:1px solid var(--ink);background:var(--bg-sof
   <section id="rmView" hidden style="padding-block:24px 56px"></section>
   <section id="cmpView" hidden style="padding-block:24px 56px"></section>
   <section id="chkView" hidden style="padding-block:24px 56px"></section>
+  <section id="docView" hidden style="padding-block:24px 56px"></section>
   <div id="calcView">
   <div class="pagehead"><h1>คำนวณต้นทุนหัวน้ำหอม</h1><p>Scent &amp; Sense ✦ ทีมต้นทุนสินค้า · Fragrance Oil Costing · ราคาวัตถุดิบ บาท/กรัม จากไฟล์ Summary RM</p></div>
   <div class="dbcard" id="dbcard"></div>
@@ -371,6 +411,12 @@ tfoot td{font-weight:700;border-top:1px solid var(--ink);background:var(--bg-sof
   </div>
 </div>
 <div class="toast" id="toast" hidden></div>
+<div class="overlay" id="docOverlay" hidden role="dialog" aria-modal="true" aria-label="ตัวอย่างเอกสาร">
+  <div class="doc-wrap">
+    <div class="doc-tools"><b id="docTitle"></b><span class="row"><button class="tbtn" type="button" id="docPrintBtn">พิมพ์ / บันทึก PDF</button><button class="tbtn" type="button" id="docCloseBtn">ปิด</button></span></div>
+    <div class="doc-sheet" id="docPrint"></div>
+  </div>
+</div>
 
 <script>
 /* ===== ฐานราคา RM: ถอดจาก "PRODUCT RM - Summary RM.pdf" (อัปเดต 12/10/2026 11:41:18, 1,123 แถว) =====
@@ -1150,7 +1196,7 @@ function renderUserBar(){
   const v=S.view||'calc', adm=isAdminRole();
   const tab=(id,view,label)=>`<button type="button" id="${id}" class="${v===view?'on':''}" ${v===view?'aria-current="page"':''}>${label}</button>`;
   $('#navtabs').innerHTML = tab('btnCalc','calc','คำนวณ')
-    + (can('calc') ? tab('btnChk','chk','ตรวจ IFRA / อย.') : '')
+    + (can('calc') ? tab('btnChk','chk','ตรวจ IFRA / อย.') + tab('btnDoc','doc','เอกสาร MSDS / IFRA') : '')
     + (can('editPrices') ? tab('btnRm','rm','ฐานราคาวัตถุดิบ') : '')
     + (adm ? tab('btnAll','all','สูตรทั้งหมด') + tab('btnPrice','price','ทำราคาขาย') : '')
     + (S.me&&S.me.role ? tab('btnCmp','cmp', (adm?'เรื่องร้องเรียน':'แจ้งเรื่องร้องเรียน') + (adm&&S.cNew ? ` <span class="badge">${S.cNew}</span>` : '')) : '')
@@ -1199,7 +1245,7 @@ $('#userbar').addEventListener('click', e=>{
 });
 $('#navtabs').addEventListener('click', e=>{
   const b=e.target.closest('button'); if(!b) return;
-  const view={btnCalc:'calc', btnChk:'chk', btnRm:'rm', btnAll:'all', btnPrice:'price', btnCmp:'cmp', btnAdmin:'admin'}[b.id];
+  const view={btnCalc:'calc', btnChk:'chk', btnDoc:'doc', btnRm:'rm', btnAll:'all', btnPrice:'price', btnCmp:'cmp', btnAdmin:'admin'}[b.id];
   if(view) showView(view);
 });
 async function showView(v){
@@ -1209,10 +1255,11 @@ async function showView(v){
   if(S.view==='price' && v!=='price') flushPrice();
   if(S.view==='rm' && v!=='rm') flushRm();
   if(v==='cmp' && !(S.me && S.me.role)) v='calc';
-  if(v==='chk' && !can('calc')) v='calc';
+  if((v==='chk' || v==='doc') && !can('calc')) v='calc';
   S.view=v; S.admin = v!=='calc';                 /* S.admin = ไม่ได้อยู่หน้าคำนวณ */
-  $('#adminView').hidden=v!=='admin'; $('#allView').hidden=v!=='all'; $('#priceView').hidden=v!=='price'; $('#rmView').hidden=v!=='rm'; $('#cmpView').hidden=v!=='cmp'; $('#chkView').hidden=v!=='chk'; $('#calcView').hidden=v!=='calc';
+  $('#adminView').hidden=v!=='admin'; $('#allView').hidden=v!=='all'; $('#priceView').hidden=v!=='price'; $('#rmView').hidden=v!=='rm'; $('#cmpView').hidden=v!=='cmp'; $('#chkView').hidden=v!=='chk'; $('#docView').hidden=v!=='doc'; $('#calcView').hidden=v!=='calc';
   renderUserBar();
+  if(v==='doc'){ window.scrollTo(0,0); renderDocView(); return; }
   if(v==='chk'){ window.scrollTo(0,0); renderChkView(); return; }
   if(v==='cmp'){ window.scrollTo(0,0); renderCmpView(); return; }
   if(v==='rm'){ window.scrollTo(0,0); renderRmView(); return; }
@@ -1878,6 +1925,329 @@ chkv.addEventListener('click', async e=>{
     catch(err){ t.disabled=false; $('#chkImport').insertAdjacentHTML('afterbegin', `<div class="msg bad">${esc(errText(err))}</div>`); }
   }
 });
+/* --- เอกสาร SDS (MSDS) และ IFRA Certificate ต่อสูตร + ทะเบียนสูตร ---
+   เนื้อหามาตรฐานอิงรูปแบบเอกสารตัวอย่างของบริษัท · องค์ประกอบ (Section 3) คำนวณจากสูตร + ตารางองค์ประกอบวัตถุดิบ (CAS)
+   ระดับ IFRA สูงสุดต่อหมวดคำนวณจากข้อกำหนดที่โหลดไว้ · ผู้ออกเอกสารตรวจและแก้ได้ก่อนออก · พิมพ์/บันทึก PDF จากเบราว์เซอร์ */
+const COMPANY = {name:'Scent and Sense Laboratory Co., Ltd.', upper:'SCENT AND SENSE LABORATORY CO., LTD.',
+  address:'2/4 Phetkasem 35/1 Alley, Phetkasem Road, Bangwa, Pasicharoen, Bangkok 10160 THAILAND', phone:'(+66) 2000 7722'};
+const IFRA_APP = {'1':'Lip products of all types','2':'Deodorant and antiperspirant products of all types','3':'Eye products, men’s facial creams and balms, baby creams and lotions',
+  '4':'Fine fragrance: Hydroalcoholic products, hair perfume, body sprays, fragranced bracelets','5A':'Body lotion / moisturizer (leave on)','5B':'Face moisturizer / face cream (leave on)','5C':'Hand cream (leave on)','5D':'Baby cream, lotion and oil',
+  '6':'Products with oral and lip exposure: Mouthwash, toothpaste','7A':'Rinse-off hair products: Shampoo, Conditioner','7B':'Hair Spray / Hair styling aids / Hair dyes (leave on)','8':'Intimate wipes, baby wipes',
+  '9':'Rinse-off toiletries: Soap, Shower Gel, Shampoo, Conditioner, Scrubs, Foams','10A':'Household products: All-purpose cleaners, laundry detergents, fabric softeners','10B':'Aerosol air freshener sprays, household aerosols',
+  '11A':'Products with intended skin contact but minimal transfer: feminine hygiene, diapers, tights','11B':'Products with incidental skin contact: scented textiles, insecticides, shoe polish',
+  '12':'Products not intended for direct skin contact: candles, air fresheners (non-spray), incense, car fresheners'};
+const GHS_H = [['H224','Extremely flammable liquid and vapour','Flammable Liquid, Category 1','flame'],['H225','Highly flammable liquid and vapour','Flammable Liquid, Category 2','flame'],['H226','Flammable liquid and vapour','Flammable Liquid, Category 3','flame'],
+  ['H304','May be fatal if swallowed and enters airways','Aspiration Hazard, Category 1','health'],['H315','Causes skin irritation','Skin Irritation, Category 2','excl'],['H317','May cause an allergic skin reaction','Skin Sensitization, Category 1','excl'],
+  ['H318','Causes serious eye damage','Serious Eye Damage, Category 1','corr'],['H319','Causes serious eye irritation','Serious Eye Damage / Eye Irritation, Category 2A','excl'],['H335','May cause respiratory irritation','Specific Target Organ Toxicity – Single Exposure, Category 3','excl'],
+  ['H400','Very toxic to aquatic life','Hazardous to the Aquatic Environment, Acute Category 1','env'],['H410','Very toxic to aquatic life with long lasting effects','Hazardous to the Aquatic Environment, Chronic Category 1','env'],['H411','Toxic to aquatic life with long lasting effects','Hazardous to the Aquatic Environment, Chronic Category 2','env'],['H412','Harmful to aquatic life with long lasting effects','Hazardous to the Aquatic Environment, Chronic Category 3','']];
+const GHS_P = {base:[['P102','Keep out of reach of children'],['P264','Wash hands thoroughly after handling'],['P280','Wear protective gloves/protective clothing/eye protection/face protection']],
+  flame:[['P210','Keep away from heat, hot surfaces, sparks, open flames and other ignition sources. No smoking'],['P233','Keep container tightly closed'],['P240','Ground and bond container and receiving equipment'],['P241','Use explosion-proof electrical/ventilating/lighting equipment'],['P242','Use only non-sparking tools'],['P243','Take precautionary measures against static discharge'],['P303 + P361 + P353','IF ON SKIN (or hair): Take off immediately all contaminated clothing. Rinse skin with water [or shower]'],['P370 + P378','In case of fire: Use dry sand, dry chemical, carbon dioxide or alcohol-resistant foam to extinguish'],['P403 + P235','Store in a well-ventilated place. Keep cool']],
+  H304:[['P301 + P310','IF SWALLOWED: Immediately call a POISON CENTER/doctor'],['P331','Do NOT induce vomiting'],['P405','Store locked up']],
+  H315:[['P302 + P352','IF ON SKIN: Wash with plenty of water'],['P321','Specific treatment (see additional first aid instructions on this label)'],['P332 + P313','If skin irritation occurs: Get medical advice/attention'],['P362','Take off contaminated clothing and wash before reuse']],
+  H317:[['P272','Contaminated work clothing should not be allowed out of the workplace'],['P333 + P313','If skin irritation or rash occurs: Get medical advice/attention']],
+  H318:[['P305 + P351 + P338','IF IN EYES: Rinse cautiously with water for several minutes. Remove contact lenses, if present and easy to do. Continue rinsing'],['P310','Immediately call a POISON CENTER/doctor']],
+  H319:[['P305 + P351 + P338','IF IN EYES: Rinse cautiously with water for several minutes. Remove contact lenses, if present and easy to do. Continue rinsing'],['P337 + P313','If eye irritation persists: Get medical advice/attention']],
+  H335:[['P261','Avoid breathing vapours'],['P271','Use only outdoors or in a well-ventilated area'],['P304 + P340','IF INHALED: Remove person to fresh air and keep comfortable for breathing']],
+  env:[['P273','Avoid release to the environment'],['P391','Collect spillage']],
+  end:[['P501','Dispose of contents/container at a hazardous or special waste collection point in accordance with local regulations']]};
+const DOC_BANDS=[[90,'90-100'],[80,'80-90'],[70,'70-80'],[60,'60-70'],[50,'50-60'],[40,'40-50'],[30,'30-40'],[20,'20-30'],[10,'10-20'],[5,'5-10'],[1,'1-5'],[0.1,'0.1-1'],[0.01,'0.01-0.1'],[0.001,'0.001-0.01'],[0,'<0.001']];
+const docBand=p=>(DOC_BANDS.find(([lo])=>p>=lo)||DOC_BANDS[DOC_BANDS.length-1])[1];
+const docDate=d=>{ const x=d?new Date(d):new Date(); return isNaN(x)?'':x.toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}); };
+let DOCS=null, DOCF=null, docQ='';
+function docFormulas(){
+  if(isAdminRole() && ADM_FORMS) return ADM_FORMS.map(f=>({id:f.id, owner:f.owner, p:f.p}));
+  return state.products.filter(p=>!p.sample).map(p=>({id:p.id, owner:S.me.email, p}));
+}
+async function loadDocs(force){
+  if(DOCS && !force) return;
+  const tasks=[api('listDocs')];
+  if(isAdminRole()) tasks.push(loadAdminForms(force));
+  if(!CHK || force) tasks.push(loadChk(force));
+  const [list]=await Promise.all(tasks); DOCS=list;
+}
+/* ระดับสารในสูตร (% ของสูตร) ตาม CAS จากตารางองค์ประกอบ */
+function docLevels(p){
+  const c=compute(p), byCode=new Map(); (CHK?CHK.map:[]).forEach(r=>{ if(!byCode.has(r.code)) byCode.set(r.code,[]); byCode.get(r.code).push(r); });
+  const byCas=new Map(); let mapped=0, total=0;
+  c.rows.forEach(r=>{ if(!(r.pct>0)) return; total+=r.pct; const code=r.e?r.e.code:normCode(r.ln.code), rows=byCode.get(code); if(!rows) return; mapped+=r.pct;
+    rows.forEach(m=>{ const o=byCas.get(m.cas)||{cas:m.cas, name:m.name, level:0}; o.level+=r.pct*m.pct/100; if(!o.name&&m.name) o.name=m.name; byCas.set(m.cas,o); }); });
+  return {rows:[...byCas.values()].sort((a,b)=>b.level-a.level), coverage: total>0?mapped/total*100:0};
+}
+function docComposition(p){
+  const L=docLevels(p), listed=L.rows.filter(r=>r.level>0);
+  const rest=Math.max(0, 100-listed.reduce((s,r)=>s+r.level,0));
+  const rows=[]; if(rest>0.0005) rows.push({name:'FRAGRANCE', cas:'-', ec:'-', range:docBand(rest)});
+  listed.forEach(r=>rows.push({name:(r.name||'').toUpperCase()||r.cas, cas:r.cas, ec:'-', range:docBand(r.level)}));
+  return rows;
+}
+/* ระดับสูงสุดที่ใช้ได้ต่อหมวด IFRA (%) จากข้อกำหนดที่โหลดไว้ · null = ไม่มีข้อกำหนดที่เกี่ยวกับสูตรนี้ */
+function docIfraMax(p){
+  const L=docLevels(p), out={}; if(!CHK) return out;
+  const lv=new Map(L.rows.map(r=>[r.cas, r.level]));
+  Object.keys(IFRA_APP).forEach(k=>{ let m=null;
+    CHK.rules.filter(r=>r.source==='IFRA' && lv.get(r.cas)>0).forEach(r=>{ const level=lv.get(r.cas);
+      let lim=null; if(r.type==='prohibited') lim=0; else if(k in r.limits) lim=r.limits[k]; else if('*' in r.limits) lim=r.limits['*']; if(lim==null) return;
+      const mx=Math.min(100, lim/level*100); m = m==null ? mx : Math.min(m, mx); });
+    out[k]=m; });
+  return out;
+}
+function docDefaults(type, f){
+  const p=f.p, m=metaOf(p), base={product:(m.sampleName||p.name)+(/fragrance oil/i.test(m.sampleName||p.name)?'':' Fragrance Oil'), customer:m.customer, brand:m.brand, sampleCode:m.sampleCode, address:'', date:new Date().toISOString().slice(0,10)};
+  if(type==='IFRA') return Object.assign(base, {amendment:'51st Amendment to the IFRA Standards (July 2023)', cats:[{cls:'9', level:''},{cls:'7B', level:''}], maxByCat:docIfraMax(p)});
+  return Object.assign(base, {application:'For blending into various finished products', hazards:['H226','H315','H319'], comp:docComposition(p), coverage:docLevels(p).coverage,
+    props:{appearance:'Clear liquid', odour:'Characteristic odour', flash:'60 °C', density:'Not available', solubility:'Insoluble', shelf:'2 years'}, transport:'UN1266'});
+}
+function sdsPStatements(h){
+  const has=c=>h.includes(c), out=[...GHS_P.base];
+  if(has('H224')||has('H225')||has('H226')) out.push(...GHS_P.flame);
+  ['H304','H315','H317','H318','H319','H335'].forEach(c=>{ if(has(c)) out.push(...GHS_P[c]); });
+  if(['H400','H410','H411','H412'].some(has)) out.push(...GHS_P.env);
+  out.push(...GHS_P.end);
+  const seen=new Set(); return out.filter(([c])=>!seen.has(c)&&seen.add(c));
+}
+function sdsSignal(h){ return ['H224','H225','H304','H318','H410'].some(c=>h.includes(c)) ? 'DANGER' : h.length ? 'WARNING' : 'Not classified'; }
+function sdsPictos(h){ const s=new Set(); GHS_H.forEach(([c,,,pic])=>{ if(pic && h.includes(c)) s.add(pic); }); return [...s]; }
+const PICTO={flame:'<path d="M50 22c6 10 2 16-2 22 8-2 16 4 16 14 0 11-8 18-14 18s-16-6-16-18c0-6 3-9 6-12-1 5 1 8 4 9-2-8 1-18 6-33z" fill="#000"/>',
+  excl:'<path d="M50 20h0a5 5 0 0 1 5 5l-2 30a3 3 0 0 1-6 0l-2-30a5 5 0 0 1 5-5zm0 44a5 5 0 1 1 0 10 5 5 0 0 1 0-10z" fill="#000"/>',
+  health:'<path d="M50 18l12 14v20l-7 6 4 18H41l4-18-7-6V32z" fill="none" stroke="#000" stroke-width="3"/><circle cx="50" cy="40" r="7" fill="#000"/>',
+  corr:'<path d="M28 40l10-6 8 10 8-10 10 6-6 14H34z" fill="#000"/><path d="M30 66h40v6H30z" fill="#000"/>',
+  env:'<path d="M28 60c8-10 14-14 22-14s12 4 22 14v6H28z" fill="#000"/><path d="M60 36l10 6-6 2 4 6-12-2 4 6-10-8-2 8-4-10 6-8z" fill="#000"/>'};
+const picto=k=>`<svg viewBox="0 0 100 100" width="64" height="64" aria-hidden="true"><path d="M50 4 96 50 50 96 4 50z" fill="#fff" stroke="#d11" stroke-width="6"/>${PICTO[k]||''}</svg>`;
+/* --- หน้าเอกสาร --- */
+function renderDocView(){
+  $('#docView').innerHTML = `<div class="bh"><h2>เอกสาร MSDS / IFRA และทะเบียนสูตร</h2><span class="hint">ออกเอกสารต่อสูตร เลขที่เอกสารรันอัตโนมัติ · พิมพ์หรือบันทึกเป็น PDF จากเบราว์เซอร์</span></div>
+    <div id="docBody"><div class="empty">กำลังโหลดทะเบียน…</div></div>`;
+  DOCF=null;
+  loadDocs().then(()=>{ if(S.view==='doc') drawDocs(); }).catch(e=>{ if($('#docBody')) $('#docBody').innerHTML=`<div class="msg bad">${esc(errText(e))}</div>`; });
+}
+function drawDocs(){
+  const box=$('#docBody'); if(!box || !DOCS) return;
+  const fs=docFormulas(), q=docQ.trim().toLowerCase(), canIssue=can('export');
+  const byF=new Map(); DOCS.forEach(d=>{ if(d.status!=='issued') return; const k=d.formulaId; if(!byF.has(k)) byF.set(k,{}); const o=byF.get(k); if(!o[d.type]) o[d.type]=d; });
+  const rows=fs.map(f=>{ const m=metaOf(f.p), dd=byF.get(f.id)||{}; return {f, m, sds:dd.SDS, ifra:dd.IFRA}; })
+    .filter(r=>!q || r.f.p.name.toLowerCase().includes(q) || Object.values(r.m).some(v=>v.toLowerCase().includes(q)) || r.f.owner.includes(q) || (r.sds&&r.sds.docNo.toLowerCase().includes(q)) || (r.ifra&&r.ifra.docNo.toLowerCase().includes(q)))
+    .sort((a,b)=>(a.m.customer||'').localeCompare(b.m.customer||'','th') || a.f.p.name.localeCompare(b.f.p.name,'th'));
+  const dash='<span class="muted">–</span>', docCell=d=>d?`<div class="mono">${esc(d.docNo)}</div><div class="muted" style="font-size:11.5px">${fmtSeen(d.issuedAt)}</div>`:dash;
+  const stat=(k,v)=>`<div class="card" style="padding:12px 18px;min-width:150px"><div class="muted" style="font-size:12.5px">${k}</div><div style="font-family:var(--f-display);font-size:28px;font-weight:700;line-height:1.2">${v}</div></div>`;
+  const issued=DOCS.filter(d=>d.status==='issued');
+  box.innerHTML = `<div class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:16px">${stat('สูตรในทะเบียน', fs.length)}${stat('มี SDS แล้ว', fs.filter(f=>byF.get(f.id)&&byF.get(f.id).SDS).length)}${stat('มี IFRA แล้ว', fs.filter(f=>byF.get(f.id)&&byF.get(f.id).IFRA).length)}${stat('เอกสารที่ออกทั้งหมด', issued.length)}</div>
+    <div class="search"><input id="docQ" type="search" autocomplete="off" placeholder="ค้นหาชื่อสูตร ลูกค้า แบรนด์ รหัสตัวอย่าง หรือเลขที่เอกสาร…" value="${esc(docQ)}">
+      <button class="btn small" type="button" id="docRefresh">รีเฟรช</button><button class="btn small" type="button" id="docXls">ดาวน์โหลดทะเบียน Excel</button></div>
+    <div class="tablebox"><table><thead><tr><th>ชื่อสูตร / ผลิตภัณฑ์</th><th>ลูกค้า</th><th>แบรนด์</th><th>รหัสตัวอย่าง</th>${isAdminRole()?'<th>เจ้าของสูตร</th>':''}<th>SDS ล่าสุด</th><th>IFRA ล่าสุด</th><th></th></tr></thead><tbody>
+      ${rows.map(r=>`<tr data-fid="${esc(r.f.id)}"><td><b>${esc(r.m.sampleName||r.f.p.name)}</b>${r.m.sampleName&&r.m.sampleName!==r.f.p.name?`<div class="muted" style="font-size:12px">${esc(r.f.p.name)}</div>`:''}</td><td>${esc(r.m.customer)||dash}</td><td>${esc(r.m.brand)||dash}</td><td class="mono">${esc(r.m.sampleCode)||dash}</td>${isAdminRole()?`<td class="muted" style="font-size:12.5px">${esc(shortName(r.f.owner))}</td>`:''}
+        <td>${docCell(r.sds)}</td><td>${docCell(r.ifra)}</td>
+        <td><div class="adm-actions">${canIssue?`<button class="btn small primary" type="button" data-docnew="SDS">ออก SDS</button><button class="btn small primary" type="button" data-docnew="IFRA">ออก IFRA</button>`:''}${r.sds?`<button class="btn small" type="button" data-docopen="${esc(r.sds.id)}">พิมพ์ SDS</button>`:''}${r.ifra?`<button class="btn small" type="button" data-docopen="${esc(r.ifra.id)}">พิมพ์ IFRA</button>`:''}</div></td></tr>`).join('')
+      || `<tr><td colspan="9" class="empty">${fs.length?'ไม่พบสูตรที่ตรงกับคำค้น':'ยังไม่มีสูตรในทะเบียน นำเข้าสูตรที่หน้าคำนวณก่อน'}</td></tr>`}
+    </tbody></table></div>
+    <div id="docForm"></div>
+    <details class="card" style="margin-top:16px"><summary style="cursor:pointer;font-weight:700">ประวัติเอกสารทั้งหมด (${DOCS.length})</summary>
+      <div class="tablebox" style="margin-top:10px"><table><thead><tr><th>เลขที่</th><th>ประเภท</th><th>ผลิตภัณฑ์</th><th>ลูกค้า</th><th>ออกเมื่อ</th><th>โดย</th><th>สถานะ</th><th></th></tr></thead><tbody>
+        ${DOCS.map(d=>`<tr><td class="mono">${esc(d.docNo)}</td><td>${esc(d.type)}</td><td>${esc(d.product)}</td><td>${esc(d.customer)||dash}</td><td class="muted" style="white-space:nowrap">${fmtSeen(d.issuedAt)}</td><td class="muted">${esc(shortName(d.issuedBy))}</td>
+          <td>${d.status==='void'?'<span class="chip bad">ยกเลิก</span>':'<span class="chip ok">ใช้งาน</span>'}</td><td><div class="adm-actions"><button class="btn small" type="button" data-docopen="${esc(d.id)}">เปิด</button>${isAdminRole()&&d.status!=='void'?`<button class="btn small danger" type="button" data-docvoid="${esc(d.id)}">ยกเลิก</button>`:''}</div></td></tr>`).join('') || '<tr><td colspan="8" class="empty">ยังไม่มีเอกสาร</td></tr>'}
+      </tbody></table></div></details>
+    <div class="note-box" style="margin-top:14px">ทะเบียนนี้รวมสูตรที่บันทึกในระบบ${isAdminRole()?'ของทุกคน':'ของคุณ'} · ชื่อผลิตภัณฑ์ ลูกค้า แบรนด์ มาจากข้อมูลหัวฟอร์มของสูตร แก้ได้ที่หน้าคำนวณ (ขั้นตอนที่ 2) · เอกสารที่ออกแล้วแก้ไม่ได้ ถ้าต้องแก้ให้ออกฉบับใหม่ (เลขที่ใหม่ Rev ถัดไป) และผู้ดูแลระบบยกเลิกฉบับเดิมได้</div>`;
+}
+/* --- ฟอร์มออกเอกสาร --- */
+function openDocForm(type, fid){
+  const f=docFormulas().find(x=>x.id===fid); if(!f) return;
+  DOCF={type, f, d:docDefaults(type, f)}; drawDocForm(); $('#docForm').scrollIntoView({behavior:'smooth', block:'start'});
+}
+function drawDocForm(){
+  const box=$('#docForm'); if(!box) return; if(!DOCF){ box.innerHTML=''; return; }
+  const {type, f, d}=DOCF, inp='border:1px solid var(--line-strong);border-radius:7px;padding:6px 9px;background:var(--input-bg);width:100%';
+  const head=`<div class="row" style="justify-content:space-between;align-items:flex-start"><div><h3 style="font-size:18px">${type==='SDS'?'ออก Safety Data Sheet (SDS / MSDS)':'ออก IFRA Certificate of Conformity'}</h3><div class="muted" style="font-size:13px">สูตร: ${esc(f.p.name)} · ${f.p.lines.length} รายการ</div></div><button class="btn small" type="button" id="docClose">ปิด</button></div>
+    <div class="settings" style="margin-top:12px">
+      <div class="field" style="grid-column:1/-1"><label>ชื่อผลิตภัณฑ์ (Product Name)</label><input data-d="product" value="${esc(d.product)}" maxlength="200"></div>
+      <div class="field"><label>ลูกค้า (Customer Company Name)</label><input data-d="customer" value="${esc(d.customer)}" maxlength="200"></div>
+      <div class="field"><label>แบรนด์ (Brand Name)</label><input data-d="brand" value="${esc(d.brand)}" maxlength="120"></div>
+      <div class="field"><label>วันที่ออกเอกสาร</label><input data-d="date" type="date" value="${esc(d.date)}"></div>
+      ${type==='IFRA'?`<div class="field" style="grid-column:1/-1"><label>ที่อยู่ลูกค้า (Customer Address)</label><input data-d="address" value="${esc(d.address)}" maxlength="300" placeholder="เช่น 58, 60, 62, 64, 66 Soi Saranakhom 10, Saranakhom Road, Si Kan, Don Mueang, Bangkok 10210, Thailand"></div>`:''}
+    </div>`;
+  let body='';
+  if(type==='IFRA'){
+    const mx=d.maxByCat||{}, hasRules=CHK && CHK.rules.some(r=>r.source==='IFRA'), cov=docLevels(f.p).coverage;
+    body=`<div class="field" style="margin-bottom:12px"><label>IFRA Amendment ที่อ้างอิง</label><input data-d="amendment" value="${esc(d.amendment)}" maxlength="120" style="${inp}"></div>
+      <h3 style="font-size:14px">หมวดการใช้งานและระดับสูงสุดที่แนะนำ (Suggested Compound Level %)</h3>
+      <div class="muted" style="font-size:12.5px;margin:4px 0 8px">${hasRules?`คอลัมน์ "สูงสุดตามข้อกำหนด" คำนวณจากข้อกำหนด IFRA ที่โหลดไว้และองค์ประกอบวัตถุดิบ (ครอบคลุม ${fmt(cov,0)}% ของสูตร) · ค่าที่กรอกต้องไม่เกินค่านี้`:'ยังไม่มีข้อกำหนด IFRA ในระบบ จึงคำนวณค่าสูงสุดให้ไม่ได้ กรอกระดับที่ประเมินเองและยืนยันกับเอกสารต้นทาง'}</div>
+      <div class="tablebox"><table><thead><tr><th>Class</th><th>Application Example</th><th class="num">สูงสุดตามข้อกำหนด %</th><th class="num">ระดับที่แนะนำ %</th><th></th></tr></thead><tbody>
+        ${d.cats.map((c,i)=>{ const m=mx[c.cls]; const over=m!=null && toNum(c.level)>m+1e-9; return `<tr data-i="${i}"><td><select data-cat="cls" style="${inp};width:auto">${Object.keys(IFRA_APP).map(k=>`<option value="${k}" ${k===c.cls?'selected':''}>${k}</option>`).join('')}</select></td><td style="font-size:12.5px">${esc(IFRA_APP[c.cls]||'')}</td>
+          <td class="num">${m==null?(hasRules?'<span class="muted">ไม่จำกัด*</span>':'–'):fmt(m,2)}</td><td class="num"><input data-cat="level" type="number" min="0" max="100" step="any" value="${esc(c.level)}" style="${inp};width:110px;text-align:right${over?';border-color:var(--bad)':''}"></td><td><button class="x" type="button" data-catdel="${i}" aria-label="ลบ">×</button></td></tr>`; }).join('')}
+      </tbody></table></div>
+      <div class="row" style="margin-top:8px"><button class="btn small" type="button" id="docCatAdd">เพิ่มหมวด</button>${hasRules?'<button class="btn small" type="button" id="docCatFill">ใส่ค่าสูงสุดตามข้อกำหนดให้ทุกหมวด</button>':''}<span class="muted" style="font-size:12px">*ไม่จำกัด = ไม่พบสารในสูตรที่มีข้อกำหนดในหมวดนั้น (ตามข้อมูลที่โหลด) ยังควรใส่ระดับใช้งานจริง</span></div>`;
+  } else {
+    const H=new Set(d.hazards), P=sdsPStatements(d.hazards);
+    body=`<div class="field" style="margin-bottom:12px"><label>การใช้งาน (Recommended Use)</label><input data-d="application" value="${esc(d.application)}" maxlength="200" style="${inp}"></div>
+      <h3 style="font-size:14px">Section 2 · การจำแนกความเป็นอันตราย (GHS)</h3>
+      <div class="checks" style="margin:6px 0 10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">${GHS_H.map(([c,t,cls])=>`<label><input type="checkbox" data-h="${c}" ${H.has(c)?'checked':''}><span><b>${c}</b> ${esc(t)}<br><span class="muted" style="font-size:11.5px">${esc(cls)}</span></span></label>`).join('')}</div>
+      <div class="muted" style="font-size:12.5px">Signal word: <b>${sdsSignal(d.hazards)}</b> · Pictograms: ${sdsPictos(d.hazards).join(', ')||'–'} · Precautionary statements ${P.length} รายการ (สร้างอัตโนมัติจากรายการที่เลือก)</div>
+      <h3 style="font-size:14px;margin-top:16px">Section 3 · องค์ประกอบ (คำนวณจากสูตร + ตารางองค์ประกอบวัตถุดิบ ครอบคลุม ${fmt(d.coverage,0)}% ของสูตร)</h3>
+      <div class="tablebox" style="margin-top:6px"><table><thead><tr><th>INCI Name</th><th>CAS No.</th><th>EC No.</th><th>Percentage (%)</th><th></th></tr></thead><tbody>
+        ${d.comp.map((r,i)=>`<tr data-i="${i}"><td><input data-comp="name" value="${esc(r.name)}" style="${inp}"></td><td><input data-comp="cas" value="${esc(r.cas)}" style="${inp};width:130px"></td><td><input data-comp="ec" value="${esc(r.ec)}" style="${inp};width:110px"></td><td><input data-comp="range" value="${esc(r.range)}" style="${inp};width:110px"></td><td><button class="x" type="button" data-compdel="${i}" aria-label="ลบ">×</button></td></tr>`).join('')}
+      </tbody></table></div>
+      <div class="row" style="margin-top:8px"><button class="btn small" type="button" id="docCompAdd">เพิ่มแถว</button><button class="btn small" type="button" id="docCompReset">คำนวณใหม่จากสูตร</button>${d.coverage<99.5?'<span class="muted" style="font-size:12px">วัตถุดิบที่ไม่มีข้อมูล CAS ถูกรวมใน "FRAGRANCE" ตรวจสอบและเพิ่มสารที่ต้องแสดงเอง</span>':''}</div>
+      <h3 style="font-size:14px;margin-top:16px">Section 9 · คุณสมบัติทางกายภาพ</h3>
+      <div class="settings" style="margin-top:6px">${[['appearance','Appearance'],['odour','Odour'],['flash','Flash point'],['density','Relative density'],['solubility','Water solubility'],['shelf','Shelf life']].map(([k,l])=>`<div class="field"><label>${l}</label><input data-prop="${k}" value="${esc(d.props[k])}" maxlength="80"></div>`).join('')}</div>
+      <div class="field"><label>Section 14 · การขนส่ง</label><select data-d="transport" style="${inp};width:auto"><option value="UN1266" ${d.transport==='UN1266'?'selected':''}>UN 1266 Perfumery products with flammable solvents · Class 3 · PG III</option><option value="UN1169" ${d.transport==='UN1169'?'selected':''}>UN 1169 Extracts, aromatic, liquid · Class 3 · PG III</option><option value="none" ${d.transport==='none'?'selected':''}>Not regulated for transport</option></select></div>`;
+  }
+  box.innerHTML=`<div class="card" style="margin-top:18px">${head}${body}
+    <div class="row" style="margin-top:16px;gap:10px"><button class="btn" type="button" id="docPreview">ดูตัวอย่าง (ฉบับร่าง)</button><button class="btn primary" type="button" id="docIssue">ออกเอกสารและพิมพ์</button><span class="muted" style="font-size:12.5px">ออกแล้วได้เลขที่เอกสารอัตโนมัติ บันทึกลงทะเบียน และแก้ไขไม่ได้</span></div>
+    <div class="note-box" style="margin-top:12px">เอกสารจัดทำจากข้อมูลที่ทีมป้อนและข้อกำหนดที่โหลดไว้ ผู้ออกเอกสารเป็นผู้รับผิดชอบความถูกต้อง ควรตรวจกับ SDS ของวัตถุดิบและ IFRA Standards ฉบับล่าสุดก่อนส่งลูกค้า</div></div>`;
+}
+/* --- สร้าง HTML เอกสาร --- */
+const docHead=(title, sub)=>`<div class="dh"><div class="dlogo"><span class="dl1">SCENT</span><span class="dl2">SENSE</span></div><div class="dtitle"><h1>${title}</h1>${sub?`<div class="dsub">${sub}</div>`:''}</div></div>`;
+function ifraHtml(d, meta){
+  const no=meta.docNo||'DRAFT';
+  return `${docHead('CERTIFICATE OF CONFORMITY OF FRAGRANCE<br>MIXTURES WITH IFRA STANDARDS','')}
+    <p class="dsmall" style="text-align:center;text-decoration:underline">This Certificate assesses the conformity of a fragrance mixture with IFRA Standards and provides restrictions for use as necessary. It is based only on those materials subject to IFRA Standards for the toxicity endpoint(s) described in each Standard.</p>
+    <hr>
+    <p><u class="dlab">CERTIFYING PARTY:</u><br>${COMPANY.upper} ${esc(COMPANY.address)}</p>
+    <p><u class="dlab">CERTIFICATE DELIVERED TO:</u><br>Customer: ${esc(d.customer||'-')}${d.brand?` (Brand: ${esc(d.brand)})`:''}${d.address?`<br>${esc(d.address)}`:''}</p>
+    <p><u class="dlab">SCOPE OF THE CERTIFICATE:</u><br>Product: “${esc(d.product)}”${d.sampleCode?` (Sample code: ${esc(d.sampleCode)})`:''}</p>
+    <hr>
+    <p><u class="dlab">COMPULSORY INFORMATION:</u></p>
+    <p>We certify that the above mixture is in compliance with the Standards of the INTERNATIONAL FRAGRANCE ASSOCIATION (IFRA), up to and including the ${esc(d.amendment)}, provided it is used in the following category(ies) at a maximum concentration level of:</p>
+    <table class="dt"><thead><tr><th>Application Example</th><th>Class</th><th>Suggested Compound Level (%)</th></tr></thead><tbody>
+      ${d.cats.map(c=>`<tr><td><i>${esc(IFRA_APP[c.cls]||'')}</i></td><td style="text-align:center"><i>${esc(c.cls)}</i></td><td style="text-align:center"><i>${fmt(toNum(c.level)||0,2)} %</i></td></tr>`).join('')}</tbody></table>
+    <p class="dsmall"><i>*Actual use level or maximum use level</i></p>
+    <p>For other kinds of application or use at higher concentration levels, a new evaluation may be needed; please contact ${COMPANY.upper}</p>
+    <p style="margin-top:28px"><span>Signature <i>(if generated electronically, no signature)</i></span><span style="float:right">Date: ${docDate(d.date)}</span></p>
+    <p class="dsmall" style="margin-top:48px">Disclaimer: This Certificate provides restrictions for use of the specified product based only on those materials restricted by IFRA Standards for the toxicity endpoint(s) described in each Standard. This Certificate does not provide certification of a comprehensive safety assessment of all product constituents. This certificate is the responsibility of the fragrance supplier issuing it. It has not been prepared or endorsed by IFRA in anyway.</p>
+    <p class="dsmall dfoot">Certificate No. ${esc(no)}${meta.rev?` · Rev ${meta.rev}`:''} · Issued by ${esc(shortName(meta.issuedBy||S.me.email))}</p>`;
+}
+function sdsHtml(d, meta){
+  const H=d.hazards, P=sdsPStatements(H), sec=(n,t)=>`<div class="dsec">Section ${n}: ${t}</div>`, li=a=>`<ul>${a.map(x=>`<li>${x}</li>`).join('')}</ul>`;
+  const flam=H.find(c=>/^H22[456]$/.test(c)), rev=`Revision Date: ${docDate(d.date)}`, no=meta.docNo||'DRAFT';
+  const tr = d.transport==='none' ? '<p>Not regulated as dangerous goods for transport.</p>'
+    : `<p><b>IMDG (Maritime transport):</b></p>${li([`Proper shipping name: ${d.transport==='UN1169'?'Extracts, aromatic, liquid':'Perfumery products with flammable solvents'}`,'Class: 3 – Flammable liquids','Packing group: III',`UN number: ${d.transport==='UN1169'?'UN 1169':'UN 1266'}`,'EMS code: F-E, S-D'])}
+       <p><b>ADR/RID (Road/Rail transport):</b></p>${li(['Class: 3 – Flammable liquids',`UN number: ${d.transport==='UN1169'?'UN 1169':'UN 1266'}`,'Label: 3 (Flammable liquid)','Tunnel restriction code: D/E'])}`;
+  return `${docHead('Safety Data Sheet (SDS)', `According to Globally Harmonized System of Classification and Labelling of Chemicals (GHS)<br>${rev} · Document No. ${esc(no)}${meta.rev?` Rev ${meta.rev}`:''}`)}
+    ${sec(1,'Identification of the substance/mixture and of the company/undertaking')}
+    <table class="dkv"><tr><td class="dn">1.1</td><td colspan="2"><b>Product Identification</b></td></tr><tr><td></td><td>Customer Company Name</td><td>${esc(d.customer||'-')}</td></tr><tr><td></td><td>Customer Brand Name</td><td>${esc(d.brand||'-')}</td></tr><tr><td></td><td>Product Name</td><td>${esc(d.product)}</td></tr>${d.sampleCode?`<tr><td></td><td>Sample Code</td><td>${esc(d.sampleCode)}</td></tr>`:''}
+      <tr><td class="dn">1.2</td><td colspan="2"><b>Recommended Use of the Product</b></td></tr><tr><td></td><td>Application</td><td>${esc(d.application)}</td></tr>
+      <tr><td class="dn">1.3</td><td colspan="2"><b>Manufacturer Details</b></td></tr><tr><td></td><td>Company</td><td>${esc(COMPANY.name)}<br>${esc(COMPANY.address)}</td></tr><tr><td></td><td>Phone</td><td>${esc(COMPANY.phone)}</td></tr></table>
+    ${sec(2,'Hazards Identification')}
+    <p><b>2.1 Classification of Substance or Mixture</b><br>Classification according to Regulation (EC) No. 1272/2008</p>
+    ${H.length?li(GHS_H.filter(([c])=>H.includes(c)).map(([c,t,cls])=>`${esc(cls)} : ${c} – ${esc(t)}`)):'<p>Not classified as hazardous according to GHS criteria.</p>'}
+    <p><b>2.2 Label Elements</b><br>Labeling according to Regulation (EC) No. 1272/2008</p>
+    <div class="dpict">${sdsPictos(H).map(picto).join('')}</div>
+    <table class="dkv"><tr><td>Signal Word</td><td><b>${sdsSignal(H)}</b></td></tr></table>
+    <p><b>Hazard Statements</b></p><table class="dkv">${GHS_H.filter(([c])=>H.includes(c)).map(([c,t])=>`<tr><td class="dcode">${c}</td><td>${esc(t)}</td></tr>`).join('')||'<tr><td>-</td><td>None</td></tr>'}</table>
+    <p><b>Precautionary Statements</b></p><table class="dkv">${P.map(([c,t])=>`<tr><td class="dcode">${esc(c)}</td><td>${esc(t)}</td></tr>`).join('')}</table>
+    ${sec(3,'Composition/information on ingredient')}
+    <p><b>3.1 Chemical composition</b></p>
+    <table class="dt"><thead><tr><th>INCI Name</th><th>CAS No.</th><th>EC No.</th><th>Percentage (%)</th></tr></thead><tbody>${d.comp.map(r=>`<tr><td>${esc(r.name)}</td><td style="text-align:center">${esc(r.cas)}</td><td style="text-align:center">${esc(r.ec||'-')}</td><td style="text-align:center">${esc(r.range)}</td></tr>`).join('')}</tbody></table>
+    ${sec(4,'First Aid Measures')}
+    <p><b>4.1 Description of First Aid Measures</b></p>
+    <table class="dkv"><tr><td>Eye Contact:</td><td>Rinse immediately with plenty of clean water for at least 15 minutes, keeping eyelids open. If eye irritation persists, consult a physician.</td></tr><tr><td>Skin Contact:</td><td>If on skin (or hair), remove contaminated clothing immediately. Rinse skin thoroughly with plenty of clean water or take a shower. If skin irritation occurs, get medical advice/attention. Wash contaminated clothing before reuse.</td></tr><tr><td>Ingestion:</td><td>If swallowed, do not induce vomiting. Rinse your mouth and drink plenty of clean water immediately. Seek medical advice/attention if feeling unwell.</td></tr><tr><td>Inhalation:</td><td>Remove person to fresh air and keep comfortable for breathing. Seek medical advice if symptoms persist.</td></tr></table>
+    <p><b>4.2 Most Important Symptoms and Effects, Both Acute and Delayed</b></p>${li(GHS_H.filter(([c])=>H.includes(c)).map(([c,t])=>`${esc(t)} (${c})`))}
+    <p><b>4.3 Indication of Any Immediate Medical Attention and Special Treatment Needed</b></p>${li(['Treat symptomatically.','If exposed to a large amount of the substance or in case of severe symptoms, seek immediate medical attention.','Provide the physician with this SDS and relevant chemical information for appropriate treatment.'])}
+    ${sec(5,'Firefighting Measures')}
+    <p><b>5.1 Suitable Extinguishing Media</b><br>Use dry chemicals, carbon dioxide (CO₂), alcohol-resistant foam, or water spray (fine mist) to extinguish. Do not use high-pressure water streams, as they may spread fire and flammable vapors.</p>
+    <p><b>5.2 Special Hazards Arising from the Substance or Mixture</b></p>${li([flam?'Flammable liquid and vapor; may form explosive mixtures in confined areas.':'Combustible at elevated temperatures.','Vapors are heavier than air and may travel along the ground to ignition sources.','Hazardous decomposition products during combustion may include toxic gases such as carbon monoxide (CO) and carbon dioxide (CO₂).'])}
+    <p><b>5.3 Advice for Firefighters</b></p>${li(['Wear full protective fire-resistant clothing and self-contained breathing apparatus (SCBA).','Move containers from the fire area if it can be done without risk.','Use water spray to cool exposed containers and reduce vapor formation.','Do not inhale smoke, fumes, or vapors from fire.'])}
+    ${sec(6,'Accidental Release Measures')}
+    <p><b>6.1 Personal Precautions</b></p>${li(['Avoid direct contact with skin, eyes, and inhalation of vapors.','Use appropriate personal protective equipment (PPE), including chemical-resistant gloves, safety goggles, and protective clothing.','No smoking, open flames, or spark-generating tools in the spill area.'])}
+    <p><b>6.2 Environmental Precautions</b></p>${li(['Prevent the material from entering drains, surface water, or soil.','Certain essential oils may be hazardous to aquatic organisms.'])}
+    <p><b>6.3 Methods for Containment and Cleaning Up</b></p>${li(['Absorb spill with non-combustible absorbent materials such as earth, chemical absorbent, vermiculite, or sand.','Collect in tightly sealed containers for disposal according to local regulations. Do not discharge into the environment.','Clean contaminated surfaces with detergent and plenty of water after removal of the material.','In case of large spills, isolate the area and notify safety personnel immediately.'])}
+    <p><b>6.4 Additional Precautions</b></p>${li(['Ensure adequate ventilation to reduce vapor concentration.','If the product contacts skin, wash thoroughly with soap and clean water. If irritation persists, seek medical advice.'])}
+    ${sec(7,'Handling and Storage')}
+    <p><b>7.1 General Requirements</b></p>${li(['Storage areas must have appropriate safety measures.','Personnel with a history of skin sensitization should not handle this substance.'])}
+    <p><b>7.2 Precautions for Safe Handling</b></p>${li(['Wash thoroughly after handling.','Remove and wash contaminated clothing before reuse.','Ensure adequate ventilation, especially in confined areas.'])}
+    <p><b>7.3 Fire Prevention</b></p>${li(['Use only in well-ventilated areas.','Restrict access to authorized personnel only.','No smoking, eating, or drinking in areas where the substance is used.'])}
+    <p><b>7.4 Recommended Equipment and Procedures</b></p>${li(['For personal protective measures, see Section 8.','Follow warnings on the label and comply with industrial safety regulations.','Do not add water directly into the mixture.','Opened containers must be carefully resealed and stored upright to prevent leakage.'])}
+    ${sec(8,'Exposure Controls / Personal Protection')}
+    <p><b>8.1 Exposure Controls</b></p>${li(['Use clean, well-maintained PPE.','Store PPE in a clean area separate from the workplace.','Do not eat, drink, or smoke while handling the product.','Remove and wash contaminated clothing before reuse.','Ensure adequate ventilation, particularly in confined spaces.'])}
+    <p><b>8.2 Eye/Face Protection</b></p>${li(['Avoid contact with eyes.','Use safety goggles with splash protection, compliant with EN166.'])}
+    <p><b>8.3 Hand Protection</b></p>${li(['Protective skin creams may be used on exposed skin areas, but not after contact with the substance.','Use chemical-resistant gloves in accordance with EN374.','Recommended glove materials: nitrile rubber (NBR), polyvinyl alcohol (PVA).'])}
+    <p><b>8.4 Body Protection</b></p>${li(['Avoid direct skin contact.','Wear suitable protective clothing to prevent chemical penetration.','For heavy splashes: liquid-tight protective clothing (Type 3) per EN14605. For light splashes: limited chemical protective clothing (Type 6) per EN13034.','Work clothing should be cleaned regularly.','After handling the product, wash all contaminated body parts thoroughly.'])}
+    ${sec(9,'Physical and Chemical Properties')}
+    <table class="dkv dnum">${[['Appearance',d.props.appearance],['Odour',d.props.odour],['Odour threshold','Not available'],['pH','Not available'],['Boiling point','Not available'],['Initial boiling point and boiling range','Not available'],['Flash point',d.props.flash],['Evaporation rate','Not available'],['Flammability (solid/gas)','Not applicable'],['Upper/lower flammability or explosive limits','Not available'],['Vapour pressure','Not available'],['Vapour density','Not available'],['Relative density',d.props.density],['Water solubility',d.props.solubility],['Partition coefficient (n-octanol/water)','Not available'],['Auto-ignition temperature','Not available'],['Decomposition temperature','Not available'],['Viscosity','Not available'],['Explosive properties','Not available'],['Oxidising properties','Not available']].map(([k,v],i)=>`<tr><td class="dn">${i+1}.</td><td>${k}:</td><td>${esc(v)}</td></tr>`).join('')}</table>
+    ${sec(10,'Stability and Reactivity')}
+    <p><b>10.1 Reactivity</b></p>${li(['No data available.'])}<p><b>10.2 Chemical stability</b></p>${li(['Stable under recommended handling and storage conditions (see Section 7).',`Shelf life: ${esc(d.props.shelf)}`,'Protect from light and air','Store in original container'])}
+    <p><b>10.3 Possibility of hazardous reactions</b><br>At elevated temperatures, decomposition may release hazardous products such as carbon monoxide (CO), carbon dioxide (CO₂), vapors, and nitrogen oxides (NOₓ).</p>
+    <p><b>10.4 Conditions to avoid</b></p>${li(['Avoid moisture','Prevent contact with water (may cause exothermic reaction)','Keep away from heat and ignition sources'])}<p><b>10.5 Incompatible materials</b></p>${li(['Keep away from water, strong oxidizing agents, strong acids and bases.'])}
+    ${sec(11,'Toxicological Information')}
+    <p><b>11.1 Information on toxicological effects</b></p>${li(['Inhalation of vapors from solvents above occupational exposure limits may cause adverse health effects, including irritation of mucous membranes and respiratory system, as well as effects on kidneys, liver, and central nervous system.','Possible symptoms: headache, numbness, dizziness, fatigue, muscle weakness, and in severe cases, unconsciousness.','Prolonged or repeated skin contact may remove natural skin oils, leading to non-allergic contact dermatitis and potential dermal absorption.','Eye contact may cause irritation and reversible damage.','May cause allergic skin reactions.'])}
+    <p><b>11.2 Respiratory or skin sensitisation</b></p>${li([H.includes('H317')?'May cause an allergic skin reaction (H317).':'May cause skin sensitisation in susceptible individuals.'])}
+    <p><b>11.3 Carcinogenicity</b></p>${li(['IARC: None of the components present at ≥ 0.1% are identified as probable, possible, or confirmed human carcinogens by IARC.'])}
+    ${sec(12,'Ecological Information')}
+    <table class="dkv">${[['12.1 Toxicity:',['H400','H410','H411','H412'].some(c=>H.includes(c))?'Harmful or toxic to aquatic life (see Section 2). Avoid release to the environment.':'Not available'],['12.2 Persistence and degradability:','Not available'],['12.3 Bioaccumulative potential:','Not available'],['12.4 Mobility in soil:','Not available'],['12.5 Results of PBT and vPvB assessment:','Not required or not conducted'],['12.6 Other adverse effects:','Not available']].map(([k,v])=>`<tr><td>${k}</td><td>${esc(v)}</td></tr>`).join('')}</table>
+    ${sec(13,'Disposal Considerations')}
+    <p><b>13.1 General</b></p>${li(['Do not discharge into drains, water courses, or the environment.'])}<p><b>13.2 Waste</b></p>${li(['Recycle or dispose of in accordance with applicable local/national regulations via licensed waste disposal contractors. Do not contaminate soil or water.'])}<p><b>13.3 Contaminated packaging</b></p>${li(['Empty containers should be rinsed or fully emptied prior to disposal. Ensure labels remain intact. Dispose of via licensed waste handler.'])}
+    ${sec(14,'Transport Information')}${tr}
+    ${sec(15,'Regulatory Information')}${li(['Classified under GHS/CLP Regulation (EC) No. 1272/2008','Subject to IFRA Standards for use in cosmetic products','REACH: All components with CAS/EC numbers are listed on the permitted inventory'])}
+    ${sec(16,'Other Information')}${li(['This document is prepared for safety and operational purposes only.','It does not constitute a product quality guarantee.','Information is based on SDS data for key fragrance ingredients and international standards.',`Preparation date: ${docDate(d.date)}`,`Document No. ${esc(no)}${meta.rev?` · Rev ${meta.rev}`:''} · Prepared by ${esc(shortName(meta.issuedBy||S.me.email))}`])}<hr>`;
+}
+function showDoc(type, d, meta){
+  const html = type==='IFRA' ? ifraHtml(d, meta) : sdsHtml(d, meta);
+  $('#docPrint').innerHTML = html + (meta.docNo ? '' : '<div class="ddraft">DRAFT</div>');
+  $('#docTitle').textContent = (type==='IFRA'?'IFRA Certificate':'Safety Data Sheet')+' · '+(meta.docNo||'ฉบับร่าง');
+  $('#docOverlay').hidden=false; document.body.classList.add('doc-open'); $('#docPrint').scrollTop=0;
+}
+function closeDoc(){ $('#docOverlay').hidden=true; document.body.classList.remove('doc-open'); }
+function collectDocForm(){
+  const {type, d}=DOCF, box=$('#docForm');
+  box.querySelectorAll('[data-d]').forEach(i=>{ d[i.dataset.d]=i.value.trim(); });
+  if(type==='IFRA'){ d.cats=[...box.querySelectorAll('tbody tr[data-i]')].map(tr=>({cls:tr.querySelector('[data-cat=cls]').value, level:tr.querySelector('[data-cat=level]').value.trim()})); }
+  else { d.hazards=[...box.querySelectorAll('[data-h]:checked')].map(i=>i.dataset.h);
+    d.comp=[...box.querySelectorAll('tbody tr[data-i]')].map(tr=>({name:tr.querySelector('[data-comp=name]').value.trim(), cas:tr.querySelector('[data-comp=cas]').value.trim(), ec:tr.querySelector('[data-comp=ec]').value.trim()||'-', range:tr.querySelector('[data-comp=range]').value.trim()})).filter(r=>r.name);
+    box.querySelectorAll('[data-prop]').forEach(i=>{ d.props[i.dataset.prop]=i.value.trim(); }); }
+}
+function validateDoc(){
+  const {type, d}=DOCF;
+  if(!d.product) return 'ใส่ชื่อผลิตภัณฑ์';
+  if(type==='IFRA'){
+    if(!d.cats.length) return 'เพิ่มหมวดการใช้งานอย่างน้อย 1 หมวด';
+    for(const c of d.cats){ const v=toNum(c.level); if(!(v>=0 && v<=100)) return `ใส่ระดับที่แนะนำของหมวด ${c.cls} (0–100)`; const m=(d.maxByCat||{})[c.cls]; if(m!=null && v>m+1e-9) return `หมวด ${c.cls}: ระดับ ${fmt(v,2)}% เกินค่าสูงสุดตามข้อกำหนด ${fmt(m,2)}%`; }
+  } else if(!d.comp.length) return 'ต้องมีองค์ประกอบอย่างน้อย 1 แถว';
+  return null;
+}
+function docRegistryXlsx(){
+  if(typeof XLSX==='undefined'){ toast('โหลดตัวเขียน Excel ไม่สำเร็จ'); return; }
+  const byF=new Map(); DOCS.forEach(d=>{ if(d.status!=='issued') return; const o=byF.get(d.formulaId)||{}; if(!o[d.type]) o[d.type]=d; byF.set(d.formulaId,o); });
+  const a1=[['ชื่อสูตร','ชื่อผลิตภัณฑ์ (Sample Name)','ลูกค้า','แบรนด์','รหัสตัวอย่าง','เจ้าของสูตร','จำนวนรายการ','SDS เลขที่','SDS ออกเมื่อ','IFRA เลขที่','IFRA ออกเมื่อ']];
+  docFormulas().forEach(f=>{ const m=metaOf(f.p), o=byF.get(f.id)||{}; a1.push([f.p.name, m.sampleName, m.customer, m.brand, m.sampleCode, f.owner, f.p.lines.length, o.SDS?o.SDS.docNo:'', o.SDS?o.SDS.issuedAt:'', o.IFRA?o.IFRA.docNo:'', o.IFRA?o.IFRA.issuedAt:'']); });
+  const a2=[['เลขที่','ประเภท','ผลิตภัณฑ์','ลูกค้า','แบรนด์','เจ้าของสูตร','ออกเมื่อ','ออกโดย','สถานะ']].concat(DOCS.map(d=>[d.docNo,d.type,d.product,d.customer,d.brand,d.owner,d.issuedAt,d.issuedBy,d.status]));
+  const wb=XLSX.utils.book_new(); const w1=XLSX.utils.aoa_to_sheet(a1); w1['!cols']=a1[0].map(()=>({wch:22})); const w2=XLSX.utils.aoa_to_sheet(a2); w2['!cols']=a2[0].map(()=>({wch:22}));
+  XLSX.utils.book_append_sheet(wb,w1,'ทะเบียนสูตร'); XLSX.utils.book_append_sheet(wb,w2,'ประวัติเอกสาร');
+  const d=new Date(), stamp=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  saveFile(`ทะเบียนสูตร_${stamp}.xlsx`, XLSX.write(wb,{type:'array',bookType:'xlsx'}));
+}
+const docv=$('#docView');
+docv.addEventListener('input', e=>{ if(e.target.id==='docQ'){ docQ=e.target.value; const keep=DOCF; drawDocs(); DOCF=keep; drawDocForm(); } });
+docv.addEventListener('change', e=>{
+  const t=e.target; if(!DOCF) return;
+  if(t.dataset.cat==='cls'){ collectDocForm(); drawDocForm(); }
+  if(t.dataset.h){ collectDocForm(); drawDocForm(); }
+});
+docv.addEventListener('click', async e=>{
+  const t=e.target;
+  if(t.id==='docRefresh'){ t.disabled=true; try{ await loadDocs(true); DOCF=null; drawDocs(); }catch(err){ toast(errText(err)); } finally{ t.disabled=false; } return; }
+  if(t.id==='docXls'){ docRegistryXlsx(); return; }
+  if(t.dataset.docnew){ openDocForm(t.dataset.docnew, t.closest('tr').dataset.fid); return; }
+  if(t.dataset.docopen){ t.disabled=true; try{ const doc=await api('getDoc', t.dataset.docopen); const d=JSON.parse(doc.data||'{}'); showDoc(doc.type, d, {docNo:doc.docNo, rev:d.rev, issuedBy:doc.issuedBy}); }catch(err){ toast(errText(err)); } finally{ t.disabled=false; } return; }
+  if(t.dataset.docvoid){ if(!twoStep(t,'ยืนยันยกเลิก?')) return; try{ DOCS=await api('voidDoc', t.dataset.docvoid, ''); drawDocs(); toast('ยกเลิกเอกสารแล้ว'); }catch(err){ toast(errText(err)); } return; }
+  if(!DOCF) return;
+  if(t.id==='docClose'){ DOCF=null; drawDocForm(); return; }
+  if(t.id==='docCatAdd'){ collectDocForm(); DOCF.d.cats.push({cls:'4', level:''}); drawDocForm(); return; }
+  if(t.dataset.catdel!=null){ collectDocForm(); DOCF.d.cats.splice(+t.dataset.catdel,1); drawDocForm(); return; }
+  if(t.id==='docCatFill'){ collectDocForm(); DOCF.d.cats.forEach(c=>{ const m=DOCF.d.maxByCat[c.cls]; c.level = m==null ? c.level : String(Math.floor(m*100)/100); }); drawDocForm(); return; }
+  if(t.id==='docCompAdd'){ collectDocForm(); DOCF.d.comp.push({name:'', cas:'', ec:'-', range:'0.1-1'}); drawDocForm(); return; }
+  if(t.dataset.compdel!=null){ collectDocForm(); DOCF.d.comp.splice(+t.dataset.compdel,1); drawDocForm(); return; }
+  if(t.id==='docCompReset'){ collectDocForm(); DOCF.d.comp=docComposition(DOCF.f.p); DOCF.d.coverage=docLevels(DOCF.f.p).coverage; drawDocForm(); return; }
+  if(t.id==='docPreview'){ collectDocForm(); const err=validateDoc(); if(err){ toast(err); return; } showDoc(DOCF.type, DOCF.d, {}); return; }
+  if(t.id==='docIssue'){
+    collectDocForm(); const err=validateDoc(); if(err){ toast(err); return; }
+    if(t.dataset.confirm!=='1'){ t.dataset.confirm='1'; t.textContent='กดอีกครั้งเพื่อยืนยันออกเอกสาร'; setTimeout(()=>{ if(t.isConnected){ t.dataset.confirm=''; t.textContent='ออกเอกสารและพิมพ์'; } },4000); return; }
+    t.disabled=true;
+    try{ if(SYNC.dirty) await syncNow(); const {type, f, d}=DOCF; const payload=Object.assign({}, d, {formulaName:f.p.name, lines:f.p.lines.length}); delete payload.maxByCat;
+      const r=await api('issueDoc', type, f.id, JSON.stringify(payload)); const meta={docNo:r.docNo, rev:r.rev, issuedBy:r.issuedBy}; Object.assign(payload, meta);
+      DOCF=null; await loadDocs(true); drawDocs(); showDoc(type, payload, meta); toast(`ออกเอกสาร ${r.docNo} แล้ว`); }
+    catch(ex){ toast(errText(ex)); t.disabled=false; t.dataset.confirm=''; t.textContent='ออกเอกสารและพิมพ์'; }
+  }
+});
+$('#docOverlay').addEventListener('click', e=>{ if(e.target.id==='docOverlay' || e.target.id==='docCloseBtn') closeDoc(); if(e.target.id==='docPrintBtn') window.print(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape' && !$('#docOverlay').hidden) closeDoc(); });
 function renderAdmin(){
   if(!S.adm) return;
   if(adminTab==='forms') adminTab='dir';

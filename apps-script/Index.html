@@ -95,7 +95,18 @@ button,input,select,textarea{font:inherit;color:inherit}
 .brand{display:flex;align-items:center;gap:14px;font-weight:700;font-size:17px;white-space:nowrap}
 .brand-logo{height:40px;width:auto;display:block}
 .brand-sub{padding-left:14px;border-left:1px solid var(--line-strong);line-height:1.2}
-.gate-logo{height:60px;width:auto;display:block;margin-bottom:6px}
+.gate-logo{height:64px;width:auto;max-width:100%;object-fit:contain;display:block;align-self:center;margin:0 auto}
+.gate-card{align-items:center;text-align:center;max-width:420px!important;padding:40px 32px 28px!important;gap:14px!important;border-radius:20px!important;box-shadow:0 18px 50px #13214a1f!important}
+.gate-card::before{content:"";display:none}
+.gate-card .eyebrow{letter-spacing:.14em;font-size:11.5px;padding-top:12px;border-top:1px solid var(--line);width:100%;margin-top:2px}
+.gate-card h1{font-size:28px!important;margin-top:6px!important}
+.gate-card p{max-width:34ch;margin-inline:auto!important;line-height:1.65}
+.gate-card form,.gate-card #gsiBtn{width:100%;display:flex;justify-content:center}
+.gate-card .btn.primary{width:100%;justify-content:center}
+.gate-card .who{width:100%;text-align:left}
+.gate-card .gate-err{min-height:1.2em;width:100%}
+.gate-foot{margin-top:10px;font-size:11.5px;color:var(--ink-muted);letter-spacing:.04em}
+.gate{align-items:center}
 :root[data-theme="dark"] .brand-logo,:root[data-theme="dark"] .gate-logo{filter:brightness(0) invert(.94)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .brand-logo,:root:not([data-theme="light"]) .gate-logo{filter:brightness(0) invert(.94)}}
 @media (max-width:640px){.brand-sub{display:none}}
@@ -1121,7 +1132,7 @@ function showGate(kind, info){
       <button class="btn primary" type="button" id="btnRequest" ${S.requested?'disabled':''}>${S.requested?'ส่งคำขอแล้ว · รอผู้ดูแลอนุมัติ':'ส่งคำขอสิทธิ์ใช้งาน'}</button><div class="gate-err" id="gateErr"></div>`;
   else if(kind==='suspended') body = `${whoBlock()}<h1>บัญชีถูกระงับ</h1><p>บัญชีนี้ถูกระงับการใช้งานระบบต้นทุน ติดต่อผู้ดูแลระบบหากต้องการเปิดใช้อีกครั้ง</p>`;
   else if(kind==='error') body = `<h1>เปิดระบบไม่สำเร็จ</h1><p>${esc(info||'')}</p><button class="btn primary" type="button" id="btnRetry">ลองอีกครั้ง</button>`;
-  $('#gateCard').innerHTML = head + body;
+  $('#gateCard').innerHTML = head + body + '<div class="gate-foot">Scent &amp; Sense Laboratory Co., Ltd.</div>';
   if(kind==='signin') renderGsi(info);
 }
 function signOut(){

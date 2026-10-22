@@ -20,7 +20,9 @@ const HEAD = {
   Complaints: ['id', 'email', 'subject', 'detail', 'status', 'reply', 'repliedBy', 'createdAt', 'updatedAt'],
   Compliance: ['id', 'source', 'name', 'cas', 'type', 'limits', 'note', 'updatedAt'],
   RmMap:      ['code', 'cas', 'name', 'pct'],
-  Docs:       ['id', 'docNo', 'type', 'formulaId', 'owner', 'product', 'customer', 'brand', 'status', 'issuedAt', 'issuedBy', 'data']
+  Docs:       ['id', 'docNo', 'type', 'formulaId', 'owner', 'product', 'customer', 'brand', 'status', 'issuedAt', 'issuedBy', 'data'],
+  RmDocs:     ['id', 'codes', 'kind', 'file', 'driveId', 'size', 'supplier', 'sg', 'sgText', 'temp', 'density', 'flash', 'flashC',
+               'hazards', 'hazText', 'pictos', 'picSrc', 'signal', 'note', 'uploadedAt', 'uploadedBy', 'updatedAt', 'updatedBy']
 };
 const PERM_KEYS = ['calc', 'export', 'viewDb', 'editPrices', 'manageUsers'];
 const DEFAULT_ROLES = [
@@ -53,7 +55,8 @@ function doPost(e) {
     loadPricing: loadPricing, savePricing: savePricing, updatePrices: updatePrices,
     submitComplaint: submitComplaint, myComplaints: myComplaints, adminComplaints: adminComplaints, replyComplaint: replyComplaint,
     loadCompliance: loadCompliance, saveComplianceRules: saveComplianceRules, saveRmMap: saveRmMap,
-    listDocs: listDocs, getDoc: getDoc, issueDoc: issueDoc, voidDoc: voidDoc};
+    listDocs: listDocs, getDoc: getDoc, issueDoc: issueDoc, voidDoc: voidDoc,
+    listRmDocs: listRmDocs, getRmDocFile: getRmDocFile, uploadRmDoc: uploadRmDoc, updateRmDoc: updateRmDoc, deleteRmDoc: deleteRmDoc};
   let out;
   try {
     const req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
@@ -129,7 +132,7 @@ function ss_() {
 function sh_(n) {
   const ss = ss_();
   let s = ss.getSheetByName(n);
-  if (!s && HEAD[n] && (n === 'Formulas' || n === 'Pricing' || n === 'Complaints' || n === 'Compliance' || n === 'RmMap' || n === 'Docs')) {   // แท็บที่เพิ่มภายหลัง สร้างให้เองเมื่อยังไม่มี
+  if (!s && HEAD[n] && (n === 'Formulas' || n === 'Pricing' || n === 'Complaints' || n === 'Compliance' || n === 'RmMap' || n === 'Docs' || n === 'RmDocs')) {   // แท็บที่เพิ่มภายหลัง สร้างให้เองเมื่อยังไม่มี
     s = ss.insertSheet(n);
     s.getRange(1, 1, 1, HEAD[n].length).setValues([HEAD[n]]).setFontWeight('bold');
     s.setFrozenRows(1);
@@ -667,6 +670,117 @@ function voidDoc(id, reason) {
     sh_('Docs').getRange(r._row, 9).setValue('void');
     log_(m.email, 'voidDoc', String(r.docNo) + (reason ? ' · ' + String(reason).slice(0, 200) : ''));
     return listDocs();
+  });
+}
+
+/* ===== MSDS และเอกสารของวัตถุดิบ (RM) =====
+   ไฟล์ PDF เก็บในโฟลเดอร์ Google Drive ของเจ้าของระบบ (ไม่แชร์สาธารณะ) · ข้อมูลที่อ่านจากไฟล์ (ความถ่วงจำเพาะ g/ml จุดวาบไฟ รหัส H สัญลักษณ์ GHS) เก็บในแท็บ RmDocs
+   ดูและดาวน์โหลด: สิทธิ์ดูฐานข้อมูล (viewDb) · อัปโหลด แก้ไข ลบ: สิทธิ์แก้ราคา (editPrices = เจ้าของระบบ แอดมิน จัดซื้อ)
+   เอกสาร 1 ไฟล์ผูกได้หลายรหัส RM (เช่น วัตถุดิบเดียวกันหลายขนาดบรรจุ) · อัปโหลดชื่อไฟล์ + ประเภทเดิมซ้ำ = แทนที่ไฟล์เก่า (ไฟล์เก่าย้ายไปถังขยะ Drive กู้คืนได้ 30 วัน) */
+const RMDOC_FOLDER = 'Scent & Sense · MSDS วัตถุดิบ', RMDOC_KINDS = {MSDS: 1, IFRA: 1, ALLERGEN: 1, COA: 1, OTHER: 1};
+const RMDOC_MAX_BYTES = 15 * 1024 * 1024, RMDOC_PICTOS = {flame: 1, excl: 1, health: 1, corr: 1, env: 1, skull: 1, oxid: 1, gas: 1, expl: 1};
+const RM_CODE_RE = /^RM-[A-Z0-9]+-\d{3}-\d{1,4}$/;
+function rmDocFolder_() {
+  const id = getSetting_('rmDocFolder');
+  if (id) { try { return DriveApp.getFolderById(id); } catch (e) {} }
+  const f = DriveApp.createFolder(RMDOC_FOLDER);
+  setSetting_('rmDocFolder', f.getId());
+  return f;
+}
+function splitList_(v) { return String(v || '').split(',').map(function (s) { return s.trim(); }).filter(String); }
+function numOrNull_(v) { const n = Number(v); return v === '' || v === null || v === undefined || isNaN(n) ? null : n; }
+function rmDocOut_(r) {
+  return {id: String(r.id), codes: splitList_(r.codes), kind: String(r.kind), file: String(r.file), size: Number(r.size) || 0,
+    supplier: String(r.supplier || ''), sg: numOrNull_(r.sg), sgText: String(r.sgText || ''), temp: numOrNull_(r.temp), density: numOrNull_(r.density),
+    flash: String(r.flash || ''), flashC: numOrNull_(r.flashC), hazards: splitList_(r.hazards), hazText: String(r.hazText || ''),
+    pictos: splitList_(r.pictos), picSrc: String(r.picSrc || ''), signal: String(r.signal || ''), note: String(r.note || ''),
+    uploadedAt: iso_(r.uploadedAt), uploadedBy: String(r.uploadedBy || ''), updatedAt: iso_(r.updatedAt), updatedBy: String(r.updatedBy || '')};
+}
+/** ตรวจและทำความสะอาดข้อมูลที่หน้าเว็บส่งมา (ไม่รวมตัวไฟล์) */
+function rmDocClean_(d) {
+  d = d || {};
+  const codes = [];
+  (Array.isArray(d.codes) ? d.codes : splitList_(d.codes)).slice(0, 20).forEach(function (c) {
+    c = String(c || '').toUpperCase().trim();
+    if (!RM_CODE_RE.test(c)) throw new Error('รหัส RM ไม่ถูกต้อง: ' + c.slice(0, 30));
+    if (codes.indexOf(c) < 0) codes.push(c);
+  });
+  if (!codes.length) throw new Error('เลือกรหัส RM อย่างน้อย 1 รหัส');
+  const kind = String(d.kind || 'MSDS').toUpperCase();
+  if (!RMDOC_KINDS[kind]) throw new Error('ประเภทเอกสารไม่ถูกต้อง');
+  const num = function (v, lo, hi) { const n = numOrNull_(v); return n !== null && n >= lo && n <= hi ? n : ''; };
+  const hz = (Array.isArray(d.hazards) ? d.hazards : splitList_(d.hazards)).map(function (h) { return String(h).toUpperCase().trim(); })
+    .filter(function (h) { return /^(EU)?H\d{3}[A-Z]{0,2}$/.test(h); }).slice(0, 40);
+  const pic = (Array.isArray(d.pictos) ? d.pictos : splitList_(d.pictos)).filter(function (p) { return RMDOC_PICTOS[p]; });
+  const signal = String(d.signal || '').toUpperCase();
+  return {codes: codes.join(','), kind: kind, supplier: String(d.supplier || '').trim().slice(0, 120),
+    sg: num(d.sg, 0.3, 3), sgText: String(d.sgText || '').trim().slice(0, 120), temp: num(d.temp, 0, 60), density: num(d.density, 0.3, 3),
+    flash: String(d.flash || '').trim().slice(0, 60), flashC: num(d.flashC, -100, 400),
+    hazards: hz.filter(function (h, i) { return hz.indexOf(h) === i; }).join(','), hazText: String(d.hazText || '').trim().slice(0, 1000),
+    pictos: pic.filter(function (p, i) { return pic.indexOf(p) === i; }).join(','),
+    picSrc: {h: 1, text: 1, manual: 1, none: 1}[d.picSrc] ? String(d.picSrc) : 'manual',
+    signal: signal === 'DANGER' || signal === 'WARNING' ? signal : '', note: String(d.note || '').trim().slice(0, 500)};
+}
+function listRmDocs() {
+  const m = need_('viewDb');
+  return {items: rows_('RmDocs').map(rmDocOut_).sort(function (a, b) { return String(b.uploadedAt).localeCompare(String(a.uploadedAt)); }),
+    canEdit: !!m.isOwner || !!m.perms.editPrices};
+}
+/** ส่งไฟล์ PDF กลับเป็น base64 ให้หน้าเว็บดาวน์โหลด/เปิดดู */
+function getRmDocFile(id) {
+  const m = need_('viewDb');
+  const r = findRow_('RmDocs', 'id', String(id || ''));
+  if (!r) throw new Error('ไม่พบเอกสาร');
+  let blob;
+  try { blob = DriveApp.getFileById(String(r.driveId)).getBlob(); } catch (e) { throw new Error('ไม่พบไฟล์ใน Google Drive (อาจถูกลบหรือย้าย) อัปโหลดใหม่ได้'); }
+  log_(m.email, 'getRmDocFile', String(r.file) + ' · ' + String(r.codes));
+  return {name: String(r.file), mime: blob.getContentType() || 'application/pdf', b64: Utilities.base64Encode(blob.getBytes())};
+}
+function uploadRmDoc(meta, b64) {
+  return withLock_(function () {
+    const m = need_('editPrices');
+    const d = rmDocClean_(meta);
+    const file = String((meta && meta.file) || '').replace(/[\\\/:*?"<>|\u0000-\u001f]/g, ' ').trim().slice(0, 150);
+    if (!/\.pdf$/i.test(file)) throw new Error('รองรับเฉพาะไฟล์ PDF');
+    if (typeof b64 !== 'string' || !b64) throw new Error('ไม่มีข้อมูลไฟล์');
+    const bytes = Utilities.base64Decode(b64);
+    if (!bytes.length || bytes.length > RMDOC_MAX_BYTES) throw new Error('ไฟล์ต้องมีขนาดไม่เกิน 15 MB');
+    if (bytes[0] !== 37 || bytes[1] !== 80 || bytes[2] !== 68 || bytes[3] !== 70) throw new Error('ไฟล์นี้ไม่ใช่ PDF');
+    const f = rmDocFolder_().createFile(Utilities.newBlob(bytes, 'application/pdf', file));
+    const now = new Date(), sheet = sh_('RmDocs'), h = HEAD.RmDocs;
+    const ex = rows_('RmDocs').filter(function (r) { return String(r.kind) === d.kind && String(r.file).toLowerCase() === file.toLowerCase(); })[0];
+    const row = Object.assign({}, d, {id: ex ? String(ex.id) : 'r' + Utilities.getUuid().replace(/-/g, '').slice(0, 12), file: file, driveId: f.getId(), size: bytes.length,
+      uploadedAt: now, uploadedBy: m.email, updatedAt: now, updatedBy: m.email});
+    const vals = h.map(function (k) { return row[k] !== undefined ? row[k] : ''; });
+    if (ex) {
+      try { DriveApp.getFileById(String(ex.driveId)).setTrashed(true); } catch (e) {}
+      sheet.getRange(ex._row, 1, 1, h.length).setValues([vals]);
+    } else sheet.appendRow(vals);
+    log_(m.email, 'uploadRmDoc', (ex ? 'แทนที่ ' : '') + d.kind + ' ' + file + ' → ' + d.codes);
+    return rmDocOut_(row);
+  });
+}
+/** แก้ข้อมูลของเอกสาร (รหัส RM ที่ผูก ความถ่วงจำเพาะ สัญลักษณ์ ฯลฯ) โดยไม่เปลี่ยนไฟล์ */
+function updateRmDoc(id, meta) {
+  return withLock_(function () {
+    const m = need_('editPrices');
+    const ex = findRow_('RmDocs', 'id', String(id || ''));
+    if (!ex) throw new Error('ไม่พบเอกสาร');
+    const row = Object.assign({}, ex, rmDocClean_(meta), {updatedAt: new Date(), updatedBy: m.email});
+    sh_('RmDocs').getRange(ex._row, 1, 1, HEAD.RmDocs.length).setValues([HEAD.RmDocs.map(function (k) { return row[k] !== undefined ? row[k] : ''; })]);
+    log_(m.email, 'updateRmDoc', String(ex.file) + ' → ' + row.codes);
+    return rmDocOut_(row);
+  });
+}
+function deleteRmDoc(id) {
+  return withLock_(function () {
+    const m = need_('editPrices');
+    const ex = findRow_('RmDocs', 'id', String(id || ''));
+    if (!ex) throw new Error('ไม่พบเอกสาร');
+    try { DriveApp.getFileById(String(ex.driveId)).setTrashed(true); } catch (e) {}
+    sh_('RmDocs').deleteRow(ex._row);
+    log_(m.email, 'deleteRmDoc', String(ex.kind) + ' ' + String(ex.file) + ' · ' + String(ex.codes));
+    return {deleted: String(ex.id)};
   });
 }
 

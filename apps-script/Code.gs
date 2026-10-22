@@ -19,7 +19,8 @@ const HEAD = {
   Pricing:  ['key', 'owner', 'formulaId', 'sell', 'updatedAt', 'updatedBy'],
   Complaints: ['id', 'email', 'subject', 'detail', 'status', 'reply', 'repliedBy', 'createdAt', 'updatedAt'],
   Compliance: ['id', 'source', 'name', 'cas', 'type', 'limits', 'note', 'updatedAt'],
-  RmMap:      ['code', 'cas', 'name', 'pct']
+  RmMap:      ['code', 'cas', 'name', 'pct'],
+  Docs:       ['id', 'docNo', 'type', 'formulaId', 'owner', 'product', 'customer', 'brand', 'status', 'issuedAt', 'issuedBy', 'data']
 };
 const PERM_KEYS = ['calc', 'export', 'viewDb', 'editPrices', 'manageUsers'];
 const DEFAULT_ROLES = [
@@ -51,7 +52,8 @@ function doPost(e) {
     loadMyFormulas: loadMyFormulas, saveMyFormulas: saveMyFormulas, adminFormulas: adminFormulas,
     loadPricing: loadPricing, savePricing: savePricing, updatePrices: updatePrices,
     submitComplaint: submitComplaint, myComplaints: myComplaints, adminComplaints: adminComplaints, replyComplaint: replyComplaint,
-    loadCompliance: loadCompliance, saveComplianceRules: saveComplianceRules, saveRmMap: saveRmMap};
+    loadCompliance: loadCompliance, saveComplianceRules: saveComplianceRules, saveRmMap: saveRmMap,
+    listDocs: listDocs, getDoc: getDoc, issueDoc: issueDoc, voidDoc: voidDoc};
   let out;
   try {
     const req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
@@ -127,7 +129,7 @@ function ss_() {
 function sh_(n) {
   const ss = ss_();
   let s = ss.getSheetByName(n);
-  if (!s && HEAD[n] && (n === 'Formulas' || n === 'Pricing' || n === 'Complaints' || n === 'Compliance' || n === 'RmMap')) {   // แท็บที่เพิ่มภายหลัง สร้างให้เองเมื่อยังไม่มี
+  if (!s && HEAD[n] && (n === 'Formulas' || n === 'Pricing' || n === 'Complaints' || n === 'Compliance' || n === 'RmMap' || n === 'Docs')) {   // แท็บที่เพิ่มภายหลัง สร้างให้เองเมื่อยังไม่มี
     s = ss.insertSheet(n);
     s.getRange(1, 1, 1, HEAD[n].length).setValues([HEAD[n]]).setFontWeight('bold');
     s.setFrozenRows(1);
@@ -602,6 +604,69 @@ function saveRmMap(items) {
     setSetting_('rmMapBy', m.email);
     log_(m.email, 'saveRmMap', rows.length + ' แถว');
     return {saved: rows.length};
+  });
+}
+
+/* ===== เอกสาร SDS (MSDS) และ IFRA Certificate ต่อสูตร + ทะเบียนสูตร =====
+   ออกเอกสารได้เมื่อมีสิทธิ์ส่งออก (export) · เจ้าของสูตรออกได้เฉพาะสูตรตัวเอง เจ้าของระบบ/admin ออกได้ทุกสูตร
+   เลขที่เอกสารรันอัตโนมัติ SDS-ปี-ลำดับ / IFRA-ปี-ลำดับ · เนื้อหาที่ออกแล้วเก็บเป็น JSON เพื่อพิมพ์ซ้ำได้เหมือนเดิม */
+const DOC_TYPES = {SDS: 1, IFRA: 1}, DOC_DATA_MAX = 45000;
+function docOut_(r, withData) {
+  const o = {id: String(r.id), docNo: String(r.docNo), type: String(r.type), formulaId: String(r.formulaId), owner: String(r.owner).toLowerCase(),
+    product: String(r.product), customer: String(r.customer), brand: String(r.brand), status: String(r.status || 'issued'),
+    issuedAt: iso_(r.issuedAt), issuedBy: String(r.issuedBy)};
+  if (withData) o.data = String(r.data || '');
+  return o;
+}
+function docVisible_(m, r) { return isAdmin_(m) || String(r.owner).toLowerCase() === m.email; }
+function listDocs() {
+  const m = need_('calc');
+  return rows_('Docs').filter(function (r) { return docVisible_(m, r); }).map(function (r) { return docOut_(r, false); })
+    .sort(function (a, b) { return String(b.issuedAt).localeCompare(String(a.issuedAt)); });
+}
+function getDoc(id) {
+  const m = need_('calc');
+  const r = findRow_('Docs', 'id', String(id || ''));
+  if (!r || !docVisible_(m, r)) throw new Error('ไม่พบเอกสาร');
+  return docOut_(r, true);
+}
+function issueDoc(type, formulaId, data) {
+  return withLock_(function () {
+    const m = need_('export');
+    type = String(type || '').toUpperCase();
+    if (!DOC_TYPES[type]) throw new Error('ประเภทเอกสารไม่ถูกต้อง');
+    formulaId = String(formulaId || '');
+    if (!/^[A-Za-z0-9_-]{3,40}$/.test(formulaId)) throw new Error('รหัสสูตรไม่ถูกต้อง');
+    const f = findRow_('Formulas', 'id', formulaId);
+    if (!f) throw new Error('ไม่พบสูตรนี้ในระบบ (บันทึกสูตรก่อนออกเอกสาร)');
+    if (!isAdmin_(m) && String(f.owner).toLowerCase() !== m.email) throw new Error('FORBIDDEN');
+    let d = {};
+    try { d = JSON.parse(String(data || '{}')); } catch (e) { throw new Error('ข้อมูลเอกสารไม่ถูกต้อง'); }
+    const product = String(d.product || f.name || '').trim().slice(0, 200);
+    if (!product) throw new Error('ใส่ชื่อผลิตภัณฑ์');
+    const now = new Date(), year = Utilities.formatDate(now, 'Asia/Bangkok', 'yyyy');
+    const all = rows_('Docs');
+    const seq = all.filter(function (r) { return String(r.type) === type && String(r.docNo).indexOf(type + '-' + year + '-') === 0; }).length + 1;
+    const rev = all.filter(function (r) { return String(r.type) === type && String(r.formulaId) === formulaId; }).length + 1;
+    const docNo = type + '-' + year + '-' + ('0000' + seq).slice(-4);
+    d.docNo = docNo; d.rev = rev; d.issuedAt = now.toISOString(); d.issuedBy = m.email; d.formulaOwner = String(f.owner).toLowerCase();
+    const json = JSON.stringify(d);
+    if (json.length > DOC_DATA_MAX) throw new Error('เนื้อหาเอกสารใหญ่เกินไป');
+    const id = 'd' + Utilities.getUuid().replace(/-/g, '').slice(0, 12);
+    sh_('Docs').appendRow([id, docNo, type, formulaId, String(f.owner).toLowerCase(), product, String(d.customer || '').slice(0, 200), String(d.brand || '').slice(0, 120), 'issued', now, m.email, json]);
+    log_(m.email, 'issueDoc', docNo + ' · ' + product + ' (rev ' + rev + ')');
+    return {id: id, docNo: docNo, rev: rev, issuedAt: d.issuedAt, issuedBy: m.email};
+  });
+}
+function voidDoc(id, reason) {
+  return withLock_(function () {
+    const m = me_();
+    if (!isAdmin_(m)) throw new Error('FORBIDDEN');
+    const r = findRow_('Docs', 'id', String(id || ''));
+    if (!r) throw new Error('ไม่พบเอกสาร');
+    sh_('Docs').getRange(r._row, 9).setValue('void');
+    log_(m.email, 'voidDoc', String(r.docNo) + (reason ? ' · ' + String(reason).slice(0, 200) : ''));
+    return listDocs();
   });
 }
 

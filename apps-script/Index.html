@@ -105,6 +105,13 @@ button,input,select,textarea{font:inherit;color:inherit}
 .gate-card .btn.primary{width:100%;justify-content:center}
 .gate-card .who{width:100%;text-align:left}
 .gate-card .gate-err{min-height:1.2em;width:100%}
+/* ฟอร์มออกเอกสาร: ช่องกรอกสูงเท่ากัน ป้ายบรรทัดเดียว เรียงตรงแนวเดียวกัน */
+#docForm .settings{grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px 16px;align-items:end}
+#docForm .field{display:flex;flex-direction:column;justify-content:flex-end;min-width:0}
+#docForm .field label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:5px}
+#docForm .field input,#docForm .field select{height:40px;box-sizing:border-box;width:100%;font-size:14px}
+#docForm .field input[type=date]{padding-block:0}
+#docForm .field[style*="grid-column"]{grid-column:1/-1}
 .gate-foot{margin-top:10px;font-size:11.5px;color:var(--ink-muted);letter-spacing:.04em}
 .gate{align-items:center}
 :root[data-theme="dark"] .brand-logo,:root[data-theme="dark"] .gate-logo{filter:brightness(0) invert(.94)}
@@ -2110,8 +2117,8 @@ function drawDocForm(){
   const head=`<div class="row" style="justify-content:space-between;align-items:flex-start"><div><h3 style="font-size:18px">${type==='SDS'?'ออก Safety Data Sheet (SDS / MSDS)':'ออก IFRA Certificate of Conformity'}</h3><div class="muted" style="font-size:13px">สูตร: ${esc(f.p.name)} · ${f.p.lines.length} รายการ</div></div><button class="btn small" type="button" id="docClose">ปิด</button></div>
     <div class="settings" style="margin-top:12px">
       <div class="field" style="grid-column:1/-1"><label>ชื่อผลิตภัณฑ์ (Product Name)</label><input data-d="product" value="${esc(d.product)}" maxlength="200"></div>
-      <div class="field"><label>ลูกค้า (Customer Company Name)</label><input data-d="customer" value="${esc(d.customer)}" maxlength="200"></div>
-      <div class="field"><label>แบรนด์ (Brand Name)</label><input data-d="brand" value="${esc(d.brand)}" maxlength="120"></div>
+      <div class="field"><label>ลูกค้า (Customer)</label><input data-d="customer" value="${esc(d.customer)}" maxlength="200"></div>
+      <div class="field"><label>แบรนด์ (Brand)</label><input data-d="brand" value="${esc(d.brand)}" maxlength="120"></div>
       <div class="field"><label>วันที่ออกเอกสาร</label><input data-d="date" type="date" value="${esc(d.date)}"></div>
       ${type==='IFRA'?`<div class="field" style="grid-column:1/-1"><label>ที่อยู่ลูกค้า (Customer Address)</label><input data-d="address" value="${esc(d.address)}" maxlength="300" placeholder="เช่น 58, 60, 62, 64, 66 Soi Saranakhom 10, Saranakhom Road, Si Kan, Don Mueang, Bangkok 10210, Thailand"></div>`:''}
     </div>`;

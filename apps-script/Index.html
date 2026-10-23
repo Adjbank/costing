@@ -1099,11 +1099,19 @@ function clearToken(){ S.token=null; try{ sessionStorage.removeItem(TOKEN_KEY); 
 async function httpApi(fn, ...args){
   const tok=getToken();
   if(!tok){ authLost(); throw new Error('AUTH_REQUIRED'); }
+  /* Apps Script ตอบผิดพลาดเป็นครั้งคราว (หน้า HTML / 404 แทน JSON โดยเฉพาะหลังปล่อยเวอร์ชันใหม่) → ลองซ้ำเองสูงสุด 4 ครั้ง */
   let j;
-  try{
-    const r=await fetch(CFG.apiUrl, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify({fn, args, idToken:tok})});
-    j=await r.json();
-  }catch(e){ throw new Error('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง'); }
+  for(let attempt=0; ; attempt++){
+    try{
+      const r=await fetch(CFG.apiUrl, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify({fn, args, idToken:tok})});
+      const txt=await r.text();
+      if(!/^\s*\{/.test(txt)) throw new Error('bad response '+r.status);
+      j=JSON.parse(txt); break;
+    }catch(e){
+      if(attempt>=3) throw new Error('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง');
+      await new Promise(res=>setTimeout(res, 800*(attempt+1)));
+    }
+  }
   if(!j.ok){ if(/^AUTH_/.test(j.error)) authLost(); throw new Error(j.error); }
   return j.result;
 }

@@ -22,11 +22,13 @@ const HEAD = {
   RmMap:      ['code', 'cas', 'name', 'pct'],
   Docs:       ['id', 'docNo', 'type', 'formulaId', 'owner', 'product', 'customer', 'brand', 'status', 'issuedAt', 'issuedBy', 'data'],
   RmDocs:     ['id', 'codes', 'kind', 'file', 'driveId', 'size', 'supplier', 'sg', 'sgText', 'temp', 'density', 'flash', 'flashC',
-               'hazards', 'hazText', 'pictos', 'picSrc', 'signal', 'note', 'uploadedAt', 'uploadedBy', 'updatedAt', 'updatedBy']
+               'hazards', 'hazText', 'pictos', 'picSrc', 'signal', 'note', 'uploadedAt', 'uploadedBy', 'updatedAt', 'updatedBy'],
+  Briefs:     ['id', 'kind', 'brand', 'status', 'owner', 'contact', 'phone', 'email', 'summary', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy', 'data'],
+  Scents:     ['id', 'code', 'name', 'briefId', 'family', 'status', 'owner', 'formulaId', 'createdAt', 'updatedAt', 'updatedBy', 'data']
 };
-const PERM_KEYS = ['calc', 'export', 'viewDb', 'editPrices', 'manageUsers'];
+const PERM_KEYS = ['calc', 'export', 'viewDb', 'editPrices', 'manageUsers', 'perfumer'];
 const DEFAULT_ROLES = [
-  ['admin',   'ผู้ดูแลระบบ', {calc:true, export:true, viewDb:true, editPrices:true, manageUsers:true}, true],
+  ['admin',   'ผู้ดูแลระบบ', {calc:true, export:true, viewDb:true, editPrices:true, manageUsers:true, perfumer:true}, true],
   ['costing', 'ทีมต้นทุน',   {calc:true, export:true, viewDb:true}, false],
   ['pc',      'จัดซื้อ / PC', {calc:true, viewDb:true, editPrices:true}, false],
   ['viewer',  'ดูอย่างเดียว', {viewDb:true}, false]
@@ -56,7 +58,8 @@ function doPost(e) {
     submitComplaint: submitComplaint, myComplaints: myComplaints, adminComplaints: adminComplaints, replyComplaint: replyComplaint,
     loadCompliance: loadCompliance, saveComplianceRules: saveComplianceRules, saveRmMap: saveRmMap,
     listDocs: listDocs, getDoc: getDoc, issueDoc: issueDoc, voidDoc: voidDoc,
-    listRmDocs: listRmDocs, getRmDocFile: getRmDocFile, uploadRmDoc: uploadRmDoc, updateRmDoc: updateRmDoc, deleteRmDoc: deleteRmDoc};
+    listRmDocs: listRmDocs, getRmDocFile: getRmDocFile, uploadRmDoc: uploadRmDoc, updateRmDoc: updateRmDoc, deleteRmDoc: deleteRmDoc,
+    listBriefs: listBriefs, saveBrief: saveBrief, deleteBrief: deleteBrief, listScents: listScents, saveScent: saveScent, deleteScent: deleteScent};
   let out;
   try {
     const req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
@@ -132,7 +135,7 @@ function ss_() {
 function sh_(n) {
   const ss = ss_();
   let s = ss.getSheetByName(n);
-  if (!s && HEAD[n] && (n === 'Formulas' || n === 'Pricing' || n === 'Complaints' || n === 'Compliance' || n === 'RmMap' || n === 'Docs' || n === 'RmDocs')) {   // แท็บที่เพิ่มภายหลัง สร้างให้เองเมื่อยังไม่มี
+  if (!s && HEAD[n] && (n === 'Formulas' || n === 'Pricing' || n === 'Complaints' || n === 'Compliance' || n === 'RmMap' || n === 'Docs' || n === 'RmDocs' || n === 'Briefs' || n === 'Scents')) {   // แท็บที่เพิ่มภายหลัง สร้างให้เองเมื่อยังไม่มี
     s = ss.insertSheet(n);
     s.getRange(1, 1, 1, HEAD[n].length).setValues([HEAD[n]]).setFontWeight('bold');
     s.setFrozenRows(1);
@@ -208,13 +211,20 @@ function me_() {
   else if (u) { role = String(u.role); active = activeOf_(u.active); }
   else if (autoJoin && rr.roles[defRole]) { role = defRole; auto = true; }
   const isOwner = email === owner;
-  const perms = isOwner ? allPerms_() : (role && rr.roles[role] ? rr.roles[role].perms : {});
+  const perms = isOwner || role === 'admin' ? allPerms_() : (role && rr.roles[role] ? rr.roles[role].perms : {});
   return {email: email, isOwner: isOwner, role: role, roleName: role && rr.roles[role] ? rr.roles[role].name : '',
           active: active, auto: auto, perms: perms, roles: rr.roles, order: rr.order, autoJoin: autoJoin, defRole: defRole, owner: owner};
 }
+/** บทบาท admin (ผู้ดูแลระบบ) มีทุกสิทธิ์เสมอ แม้สิทธิ์ใหม่จะยังไม่อยู่ในชีต Roles */
+function hasPerm_(m, perm) { return !!(m.isOwner || m.role === 'admin' || m.perms[perm]); }
 function need_(perm) {
   const m = me_();
-  if (!m.role || !m.active || !(m.isOwner || m.perms[perm])) throw new Error('FORBIDDEN');
+  if (!m.role || !m.active || !hasPerm_(m, perm)) throw new Error('FORBIDDEN');
+  return m;
+}
+function needAny_(perms) {
+  const m = me_();
+  if (!m.role || !m.active || !perms.some(function (p) { return hasPerm_(m, p); })) throw new Error('FORBIDDEN');
   return m;
 }
 
@@ -780,6 +790,109 @@ function deleteRmDoc(id) {
     try { DriveApp.getFileById(String(ex.driveId)).setTrashed(true); } catch (e) {}
     sh_('RmDocs').deleteRow(ex._row);
     log_(m.email, 'deleteRmDoc', String(ex.kind) + ' ' + String(ex.file) + ' · ' + String(ex.codes));
+    return {deleted: String(ex.id)};
+  });
+}
+
+/* ===== Perfumer: บรีฟออกแบบกลิ่น (Briefs) และคลังกลิ่น (Scents) =====
+   ต้นแบบฟอร์มบรีฟ: ODM Brief · SV Brief · Brand Archetype Quiz ของ Scent & Sense
+   ดู: สิทธิ์ perfumer, calc หรือ viewDb · สร้าง/แก้ไข: สิทธิ์ perfumer (ทีมแก้ไขร่วมกันได้ทุกรายการ) · ลบ: ผู้สร้างหรือ admin
+   ฟิลด์หลักเก็บเป็นคอลัมน์เพื่อค้นหา ส่วนรายละเอียดทั้งหมดเก็บเป็น JSON ในคอลัมน์ data · รหัสกลิ่นรันอัตโนมัติ SC-ปี-ลำดับ */
+const PF_VIEW = ['perfumer', 'calc', 'viewDb'], PF_DATA_MAX = 45000;
+const PF_KINDS = {ODM: 1, SV: 1, INT: 1};
+const PF_BRIEF_STATUS = {new: 1, design: 1, sample: 1, revise: 1, approved: 1, closed: 1, lost: 1};
+const PF_SCENT_STATUS = {draft: 1, trial: 1, sent: 1, approved: 1, production: 1, retired: 1};
+function pfJson_(d) {
+  const s = JSON.stringify(d && typeof d === 'object' ? d : {});
+  if (s.length > PF_DATA_MAX) throw new Error('ข้อมูลใหญ่เกินไป (ลดความยาวข้อความ)');
+  return s;
+}
+function pfStr_(v, n) { return String(v === undefined || v === null ? '' : v).trim().slice(0, n); }
+function briefOut_(r) {
+  let d = {}; try { d = JSON.parse(r.data || '{}'); } catch (e) {}
+  return {id: String(r.id), kind: String(r.kind), brand: String(r.brand), status: String(r.status), owner: String(r.owner).toLowerCase(),
+    contact: String(r.contact || ''), phone: String(r.phone || ''), email: String(r.email || ''), summary: String(r.summary || ''),
+    createdAt: iso_(r.createdAt), createdBy: String(r.createdBy || ''), updatedAt: iso_(r.updatedAt), updatedBy: String(r.updatedBy || ''), data: d};
+}
+function scentOut_(r) {
+  let d = {}; try { d = JSON.parse(r.data || '{}'); } catch (e) {}
+  return {id: String(r.id), code: String(r.code), name: String(r.name), briefId: String(r.briefId || ''), family: String(r.family || ''),
+    status: String(r.status), owner: String(r.owner).toLowerCase(), formulaId: String(r.formulaId || ''),
+    createdAt: iso_(r.createdAt), updatedAt: iso_(r.updatedAt), updatedBy: String(r.updatedBy || ''), data: d};
+}
+function pfSort_(a, b) { return String(b.updatedAt).localeCompare(String(a.updatedAt)); }
+function listBriefs() { needAny_(PF_VIEW); return rows_('Briefs').map(briefOut_).sort(pfSort_); }
+function listScents() { needAny_(PF_VIEW); return rows_('Scents').map(scentOut_).sort(pfSort_); }
+function saveBrief(b) {
+  return withLock_(function () {
+    const m = need_('perfumer');
+    b = b || {};
+    const brand = pfStr_(b.brand, 200);
+    if (!brand) throw new Error('ใส่ชื่อแบรนด์ / ชื่อลูกค้า');
+    const kind = String(b.kind || 'ODM').toUpperCase();
+    if (!PF_KINDS[kind]) throw new Error('ประเภทบรีฟไม่ถูกต้อง');
+    const status = PF_BRIEF_STATUS[b.status] ? String(b.status) : 'new';
+    const now = new Date(), ex = b.id ? findRow_('Briefs', 'id', String(b.id)) : null;
+    if (b.id && !ex) throw new Error('ไม่พบบรีฟนี้ (อาจถูกลบไปแล้ว)');
+    const owner = ex ? String(ex.owner) : m.email;
+    const row = {id: ex ? String(ex.id) : 'b' + Utilities.getUuid().replace(/-/g, '').slice(0, 12), kind: kind, brand: brand, status: status, owner: owner,
+      contact: pfStr_(b.contact, 120), phone: pfStr_(b.phone, 60), email: pfStr_(b.email, 120), summary: pfStr_(b.summary, 300),
+      createdAt: ex ? ex.createdAt : now, createdBy: ex ? String(ex.createdBy) : m.email, updatedAt: now, updatedBy: m.email, data: pfJson_(b.data)};
+    const h = HEAD.Briefs, vals = h.map(function (k) { return row[k]; });
+    if (ex) sh_('Briefs').getRange(ex._row, 1, 1, h.length).setValues([vals]); else sh_('Briefs').appendRow(vals);
+    log_(m.email, 'saveBrief', (ex ? 'แก้ไข ' : 'สร้าง ') + kind + ' · ' + brand + ' [' + status + ']');
+    return briefOut_(row);
+  });
+}
+function deleteBrief(id) {
+  return withLock_(function () {
+    const m = need_('perfumer');
+    const ex = findRow_('Briefs', 'id', String(id || ''));
+    if (!ex) throw new Error('ไม่พบบรีฟนี้');
+    if (!isAdmin_(m) && String(ex.createdBy).toLowerCase() !== m.email && String(ex.owner).toLowerCase() !== m.email) throw new Error('FORBIDDEN');
+    if (rows_('Scents').some(function (s) { return String(s.briefId) === String(ex.id); })) throw new Error('ยังมีกลิ่นที่อ้างถึงบรีฟนี้ ย้ายหรือลบกลิ่นก่อน');
+    sh_('Briefs').deleteRow(ex._row);
+    log_(m.email, 'deleteBrief', String(ex.kind) + ' · ' + String(ex.brand));
+    return {deleted: String(ex.id)};
+  });
+}
+function saveScent(s) {
+  return withLock_(function () {
+    const m = need_('perfumer');
+    s = s || {};
+    const name = pfStr_(s.name, 160);
+    if (!name) throw new Error('ใส่ชื่อกลิ่น');
+    const status = PF_SCENT_STATUS[s.status] ? String(s.status) : 'draft';
+    const briefId = pfStr_(s.briefId, 40);
+    if (briefId && !findRow_('Briefs', 'id', briefId)) throw new Error('ไม่พบบรีฟที่เลือก');
+    const formulaId = pfStr_(s.formulaId, 40);
+    if (formulaId && !/^[A-Za-z0-9_-]{3,40}$/.test(formulaId)) throw new Error('รหัสสูตรไม่ถูกต้อง');
+    const now = new Date(), ex = s.id ? findRow_('Scents', 'id', String(s.id)) : null;
+    if (s.id && !ex) throw new Error('ไม่พบกลิ่นนี้ (อาจถูกลบไปแล้ว)');
+    let code = ex ? String(ex.code) : '';
+    if (!code) {
+      const year = Utilities.formatDate(now, 'Asia/Bangkok', 'yyyy');
+      const seq = rows_('Scents').filter(function (r) { return String(r.code).indexOf('SC-' + year + '-') === 0; }).length + 1;
+      code = 'SC-' + year + '-' + ('0000' + seq).slice(-4);
+    }
+    const row = {id: ex ? String(ex.id) : 's' + Utilities.getUuid().replace(/-/g, '').slice(0, 12), code: code, name: name, briefId: briefId,
+      family: pfStr_(s.family, 80), status: status, owner: ex ? String(ex.owner) : m.email, formulaId: formulaId,
+      createdAt: ex ? ex.createdAt : now, updatedAt: now, updatedBy: m.email, data: pfJson_(s.data)};
+    const h = HEAD.Scents, vals = h.map(function (k) { return row[k]; });
+    if (ex) sh_('Scents').getRange(ex._row, 1, 1, h.length).setValues([vals]); else sh_('Scents').appendRow(vals);
+    log_(m.email, 'saveScent', (ex ? 'แก้ไข ' : 'สร้าง ') + code + ' · ' + name + ' [' + status + ']');
+    return scentOut_(row);
+  });
+}
+function deleteScent(id) {
+  return withLock_(function () {
+    const m = need_('perfumer');
+    const ex = findRow_('Scents', 'id', String(id || ''));
+    if (!ex) throw new Error('ไม่พบกลิ่นนี้');
+    if (!isAdmin_(m) && String(ex.owner).toLowerCase() !== m.email) throw new Error('FORBIDDEN');
+    if (String(ex.status) === 'production') throw new Error('กลิ่นที่ใช้ผลิตอยู่ลบไม่ได้ เปลี่ยนสถานะเป็น "เลิกใช้" แทน');
+    sh_('Scents').deleteRow(ex._row);
+    log_(m.email, 'deleteScent', String(ex.code) + ' · ' + String(ex.name));
     return {deleted: String(ex.id)};
   });
 }

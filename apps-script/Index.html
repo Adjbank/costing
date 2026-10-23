@@ -109,6 +109,26 @@ button,input,select,textarea{font:inherit;color:inherit}
 #docForm .settings{grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px 16px;align-items:end}
 #docForm .field{display:flex;flex-direction:column;justify-content:flex-end;min-width:0}
 #docForm .field label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:5px}
+/* Perfumer */
+.pf-tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.pf-tabs button{border:1px solid var(--line-strong);background:var(--card);border-radius:999px;padding:6px 16px;cursor:pointer;font-size:13.5px;font-weight:600;color:var(--ink-muted)}
+.pf-tabs button.on{background:var(--primary);color:var(--primary-ink);border-color:var(--primary)}
+.pf-n{display:inline-block;min-width:18px;padding:0 6px;border-radius:999px;background:var(--tint);color:var(--ink);font-size:11.5px;line-height:18px;text-align:center;margin-left:4px}
+.pf-tabs button.on .pf-n{background:#ffffff33;color:inherit}
+.pf-group{margin-top:14px}
+.pf-group h4{font-size:12.5px;letter-spacing:.04em;text-transform:none;color:var(--ink-muted);margin:0 0 8px;font-weight:700}
+#pfForm .settings{grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px 16px;align-items:start;margin-bottom:0}
+#pfForm .field label{margin-bottom:5px}
+#pfForm .field input,#pfForm .field select,#pfForm .field textarea{width:100%;border:1px solid var(--line-strong);border-radius:8px;padding:8px 10px;background:var(--input-bg);min-height:38px}
+#pfForm textarea{min-height:72px;resize:vertical;line-height:1.5}
+#pfForm .pf-wide{grid-column:1/-1}
+#pfForm td input,#pfForm td select{border:1px solid var(--line-strong);border-radius:7px;padding:5px 8px;background:var(--input-bg);width:100%;min-width:90px}
+#pfForm fieldset:disabled input,#pfForm fieldset:disabled select,#pfForm fieldset:disabled textarea{opacity:.85}
+.pf-chips{display:flex;flex-wrap:wrap;gap:6px}
+#pfForm .field label.pf-chip,.pf-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-strong);border-radius:999px;padding:4px 11px;font-size:12.5px;cursor:pointer;background:var(--card);line-height:1.3;color:var(--ink);margin:0}
+#pfForm .field .pf-chip input,.pf-chip input{margin:0;width:15px;height:15px;min-height:0;padding:0;border:0;flex:none;accent-color:var(--accent)}
+.pf-chip span{white-space:nowrap}
+.pf-chip:has(input:checked){background:var(--tint);border-color:var(--accent)}
 #docForm .field input,#docForm .field select{height:40px;box-sizing:border-box;width:100%;font-size:14px}
 #docForm .field input[type=date]{padding-block:0}
 #docForm .field[style*="grid-column"]{grid-column:1/-1}
@@ -357,6 +377,7 @@ tfoot td{font-weight:700;border-top:1px solid var(--ink);background:var(--bg-sof
   <section id="chkView" hidden style="padding-block:24px 56px"></section>
   <section id="docView" hidden style="padding-block:24px 56px"></section>
   <section id="msdsView" hidden style="padding-block:24px 56px"></section>
+  <section id="perfView" hidden style="padding-block:24px 56px"></section>
   <div id="calcView">
   <div class="pagehead"><h1>คำนวณต้นทุนหัวน้ำหอม</h1><p>Scent &amp; Sense ✦ ทีมต้นทุนสินค้า · Fragrance Oil Costing · ราคาวัตถุดิบ บาท/กรัม จากไฟล์ Summary RM</p></div>
   <div class="dbcard" id="dbcard"></div>
@@ -1056,7 +1077,8 @@ const PERMS = [
   ['export','ส่งออก Excel','ดาวน์โหลดผลคำนวณเป็นไฟล์'],
   ['viewDb','ดูฐานราคา','ค้นหาราคาวัตถุดิบ'],
   ['editPrices','อัปเดตฐานราคา','อัปโหลดราคาใหม่ให้ทั้งทีม'],
-  ['manageUsers','จัดการผู้ใช้','เพิ่มผู้ใช้ กำหนดบทบาท ระงับ']
+  ['manageUsers','จัดการผู้ใช้','เพิ่มผู้ใช้ กำหนดบทบาท ระงับ'],
+  ['perfumer','Perfumer','รับบรีฟ ออกแบบกลิ่น และบันทึกกลิ่นในคลัง']
 ];
 const DOMAINS = ['scentandsense.co.th','scentandsense.co'];
 const S = {me:null, roles:{}, order:[], access:{autoJoin:false, defaultRole:'costing'}, perms:{}, roleName:'',
@@ -1229,6 +1251,7 @@ function renderUserBar(){
   const tab=(id,view,label)=>`<button type="button" id="${id}" class="${v===view?'on':''}" ${v===view?'aria-current="page"':''}>${label}</button>`;
   $('#navtabs').innerHTML = tab('btnCalc','calc','คำนวณ')
     + (can('calc') ? tab('btnChk','chk','ตรวจ IFRA / อย.') + tab('btnDoc','doc','เอกสาร MSDS / IFRA') : '')
+    + (pfCanView() ? tab('btnPerf','perf','Perfumer') : '')
     + (can('viewDb') ? tab('btnMsds','msds','MSDS วัตถุดิบ') : '')
     + (can('editPrices') ? tab('btnRm','rm','ฐานราคาวัตถุดิบ') : '')
     + (adm ? tab('btnAll','all','สูตรทั้งหมด') + tab('btnPrice','price','ทำราคาขาย') : '')
@@ -1278,7 +1301,7 @@ $('#userbar').addEventListener('click', e=>{
 });
 $('#navtabs').addEventListener('click', e=>{
   const b=e.target.closest('button'); if(!b) return;
-  const view={btnCalc:'calc', btnChk:'chk', btnDoc:'doc', btnMsds:'msds', btnRm:'rm', btnAll:'all', btnPrice:'price', btnCmp:'cmp', btnAdmin:'admin'}[b.id];
+  const view={btnCalc:'calc', btnChk:'chk', btnDoc:'doc', btnPerf:'perf', btnMsds:'msds', btnRm:'rm', btnAll:'all', btnPrice:'price', btnCmp:'cmp', btnAdmin:'admin'}[b.id];
   if(view) showView(view);
 });
 async function showView(v){
@@ -1290,12 +1313,14 @@ async function showView(v){
   if(v==='cmp' && !(S.me && S.me.role)) v='calc';
   if((v==='chk' || v==='doc') && !can('calc')) v='calc';
   if(v==='msds' && !can('viewDb')) v='calc';
+  if(v==='perf' && !pfCanView()) v='calc';
   S.view=v; S.admin = v!=='calc';                 /* S.admin = ไม่ได้อยู่หน้าคำนวณ */
-  $('#msdsView').hidden=v!=='msds';
+  $('#msdsView').hidden=v!=='msds'; $('#perfView').hidden=v!=='perf';
   $('#adminView').hidden=v!=='admin'; $('#allView').hidden=v!=='all'; $('#priceView').hidden=v!=='price'; $('#rmView').hidden=v!=='rm'; $('#cmpView').hidden=v!=='cmp'; $('#chkView').hidden=v!=='chk'; $('#docView').hidden=v!=='doc'; $('#calcView').hidden=v!=='calc';
   renderUserBar();
   if(v==='doc'){ window.scrollTo(0,0); renderDocView(); return; }
   if(v==='msds'){ window.scrollTo(0,0); renderMsdsView(); return; }
+  if(v==='perf'){ window.scrollTo(0,0); renderPerfView(); return; }
   if(v==='chk'){ window.scrollTo(0,0); renderChkView(); return; }
   if(v==='cmp'){ window.scrollTo(0,0); renderCmpView(); return; }
   if(v==='rm'){ window.scrollTo(0,0); renderRmView(); return; }
@@ -2694,6 +2719,341 @@ msv.addEventListener('submit', async e=>{
 });
 msv.addEventListener('dragover', e=>{ if(msCanEdit()){ e.preventDefault(); } });
 msv.addEventListener('drop', e=>{ if(!msCanEdit()) return; e.preventDefault(); if(e.dataTransfer && e.dataTransfer.files.length) msAddFiles(e.dataTransfer.files); });
+/* --- Perfumer: บรีฟออกแบบกลิ่น + คลังกลิ่นสำหรับผลิตเป็นสินค้า ---
+   ต้นแบบฟอร์ม: ODM Brief · SV Brief · Brand Archetype Quiz (Typeform ของ Scent & Sense)
+   ดู: perfumer / calc / viewDb · สร้างและแก้ไข: perfumer · ลบ: ผู้สร้างหรือ admin (เซิร์ฟเวอร์ตรวจซ้ำ) */
+let PF={briefs:null, scents:null}, pfTab='brief', pfQ='', pfKind='', pfStatus='', pfEdit=null, pfBusy=false;
+const pfCanView=()=>can('perfumer')||can('calc')||can('viewDb'), pfCanEdit=()=>can('perfumer');
+const PF_KIND={ODM:'ODM · บรีฟจ้างผลิต', SV:'SV · กลิ่นประจำแบรนด์ธุรกิจบริการ', INT:'ภายใน · ออกแบบกลิ่นเอง'};
+const PF_BSTAT={new:['รับบรีฟ','info'], design:['กำลังออกแบบ','warn'], sample:['ส่งตัวอย่าง','warn'], revise:['ปรับแก้','warn'], approved:['ลูกค้าอนุมัติ','ok'], closed:['ปิดงาน','ok'], lost:['ยกเลิก','bad']};
+const PF_SSTAT={draft:['ร่าง','info'], trial:['ทดลอง','warn'], sent:['ส่งตัวอย่าง','warn'], approved:['อนุมัติ','ok'], production:['ใช้ผลิต','ok'], retired:['เลิกใช้','bad']};
+const PF_OPT={
+  bizStatus:['แบรนด์ใหม่ / เริ่มต้นธุรกิจ','แบรนด์เดิม ต้องการเพิ่มไลน์สินค้า','โรงแรม / สปา / องค์กร (อเมนิตี้ ของที่ระลึก)','ผู้จัดจำหน่าย / ร้านค้าปลีก','อินฟลูเอนเซอร์ / ครีเอเตอร์','อื่น ๆ'],
+  markets:['ไทย','อาเซียน','จีน','ญี่ปุ่น / เกาหลี','ยุโรป','สหรัฐฯ','ตะวันออกกลาง','อื่น ๆ'],
+  channels:['ออนไลน์ / TikTok Shop / Marketplace','ห้างสรรพสินค้า / ร้านค้าปลีก','หน้าร้านของแบรนด์','โรงแรม / สปา','ของขวัญองค์กร','ส่งออกต่างประเทศ'],
+  products:['น้ำหอม (Perfume / Roller / Stick)','บอดี้มิสต์ / บอดี้เพอร์ฟูม','ผลิตภัณฑ์อาบน้ำ (เจลอาบน้ำ สครับ ออยล์)','บำรุงผิว (โลชั่น ครีม กันแดด)','ดูแลเส้นผม (แชมพู คอนดิชันเนอร์ แฮร์ออยล์)','ดูแลมือ (แฮนด์ครีม เจล / สเปรย์แอลกอฮอล์)','ดูแลผิวหน้า (คลีนเซอร์ โฟม)','หอมในบ้าน (ก้านไม้หอม สเปรย์ห้อง เทียนหอม สเปรย์ผ้า)','หัวน้ำหอม (Fragrance Oil) อย่างเดียว'],
+  sku:['1','2-3','4-6','7 ขึ้นไป'],
+  approach:['ออกแบบ Signature Scent ใหม่เฉพาะแบรนด์','เลือกจากคลังกลิ่น Scent & Sense / 100 Siam Palette','พัฒนาให้ใกล้เคียงกลิ่นอ้างอิง','ลูกค้ามีหัวน้ำหอมของตัวเองแล้ว'],
+  families:['ซิตรัส / สดชื่น','กรีน / สมุนไพร','ดอกไม้','ดอกไม้สีขาว','ชา','น้ำ / ทะเล','ผลไม้','ไม้หอม','อำพัน / โอเรียนทัล','เครื่องเทศ','หนัง / ควันไม้','หวาน / กูร์มองด์','มัสก์ / Skin Scent','พฤกษาไทย'],
+  claims:['น้ำมันหอมระเหยธรรมชาติ','วัตถุดิบยั่งยืน / Upcycled','Vegan / Clean Beauty','ลดสารก่อภูมิแพ้ (83 Allergen Report)','อโรมาเธอราพี / Wellness','กลิ่นติดทนนาน (Encapsulation)','ลดกลิ่นไม่พึงประสงค์'],
+  services:['ออกแบบกลิ่น','พัฒนาสูตรผลิตภัณฑ์','จัดหาบรรจุภัณฑ์','ออกแบบฉลากและบรรจุภัณฑ์','ออกแบบแบรนด์ (โลโก้ CI)','จดแจ้ง อย.','เอกสาร MSDS / COA / IFRA / Stability Test','เวิร์กช็อปและอบรมทีมขาย'],
+  packaging:['มีบรรจุภัณฑ์ของตัวเอง','ให้ Scent & Sense จัดหา','ยังไม่แน่ใจ'],
+  qty:['น้อยกว่า 500 ชิ้น','500-1,000','1,000-3,000','3,000-10,000','มากกว่า 10,000'],
+  retail:['ต่ำกว่า 200 บาท','200-499','500-999','1,000-1,999','2,000 บาทขึ้นไป'],
+  launch:['ภายใน 3 เดือน','3-6 เดือน','6-12 เดือน','มากกว่า 12 เดือน','ยังไม่แน่ใจ'],
+  bizType:['โรงแรม / รีสอร์ต','สปา / เวลเนส','คลินิก / โรงพยาบาล','ร้านอาหาร / คาเฟ่','โชว์รูม / ยานยนต์','อาคารสำนักงาน','ร้านค้า / ศูนย์การค้า','ที่พักอาศัย / อสังหาฯ','บันเทิง / อีเวนต์ / มิวเซียม','ฟิตเนส / ซาลอน'],
+  positioning:['เข้าถึงง่าย (Accessible)','พรีเมียม (Premium)','ลักชัวรี (Luxury)','เหนือระดับ (Ultra-luxury)'],
+  feelings:['ผ่อนคลาย สงบ','สดชื่น สะอาด','หรูหรา มีระดับ','อบอุ่น ได้รับการต้อนรับ','มีพลัง กระฉับกระเฉง','สร้างแรงบันดาลใจ','น่าเชื่อถือ ปลอดภัย','โรแมนติก ใกล้ชิด','สนุก ตื่นเต้น','อยากอาหาร','มีสมาธิ จดจ่อ','ดื่มด่ำ ลึกลับ'],
+  touchpoints:['กล่องของขวัญ / จดหมายเชิญ','รถรับส่ง','ทางเข้า / ล็อบบี้','ลิฟต์ / ทางเดิน','ห้องพัก / ห้องทรีตเมนต์','ห้องอาหาร','ห้องน้ำ','อเมนิตี้ (สบู่ แชมพู โลชั่น)','สปา / สระว่ายน้ำ','ร้านของที่ระลึก','ของฝากกลับบ้าน','ของขวัญองค์กร'],
+  sustainable:['Natural Ingredients — ส่วนผสมจากธรรมชาติ เช่น Essential Oils','Thai Identity — เอกลักษณ์ไทยผ่าน 100 Siam Palette','Upcycled Ingredients — วัตถุดิบจากผลพลอยได้','Open to Suggestions — เปิดรับคำแนะนำจากทีม'],
+  hvac:['มี ระบบส่วนกลาง','ไม่มี ใช้แอร์แยกห้อง','ไม่แน่ใจ'],
+  svProducts:['ระบบกระจายกลิ่น (Scent Diffuser)','ก้านไม้หอม (Reed Diffuser)','Hotel Amenities (Shower gel, Shampoo, Body Lotion)','Spa Amenities (Body Oil, Massage Oil)','ระบบสุขอนามัย (Soap / Urinal sanitizer)','ระบบกระดาษเช็ดมือ','ของที่ระลึก / ของขวัญองค์กร','สเปรย์ห้อง / สเปรย์ผ้า','เทียนหอม / ถุงหอม'],
+  start:['ภายใน 1 เดือน','1-3 เดือน','3-6 เดือน','มากกว่า 6 เดือน / เปิดโครงการใหม่'],
+  offering:['ระบบดูแลบรรยากาศ','ของใช้ในโรงแรม','ของใช้ในสปา','ของฝากที่ระลึก'],
+  budget:['ต่ำกว่า 30,000 บาท','30,000-100,000 บาท','100,000-300,000 บาท','มากกว่า 300,000 บาท','ไม่ระบุ'],
+  source:['Google','Facebook / Instagram','LINE','งานแสดงสินค้า (Expo)','คนรู้จักแนะนำ','อื่น ๆ']};
+/* Brand Archetype: ชื่อ · ชื่อไทย · แรงขับ · เป้าหมาย · ตัวอย่าง · ทิศทางกลิ่น (ตามผลลัพธ์ของ Brand Archetype Quiz) */
+const PF_ARCH={
+  caregiver:['The Caregiver','ผู้ดูแล','ดูแลผู้อื่น','ความปลอดภัย','Unicef','อบอุ่น อ่อนโยน — ลาเวนเดอร์ คาโมมายล์ มัสก์นุ่ม วานิลลา'],
+  ruler:['The Ruler','ผู้ปกครอง','ควบคุม','ความสำเร็จและสถานะ','Rolex','สง่า มั่นคง — กฤษณา (Oud) หนัง อำพัน แฝกหอม'],
+  creator:['The Creator','ผู้สร้างสรรค์','สร้างสรรค์','นวัตกรรม','Apple','ไม่ซ้ำใคร — ไม้ซีดาร์ อำพัน อาคอร์ดน้ำค้าง พริกไทยชมพู'],
+  innocent:['The Innocent','ผู้บริสุทธิ์','มองโลกแง่ดี','ความสุขสมบูรณ์','Dove','สะอาด สดใส — ผ้าฝ้าย มัสก์ขาว ลิลลี่ออฟเดอะแวลลีย์ เบอร์กามอต'],
+  sage:['The Sage','ปราชญ์','แสวงหาปัญญา','ค้นพบความจริง','Google','สงบ ลึกซึ้ง — ชาเขียว ซีดาร์ กำยาน คลารีเซจ'],
+  explorer:['The Explorer','นักสำรวจ','เป็นอิสระ','การผจญภัย','Jeep','อิสระ เป็นธรรมชาติ — ไซเปรส กัลบานัม โรสแมรี่ แฝกหอม'],
+  outlaw:['The Outlaw','ผู้แหกกฎ','ท้าทายกฎ','การปฏิวัติ','Harley-Davidson','กล้า แรง — ควันไม้ พริกไทยดำ หนัง พิสเซียะ'],
+  magician:['The Magician','นักมายากล','จินตนาการ','เปลี่ยนฝันเป็นจริง','Disney','ดื่มด่ำ ลึกลับ — ลมทะเล บัวสาย กำยาน โอโซน'],
+  hero:['The Hero','วีรบุรุษ','เอาชนะขีดจำกัด','ความเป็นเลิศ','Nike','มีพลัง — เกรปฟรุต มินต์ ขิง แฝกหอม'],
+  everyman:['The Everyman','เพื่อนของทุกคน','เข้าถึงง่าย','ความรู้สึกเป็นส่วนหนึ่ง','IKEA','เป็นกันเอง — ผ้าสะอาด ตะไคร้ ดอกส้ม ใบเตย'],
+  jester:['The Jester','นักสร้างความสุข','สนุกสนาน','ความบันเทิง',"M&M's",'สดใส ขี้เล่น — เกรปฟรุตชมพู เบอร์รี่ ส้มเชื่อม วานิลลา'],
+  lover:['The Lover','คนรัก','ความสัมพันธ์','ความใกล้ชิดลึกซึ้ง','Chanel','ละมุน หรูหรา — มะลิ พีโอนี กุหลาบ สเอด']};
+const PF_QUIZ=[
+  ['ภารกิจหลักของแบรนด์คือ',[['สร้างมาตรฐานความเป็นเลิศและความมั่นคง','ruler'],['ดูแลและปกป้องลูกค้าเหมือนคนในครอบครัว','caregiver'],['สร้างสรรค์สิ่งใหม่ที่ยังไม่เคยมีใครทำ','creator'],['ทำให้ชีวิตลูกค้าเรียบง่ายและมีความสุข','innocent'],['มอบความรู้และคำตอบที่เชื่อถือได้','sage'],['พาลูกค้าไปพบประสบการณ์ใหม่','explorer']]],
+  ['ถ้าแบรนด์เป็นคนหนึ่งคน คนรอบตัวจะบอกว่าเขา',[['กล้าคิดต่าง ไม่ทำตามใคร','outlaw'],['มีเสน่ห์ลึกลับ ทำเรื่องธรรมดาให้น่าทึ่ง','magician'],['มุ่งมั่น ไม่ยอมแพ้ ชอบความท้าทาย','hero'],['เป็นกันเอง เข้าถึงง่าย','everyman'],['ตลก สดใส อยู่ด้วยแล้วสนุก','jester'],['อบอุ่น ละมุน ใส่ใจความรู้สึก','lover']]],
+  ['อยากให้ลูกค้ารู้สึกอย่างไรเมื่อก้าวเข้ามาในพื้นที่',[['หรูหรา มีระดับ','ruler'],['พิเศษ เหมือนได้รับการดูแลอย่างใกล้ชิด','lover'],['มีพลัง พร้อมลุยเป้าหมาย','hero'],['สงบ ปลอดโปร่ง สบายใจ','innocent'],['ตื่นเต้น อยากค้นหาต่อ','explorer'],['สนุก อารมณ์ดี ยิ้มได้','jester']]],
+  ['สิ่งที่แบรนด์ภูมิใจที่สุดคือ',[['บริการที่เอาใจใส่ทุกคน','caregiver'],['ไอเดียและการออกแบบที่ไม่ซ้ำใคร','creator'],['ความเชี่ยวชาญและข้อมูลที่ลึกซึ้ง','sage'],['การท้าทายวิธีเดิม ๆ ของอุตสาหกรรม','outlaw'],['ประสบการณ์ที่เปลี่ยนความรู้สึกลูกค้าได้จริง','magician'],['ความจริงใจ เข้าถึงได้ทุกคน','everyman']]],
+  ['ถ้าแบรนด์เป็นสถานที่ จะเป็น',[['ห้องสมุดเงียบสงบริมสวน','sage'],['โรงละครที่เต็มไปด้วยเวทมนตร์','magician'],['สนามแข่งขันระดับโลก','hero'],['บ้านอบอุ่นที่มีคนรอต้อนรับ','caregiver'],['ร้านกาแฟประจำซอยที่ทุกคนรู้จัก','everyman'],['สปาหรูริมทะเลยามพระอาทิตย์ตก','lover']]],
+  ['คำที่อยากให้ลูกค้าใช้พูดถึงแบรนด์',[['น่าเชื่อถือ ระดับพรีเมียม','ruler'],['ไม่เหมือนใคร มีสไตล์','creator'],['สะอาด บริสุทธิ์ ไว้ใจได้','innocent'],['อิสระ กล้าลอง','explorer'],['เท่ แรง มีจุดยืน','outlaw'],['สนุก ขำ น่ารัก','jester']]],
+  ['เมื่อเจอปัญหา แบรนด์จะ',[['วางระบบและควบคุมสถานการณ์ให้เป็นระเบียบ','ruler'],['ร่วมมือกับทุกคนหาทางออกที่ทุกฝ่ายรับได้','everyman'],['พลิกวิกฤตให้เป็นโอกาสที่ไม่มีใครคาดคิด','magician'],['ลองเส้นทางใหม่ที่ยังไม่มีใครเดิน','explorer'],['ใส่ใจความรู้สึกของลูกค้าและทีมก่อน','lover'],['ปกป้องลูกค้าไม่ให้ได้รับผลกระทบ','caregiver']]],
+  ['กลิ่นแบบไหนที่รู้สึกว่า "ใช่" สำหรับแบรนด์',[['กลิ่นแปลกใหม่ ผสมผสานไม่เหมือนใคร','creator'],['กลิ่นผ้าสะอาด มัสก์ขาว ดอกไม้อ่อน ๆ','innocent'],['กลิ่นชา ไม้ซีดาร์ และกำยาน','sage'],['กลิ่นหนัง ควันไม้ เครื่องเทศเข้ม','outlaw'],['กลิ่นซิตรัส มินต์ สดชื่นกระฉับกระเฉง','hero'],['กลิ่นผลไม้หวาน สดใส ขี้เล่น','jester']]]];
+/* ประเภทสินค้าที่นำกลิ่นไปใช้ + % หัวน้ำหอมที่ใช้กันทั่วไป (ค่าเริ่มต้นให้แก้ตามสูตรจริง) */
+const PF_APP=[['น้ำหอม EDP / Perfume','15-20'],['น้ำหอม EDT','8-12'],['Roller / Solid Perfume','10-20'],['บอดี้มิสต์','3-5'],['เจลอาบน้ำ','1-1.5'],['สครับ','1-1.5'],['บอดี้ออยล์ / น้ำมันนวด','1-3'],['โลชั่น / ครีม','0.5-1'],['แชมพู / คอนดิชันเนอร์','0.8-1.2'],['แฮร์ออยล์','0.5-1'],['แฮนด์ครีม','0.5-1'],['เจล / สเปรย์แอลกอฮอล์','0.3-0.8'],['คลีนเซอร์ / โฟมล้างหน้า','0.2-0.5'],['สบู่ก้อน','1-2'],['ก้านไม้หอม (Reed Diffuser)','15-25'],['สเปรย์ห้อง','3-6'],['สเปรย์ผ้า','1-3'],['เทียนหอม','6-10'],['ถุงหอม / Wax Sachet','5-10'],['ระบบกระจายกลิ่น (Scent Diffuser)','100'],['อื่น ๆ','']];
+/* โครงฟอร์ม: k=คีย์ใน data · t=text|long|number|select|multi · o=ชุดตัวเลือกใน PF_OPT · kinds=แสดงเฉพาะประเภทบรีฟ · max=เลือกได้สูงสุด */
+const PF_BRIEF_FIELDS=[
+  {g:'ผู้ติดต่อและแหล่งที่มา', f:[
+    {k:'contact',l:'ชื่อผู้ติดต่อ',t:'text'},{k:'position',l:'ตำแหน่ง',t:'text'},{k:'phone',l:'เบอร์โทรศัพท์',t:'text'},{k:'email',l:'อีเมล',t:'text'},{k:'line',l:'LINE ID',t:'text'},
+    {k:'website',l:'เว็บไซต์ หรือ Instagram',t:'text'},{k:'moodboard',l:'ลิงก์ไฟล์อ้างอิง / Mood board',t:'text'},{k:'source',l:'รู้จัก Scent & Sense จากช่องทางใด',t:'select',o:'source'}]},
+  {g:'ธุรกิจและตลาด', f:[
+    {k:'bizStatus',l:'สถานะธุรกิจ',t:'select',o:'bizStatus',kinds:'ODM'},{k:'bizType',l:'ประเภทธุรกิจ',t:'select',o:'bizType',kinds:'SV'},
+    {k:'location',l:'ที่ตั้ง (จังหวัด / ย่าน)',t:'text',kinds:'SV'},{k:'branches',l:'จำนวนสาขา',t:'number',kinds:'SV'},{k:'positioning',l:'ระดับการวางตำแหน่งแบรนด์',t:'select',o:'positioning'},
+    {k:'markets',l:'ตลาดที่ต้องการจำหน่าย',t:'multi',o:'markets',kinds:'ODM'},{k:'channels',l:'ช่องทางการขาย',t:'multi',o:'channels',kinds:'ODM'}]},
+  {g:'ตัวตนแบรนด์และความรู้สึก', f:[
+    {k:'slogan',l:'สโลแกน หรือคำสัญญาของแบรนด์',t:'text'},{k:'words3',l:'คำ 3 คำที่อธิบายแบรนด์ได้ดีที่สุด',t:'text'},{k:'customers',l:'ลูกค้าหลักคือใคร',t:'text'},
+    {k:'story',l:'เรื่องราว แรงบันดาลใจ หรือจุดเด่น',t:'long'},
+    {k:'feelings',l:'ความรู้สึกที่อยากให้ลูกค้าได้รับ (เลือกไม่เกิน 3)',t:'multi',o:'feelings',max:3},
+    {k:'touchpoints',l:'จุดที่อยากให้ลูกค้าพบกลิ่นของแบรนด์',t:'multi',o:'touchpoints',kinds:'SV'},{k:'moments',l:'ช่วงเวลาที่อยากให้ลูกค้าจดจำ',t:'long',kinds:'SV'}]},
+  {g:'ทิศทางกลิ่น', f:[
+    {k:'approach',l:'แนวทางพัฒนากลิ่น',t:'select',o:'approach'},{k:'like',l:'กลุ่มกลิ่นที่ชอบ / ทิศทางที่สนใจ',t:'multi',o:'families'},{k:'dislike',l:'กลุ่มกลิ่นที่ไม่ชอบ',t:'multi',o:'families'},
+    {k:'sustainable',l:'วัตถุดิบเพื่อความยั่งยืนที่สนใจ',t:'multi',o:'sustainable'},{k:'claims',l:'จุดเด่นหรือคำกล่าวอ้างที่ต้องการ',t:'multi',o:'claims',kinds:'ODM,INT'},
+    {k:'refScent',l:'กลิ่นที่ชอบเป็นพิเศษ หรือกลิ่นอ้างอิง',t:'text'},{k:'avoid',l:'กลิ่นที่ต้องหลีกเลี่ยง หรือข้อจำกัดด้านการแพ้',t:'text'}]},
+  {g:'สินค้าและการผลิต', f:[
+    {k:'products',l:'ประเภทสินค้าที่ต้องการผลิต',t:'multi',o:'products',kinds:'ODM,INT'},{k:'sku',l:'จำนวน SKU ที่ต้องการ',t:'select',o:'sku',kinds:'ODM'},
+    {k:'concept',l:'แนวคิดสินค้าและกลุ่มลูกค้าเป้าหมาย',t:'long',kinds:'ODM,INT'},{k:'refProducts',l:'สินค้าหรือแบรนด์อ้างอิง',t:'text',kinds:'ODM,INT'},
+    {k:'services',l:'บริการที่ต้องการ',t:'multi',o:'services',kinds:'ODM'},{k:'packaging',l:'บรรจุภัณฑ์',t:'select',o:'packaging',kinds:'ODM'},
+    {k:'qty',l:'จำนวนผลิตต่อ SKU ต่อล็อต',t:'select',o:'qty',kinds:'ODM'},{k:'retail',l:'ราคาขายปลีกที่ตั้งไว้ต่อชิ้น',t:'select',o:'retail',kinds:'ODM'},{k:'launch',l:'ต้องการวางจำหน่ายเมื่อไร',t:'select',o:'launch',kinds:'ODM'},
+    {k:'svProducts',l:'ผลิตภัณฑ์และบริการที่สนใจ',t:'multi',o:'svProducts',kinds:'SV'},{k:'offering',l:'รูปแบบที่สนใจ',t:'select',o:'offering',kinds:'SV'},
+    {k:'hvac',l:'ระบบปรับอากาศส่วนกลาง (HVAC)',t:'select',o:'hvac',kinds:'SV'},{k:'hours',l:'ช่วงเวลาให้บริการ',t:'text',kinds:'SV'},
+    {k:'start',l:'ต้องการเริ่มใช้กลิ่นเมื่อไร',t:'select',o:'start',kinds:'SV'},{k:'budget',l:'งบประมาณโดยประมาณ',t:'select',o:'budget',kinds:'SV'}]},
+  {g:'บันทึกเพิ่มเติม', f:[{k:'notes',l:'รายละเอียดเพิ่มเติม / บันทึกของนักปรุงกลิ่น',t:'long'}]}];
+const PF_SCENT_FIELDS=[
+  {g:'แนวคิดและลักษณะกลิ่น', f:[
+    {k:'concept',l:'แนวคิด / เรื่องราวของกลิ่น',t:'long'},{k:'inspiration',l:'กลิ่นอ้างอิง / แรงบันดาลใจ',t:'text'},{k:'archetype',l:'Brand Archetype',t:'select',o:'arch'},
+    {k:'character',l:'ความรู้สึกที่กลิ่นสื่อ',t:'multi',o:'feelings'},{k:'subfamilies',l:'กลุ่มกลิ่นรอง',t:'multi',o:'families'}]},
+  {g:'พีระมิดกลิ่น (Olfactive Pyramid)', f:[{k:'top',l:'Top notes · กลิ่นแรกสัมผัส',t:'long'},{k:'heart',l:'Heart notes · กลิ่นกลาง',t:'long'},{k:'base',l:'Base notes · กลิ่นฐาน',t:'long'}]},
+  {g:'ข้อกำหนดและจุดขาย', f:[{k:'claims',l:'จุดขาย / วัตถุดิบยั่งยืน',t:'multi',o:'claims'},{k:'ifra',l:'หมายเหตุ IFRA / อย. / Allergen',t:'long'},{k:'notes',l:'บันทึกเพิ่มเติม',t:'long'}]}];
+
+/* ---------- ตัวช่วย ---------- */
+const pfChip=(k,map)=>{ const s=map[k]||[k,'info']; return `<span class="chip ${s[1]}">${esc(s[0])}</span>`; };
+const pfList=v=>Array.isArray(v)?v:[];
+const pfOpts=o=>o==='arch'?Object.entries(PF_ARCH).map(([k,a])=>[k,a[0]+' · '+a[1]]):(PF_OPT[o]||[]).map(x=>[x,x]);
+function pfShow(f, kind){ return !f.kinds || f.kinds.split(',').includes(kind); }
+function pfArchResult(ans){
+  const score={}; Object.keys(PF_ARCH).forEach(k=>score[k]=0);
+  pfList(ans).forEach((a,i)=>{ const q=PF_QUIZ[i]; if(!q || a==='' || a==null) return; const c=q[1][+a]; if(c) score[c[1]]++; });
+  const answered=pfList(ans).filter(a=>a!=='' && a!=null).length; if(!answered) return null;
+  const order=Object.keys(PF_ARCH), best=order.reduce((b,k)=>score[k]>score[b]?k:b, order[0]);
+  const ties=order.filter(k=>k!==best && score[k]===score[best]);
+  return {key:best, score:score[best], ties, answered};
+}
+function pfArchBox(key, extra){ const a=PF_ARCH[key]; if(!a) return ''; return `<div class="card" style="background:var(--tint);border-color:transparent;padding:12px 16px"><div style="font-family:var(--f-display);font-size:18px">${esc(a[0])} · ${esc(a[1])}</div><div class="muted" style="font-size:12.5px">แรงขับ: ${esc(a[2])} · เป้าหมาย: ${esc(a[3])} · ตัวอย่าง: ${esc(a[4])}</div><div style="margin-top:4px"><b>ทิศทางกลิ่น:</b> ${esc(a[5])}</div>${extra||''}</div>`; }
+function pfField(f, v, kind){
+  if(!pfShow(f, kind)) return '';
+  const id='pf_'+f.k, wide=f.t==='long'||f.t==='multi'?' pf-wide':'';
+  let inp='';
+  if(f.t==='long') inp=`<textarea id="${id}" data-k="${f.k}" rows="3" maxlength="3000">${esc(v||'')}</textarea>`;
+  else if(f.t==='select') inp=`<select id="${id}" data-k="${f.k}"><option value="">– เลือก –</option>${pfOpts(f.o).map(([val,lab])=>`<option value="${esc(val)}" ${v===val?'selected':''}>${esc(lab)}</option>`).join('')}</select>`;
+  else if(f.t==='multi'){ const cur=pfList(v); inp=`<div class="pf-chips" data-k="${f.k}" ${f.max?`data-max="${f.max}"`:''}>${pfOpts(f.o).map(([val,lab])=>`<label class="pf-chip"><input type="checkbox" value="${esc(val)}" ${cur.includes(val)?'checked':''}><span>${esc(lab)}</span></label>`).join('')}</div>`; }
+  else inp=`<input id="${id}" data-k="${f.k}" type="${f.t==='number'?'number':'text'}" value="${esc(v==null?'':v)}" maxlength="300">`;
+  return `<div class="field${wide}"><label for="${id}">${esc(f.l)}</label>${inp}</div>`;
+}
+function pfGroups(fields, data, kind){
+  return fields.map(g=>{ const html=g.f.map(f=>pfField(f, data[f.k], kind)).join(''); return html?`<div class="pf-group"><h4>${esc(g.g)}</h4><div class="settings">${html}</div></div>`:''; }).join('');
+}
+function pfCollect(root, fields){
+  const d={};
+  fields.forEach(g=>g.f.forEach(f=>{
+    if(f.t==='multi'){ const box=root.querySelector(`.pf-chips[data-k="${f.k}"]`); if(box) d[f.k]=[...box.querySelectorAll('input:checked')].map(i=>i.value); return; }
+    const el=root.querySelector(`[data-k="${f.k}"]`); if(!el) return;
+    d[f.k]=f.t==='number'?(el.value===''?'':toNum(el.value)):el.value.trim();
+  }));
+  return d;
+}
+function pfFormulas(){
+  const out=new Map();
+  state.products.filter(p=>!p.sample).forEach(p=>out.set(p.id,{id:p.id, name:p.name, owner:S.me.email, p}));
+  if(isAdminRole() && ADM_FORMS) ADM_FORMS.forEach(f=>{ if(!out.has(f.id)) out.set(f.id,{id:f.id, name:f.p?f.p.name:f.id, owner:f.owner, p:f.p}); });
+  return [...out.values()];
+}
+function pfFormulaCost(id){ const f=pfFormulas().find(x=>x.id===id); if(!f||!f.p||!DB.entries.length) return null; try{ const c=compute(f.p); return {name:f.name, total:c.total, complete:c.complete}; }catch(e){ return {name:f.name}; } }
+const pfBrand=id=>{ const b=(PF.briefs||[]).find(x=>x.id===id); return b?b.brand:''; };
+const pfLabelOf=k=>{ for(const g of PF_BRIEF_FIELDS) for(const f of g.f) if(f.k===k) return f.l; return k; };
+
+/* ---------- โหลดและหน้าหลัก ---------- */
+async function loadPf(force){
+  if(PF.briefs && PF.scents && !force) return;
+  const [b,s]=await Promise.all([api('listBriefs'), api('listScents')]); PF.briefs=b; PF.scents=s;
+  if(isAdminRole() && !ADM_FORMS){ try{ await loadAdminForms(false); }catch(e){} }
+}
+function renderPerfView(){
+  $('#perfView').innerHTML=`<div class="bh"><h2>Perfumer · ออกแบบกลิ่น</h2><span class="hint">รับบรีฟจากลูกค้า ออกแบบกลิ่น และบันทึกกลิ่นที่พร้อมนำไปผลิตเป็นสินค้าประเภทต่าง ๆ</span></div>
+    ${helpBox('ขั้นตอนการทำงาน', `<ol style="margin:6px 0 0 18px;padding:0">
+      <li><b>บรีฟ:</b> บันทึกข้อมูลลูกค้าตามแบบฟอร์ม ODM Brief (จ้างผลิต) หรือ SV Brief (กลิ่นประจำแบรนด์ธุรกิจบริการ) และทำ Brand Archetype Quiz 8 ข้อเพื่อหาตัวตนแบรนด์และทิศทางกลิ่น · บรีฟที่ลูกค้ากรอกใน Typeform ให้คัดลอกคำตอบมาใส่ที่นี่</li>
+      <li><b>ออกแบบกลิ่น:</b> กด "สร้างกลิ่นจากบรีฟ" ระบบดึงความรู้สึก ทิศทางกลิ่น และสินค้าที่ต้องการมาให้ แล้วบันทึกพีระมิดกลิ่น เวอร์ชันทดลอง และผลตอบรับ</li>
+      <li><b>ส่งต่อการผลิต:</b> ระบุ % หัวน้ำหอมต่อสินค้าแต่ละประเภท เชื่อมกับสูตรต้นทุนในหน้า "คำนวณ" และเปลี่ยนสถานะเป็น "ใช้ผลิต" เมื่อลูกค้าอนุมัติ · ตรวจ IFRA และออก MSDS ได้จากแท็บที่เกี่ยวข้อง</li></ol>`)}
+    <div class="pf-tabs" role="tablist"><button type="button" data-tab="brief" class="${pfTab==='brief'?'on':''}">บรีฟลูกค้า <span class="pf-n" id="pfNb"></span></button><button type="button" data-tab="scent" class="${pfTab==='scent'?'on':''}">คลังกลิ่น <span class="pf-n" id="pfNs"></span></button></div>
+    <div class="search" id="pfBar"></div>
+    <div id="pfEdit"></div>
+    <div id="pfBody"><div class="empty">กำลังโหลด…</div></div>`;
+  loadPf().then(drawPf).catch(e=>{ $('#pfBody').innerHTML=`<div class="msg bad">${esc(errText(e))}</div>`; });
+}
+function drawPf(){
+  if(!PF.briefs) return;
+  const nb=$('#pfNb'), ns=$('#pfNs'); if(nb) nb.textContent=PF.briefs.length; if(ns) ns.textContent=PF.scents.length;
+  document.querySelectorAll('.pf-tabs button').forEach(b=>b.classList.toggle('on', b.dataset.tab===pfTab));
+  const isB=pfTab==='brief', stat=isB?PF_BSTAT:PF_SSTAT, ed=pfCanEdit();
+  $('#pfBar').innerHTML=`<input id="pfQ" type="search" autocomplete="off" placeholder="${isB?'ค้นหาแบรนด์ ผู้ติดต่อ กลิ่นที่ชอบ…':'ค้นหารหัส ชื่อกลิ่น กลุ่มกลิ่น แบรนด์…'}" value="${esc(pfQ)}">
+    ${isB?`<select id="pfKind" aria-label="ประเภทบรีฟ"><option value="">ทุกประเภท</option>${Object.entries(PF_KIND).map(([k,l])=>`<option value="${k}" ${pfKind===k?'selected':''}>${esc(l)}</option>`).join('')}</select>`:''}
+    <select id="pfStatus" aria-label="สถานะ"><option value="">ทุกสถานะ</option>${Object.entries(stat).map(([k,[l]])=>`<option value="${k}" ${pfStatus===k?'selected':''}>${esc(l)}</option>`).join('')}</select>
+    ${ed?`<button class="btn small primary" type="button" id="pfNew">${isB?'+ สร้างบรีฟ':'+ สร้างกลิ่น'}</button>`:''}
+    ${can('export')?`<button class="btn small" type="button" id="pfXlsx">ดาวน์โหลด Excel</button>`:''}
+    <button class="btn small" type="button" id="pfRefresh">รีเฟรช</button>`;
+  drawPfEdit(); drawPfTable();
+}
+function pfFiltered(){
+  const q=pfQ.trim().toLowerCase();
+  if(pfTab==='brief') return PF.briefs.filter(b=>(!pfKind||b.kind===pfKind)&&(!pfStatus||b.status===pfStatus)&&(!q||[b.brand,b.contact,b.email,b.summary,...pfList(b.data.like),b.data.refScent||'',b.data.story||''].join(' ').toLowerCase().includes(q)));
+  return PF.scents.filter(s=>(!pfStatus||s.status===pfStatus)&&(!q||[s.code,s.name,s.family,pfBrand(s.briefId),s.data.concept||'',s.data.top||'',s.data.heart||'',s.data.base||'',...pfList(s.data.applications).map(a=>a.type||'')].join(' ').toLowerCase().includes(q)));
+}
+function drawPfTable(){
+  const body=$('#pfBody'); if(!body) return;
+  const list=pfFiltered(), ed=pfCanEdit();
+  if(pfTab==='brief'){
+    body.innerHTML=`<div class="tablebox"><table><thead><tr><th>แบรนด์ / ลูกค้า</th><th>ประเภท</th><th>สถานะ</th><th>ผู้ติดต่อ</th><th>ทิศทางกลิ่น</th><th>สินค้า / บริการ</th><th>Archetype</th><th>กลิ่น</th><th>แก้ล่าสุด</th><th></th></tr></thead><tbody>
+      ${list.map(b=>{ const d=b.data, prods=pfList(d.products).concat(pfList(d.svProducts)), n=PF.scents.filter(s=>s.briefId===b.id).length, ar=d.arch&&d.arch.result?PF_ARCH[d.arch.result]:null;
+        return `<tr><td style="min-width:180px"><b>${esc(b.brand)}</b>${b.summary?`<div class="muted" style="font-size:12px">${esc(b.summary)}</div>`:''}</td><td style="white-space:nowrap;font-size:12.5px">${esc(PF_KIND[b.kind]||b.kind)}</td><td>${pfChip(b.status,PF_BSTAT)}</td>
+          <td style="font-size:12.5px">${esc(b.contact)}${b.phone?`<div class="muted">${esc(b.phone)}</div>`:''}</td><td style="font-size:12.5px;max-width:200px">${esc(pfList(d.like).join(', '))||'<span class="muted">–</span>'}</td>
+          <td style="font-size:12.5px;max-width:220px">${prods.length?esc(prods.map(p=>p.split(' (')[0]).join(', ')):'<span class="muted">–</span>'}</td><td style="font-size:12.5px;white-space:nowrap">${ar?esc(ar[0].replace('The ','')):'<span class="muted">–</span>'}</td>
+          <td class="num">${n||'<span class="muted">0</span>'}</td><td class="muted" style="white-space:nowrap;font-size:12px">${fmtSeen(b.updatedAt)}<br>${esc(b.updatedBy.split('@')[0])}</td>
+          <td style="white-space:nowrap"><button class="btn small" type="button" data-pf-open="${b.id}">${ed?'แก้ไข':'เปิดดู'}</button>${ed?` <button class="btn small" type="button" data-pf-scent-from="${b.id}" title="สร้างกลิ่นใหม่โดยดึงข้อมูลจากบรีฟนี้">+ กลิ่น</button>`:''}</td></tr>`; }).join('') || `<tr><td colspan="10" class="empty">${PF.briefs.length?'ไม่พบบรีฟที่ตรงกับคำค้น':'ยังไม่มีบรีฟ'+(ed?' · กด "+ สร้างบรีฟ" เพื่อเริ่ม':'')}</td></tr>`}
+      </tbody></table></div>`;
+  } else {
+    body.innerHTML=`<div class="tablebox"><table><thead><tr><th>รหัส</th><th>ชื่อกลิ่น</th><th>กลุ่มกลิ่น</th><th>สถานะ</th><th>บรีฟ / แบรนด์</th><th>ใช้ผลิตเป็น</th><th>สูตรต้นทุน</th><th>เวอร์ชัน</th><th>แก้ล่าสุด</th><th></th></tr></thead><tbody>
+      ${list.map(s=>{ const d=s.data, apps=pfList(d.applications), vers=pfList(d.versions), fc=s.formulaId?pfFormulaCost(s.formulaId):null;
+        return `<tr><td class="mono">${esc(s.code)}</td><td style="min-width:160px"><b>${esc(s.name)}</b>${d.archetype&&PF_ARCH[d.archetype]?`<div class="muted" style="font-size:12px">${esc(PF_ARCH[d.archetype][0])}</div>`:''}</td><td style="font-size:12.5px">${esc(s.family)||'<span class="muted">–</span>'}</td><td>${pfChip(s.status,PF_SSTAT)}</td>
+          <td style="font-size:12.5px">${esc(pfBrand(s.briefId))||'<span class="muted">–</span>'}</td>
+          <td style="font-size:12.5px;max-width:240px">${apps.length?apps.map(a=>esc(a.type)+(a.dosage?` <span class="muted">${esc(a.dosage)}%</span>`:'')).join('<br>'):'<span class="muted">–</span>'}</td>
+          <td style="font-size:12.5px">${fc?esc(fc.name)+(fc.total!=null?`<div class="muted">${fc.total.toLocaleString('th-TH',{maximumFractionDigits:0})} ฿/กก.${fc.complete?'':' (ราคาไม่ครบ)'}</div>`:''):s.formulaId?'<span class="muted">สูตรไม่อยู่ในเครื่องนี้</span>':'<span class="muted">–</span>'}</td>
+          <td class="num">${vers.length||'<span class="muted">0</span>'}</td><td class="muted" style="white-space:nowrap;font-size:12px">${fmtSeen(s.updatedAt)}<br>${esc(s.updatedBy.split('@')[0])}</td>
+          <td><button class="btn small" type="button" data-pf-open="${s.id}">${ed?'แก้ไข':'เปิดดู'}</button></td></tr>`; }).join('') || `<tr><td colspan="10" class="empty">${PF.scents.length?'ไม่พบกลิ่นที่ตรงกับคำค้น':'ยังไม่มีกลิ่นในคลัง'+(ed?' · สร้างจากบรีฟ หรือกด "+ สร้างกลิ่น"':'')}</td></tr>`}
+      </tbody></table></div>`;
+  }
+}
+/* ---------- ฟอร์มแก้ไข ---------- */
+function pfNewBrief(){ return {id:'', kind:'ODM', brand:'', status:'new', contact:'', phone:'', email:'', summary:'', data:{arch:{answers:[], result:''}}}; }
+function pfNewScent(from){
+  const s={id:'', code:'', name:'', briefId:'', family:'', status:'draft', formulaId:'', data:{applications:[], versions:[]}};
+  if(from){ const d=from.data;
+    s.briefId=from.id; s.name=from.brand+' Signature Scent'; s.family=pfList(d.like)[0]||'';
+    s.data.subfamilies=pfList(d.like).slice(1); s.data.character=pfList(d.feelings); s.data.archetype=(d.arch&&d.arch.result)||'';
+    s.data.concept=[d.story, d.concept].filter(Boolean).join('\n'); s.data.inspiration=d.refScent||''; s.data.claims=pfList(d.claims);
+    s.data.ifra=d.avoid?'ข้อจำกัดจากบรีฟ: '+d.avoid:'';
+    s.data.applications=pfList(d.products).concat(pfList(d.svProducts)).map(p=>({type:p.split(' (')[0], dosage:'', base:'', note:''})); }
+  return s;
+}
+function drawPfEdit(){
+  const el=$('#pfEdit'); if(!el) return;
+  if(!pfEdit){ el.innerHTML=''; return; }
+  const ro=!pfCanEdit(), dis=ro?'disabled':'';
+  if(pfEdit.type==='brief'){
+    const b=pfEdit.obj, d=b.data||{}, arch=d.arch||{answers:[],result:''}, res=pfArchResult(arch.answers);
+    el.innerHTML=`<form id="pfForm" class="card" style="margin:0 0 16px" novalidate><fieldset ${dis} style="border:0;padding:0;margin:0;min-width:0">
+      <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px"><h3 style="margin:0">${b.id?'บรีฟ · '+esc(b.brand):'สร้างบรีฟใหม่'}</h3><span class="muted" style="font-size:12px">${b.id?`สร้างโดย ${esc(b.createdBy||'')} · ${fmtSeen(b.createdAt)}`:'ต้นแบบจาก ODM Brief / SV Brief'}</span></div>
+      <div class="settings" style="margin-top:10px">
+        <div class="field"><label for="pfBrand">ชื่อแบรนด์ / ชื่อลูกค้า *</label><input id="pfBrand" value="${esc(b.brand)}" maxlength="200" required></div>
+        <div class="field"><label for="pfKindSel">ประเภทบรีฟ</label><select id="pfKindSel">${Object.entries(PF_KIND).map(([k,l])=>`<option value="${k}" ${b.kind===k?'selected':''}>${esc(l)}</option>`).join('')}</select></div>
+        <div class="field"><label for="pfStat">สถานะงาน</label><select id="pfStat">${Object.entries(PF_BSTAT).map(([k,[l]])=>`<option value="${k}" ${b.status===k?'selected':''}>${esc(l)}</option>`).join('')}</select></div>
+        <div class="field pf-wide"><label for="pfSummary">สรุปบรีฟสั้น ๆ (แสดงในตาราง)</label><input id="pfSummary" value="${esc(b.summary)}" maxlength="300" placeholder="เช่น น้ำหอม 2 SKU กลิ่นดอกไม้สีขาว วางขาย Q1"></div>
+      </div>
+      <div id="pfFields">${pfGroups(PF_BRIEF_FIELDS, d, b.kind)}</div>
+      <div class="pf-group"><h4>Brand Archetype Quiz · ค้นหาตัวตนแบรนด์ (8 ข้อ)</h4>
+        <div class="settings" id="pfQuiz">${PF_QUIZ.map((q,i)=>`<div class="field"><label>${i+1}. ${esc(q[0])}</label><select data-q="${i}"><option value="">– เลือก –</option>${q[1].map((c,j)=>`<option value="${j}" ${String(arch.answers[i])===String(j)?'selected':''}>${esc(c[0])}</option>`).join('')}</select></div>`).join('')}</div>
+        <div id="pfArchOut">${res?pfArchBox(res.key, `<div class="muted" style="font-size:12px;margin-top:4px">ตอบแล้ว ${res.answered}/8 ข้อ · คะแนน ${res.score}${res.ties.length?' · เสมอกับ '+res.ties.map(k=>PF_ARCH[k][0]).join(', ')+' (ใช้ลำดับตามแบบทดสอบ)':''}</div>`):'<div class="muted" style="font-size:12.5px">ตอบคำถามเพื่อดูผล Archetype และทิศทางกลิ่นที่แนะนำ</div>'}</div></div>
+      </fieldset>
+      <div class="row" style="margin-top:14px;gap:8px;flex-wrap:wrap">${ro?'':'<button class="btn primary" type="submit">บันทึกบรีฟ</button>'}<button class="btn" type="button" id="pfCancel">${ro?'ปิด':'ยกเลิก'}</button>
+        ${b.id&&!ro?`<button class="btn" type="button" id="pfScentFrom">+ สร้างกลิ่นจากบรีฟนี้</button><button class="btn" type="button" id="pfDel" style="margin-left:auto;color:var(--bad)">ลบบรีฟ</button>`:''}<span class="muted" id="pfErr" role="alert" style="color:var(--bad)"></span></div></form>`;
+  } else {
+    const s=pfEdit.obj, d=s.data||{}, apps=pfList(d.applications), vers=pfList(d.versions), fs=pfFormulas(), fc=s.formulaId?pfFormulaCost(s.formulaId):null;
+    const briefOpts=PF.briefs.map(b=>`<option value="${b.id}" ${s.briefId===b.id?'selected':''}>${esc(b.brand)} · ${esc(PF_KIND[b.kind]||b.kind)}</option>`).join('');
+    const fOpts=fs.map(f=>`<option value="${esc(f.id)}" ${s.formulaId===f.id?'selected':''}>${esc(f.name)}${f.owner!==S.me.email?' · '+esc(f.owner.split('@')[0]):''}</option>`).join('')+(s.formulaId&&!fs.some(f=>f.id===s.formulaId)?`<option value="${esc(s.formulaId)}" selected>${esc(s.formulaId)} (ไม่อยู่ในเครื่องนี้)</option>`:'');
+    const appRow=(a,i)=>`<tr data-i="${i}"><td><input class="pa-type" list="pfAppList" value="${esc(a.type||'')}" maxlength="80" placeholder="ประเภทสินค้า"></td><td><input class="pa-dosage num" value="${esc(a.dosage||'')}" maxlength="20" placeholder="${esc((PF_APP.find(x=>x[0]===a.type)||[])[1]||'%')}" style="width:90px"></td><td><input class="pa-base" value="${esc(a.base||'')}" maxlength="120" placeholder="เบส / ตัวทำละลาย"></td><td><input class="pa-note" value="${esc(a.note||'')}" maxlength="200" placeholder="หมายเหตุ"></td><td>${ro?'':`<button class="x" type="button" data-pa-rm="${i}" aria-label="เอาออก">×</button>`}</td></tr>`;
+    const verRow=(v,i)=>`<tr data-i="${i}"><td><input class="pv-v" value="${esc(v.v||'')}" maxlength="20" placeholder="V${i+1}" style="width:70px"></td><td><input class="pv-date" type="date" value="${esc(v.date||'')}" style="width:150px"></td><td><input class="pv-change" value="${esc(v.change||'')}" maxlength="300" placeholder="สิ่งที่ปรับ"></td><td><input class="pv-feedback" value="${esc(v.feedback||'')}" maxlength="300" placeholder="ผลตอบรับ / ความเห็นลูกค้า"></td><td><select class="pv-result"><option value="">–</option>${[['go','ไปต่อ'],['revise','ปรับแก้'],['chosen','เลือกเวอร์ชันนี้'],['drop','ยกเลิก']].map(([k,l])=>`<option value="${k}" ${v.result===k?'selected':''}>${l}</option>`).join('')}</select></td><td>${ro?'':`<button class="x" type="button" data-pv-rm="${i}" aria-label="เอาออก">×</button>`}</td></tr>`;
+    el.innerHTML=`<form id="pfForm" class="card" style="margin:0 0 16px" novalidate><fieldset ${dis} style="border:0;padding:0;margin:0;min-width:0">
+      <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px"><h3 style="margin:0">${s.id?`<span class="mono">${esc(s.code)}</span> · ${esc(s.name)}`:'สร้างกลิ่นใหม่'}</h3><span class="muted" style="font-size:12px">${s.id?`เจ้าของ ${esc(s.owner||'')} · แก้ล่าสุด ${fmtSeen(s.updatedAt)}`:'รหัสกลิ่นจะออกให้อัตโนมัติเมื่อบันทึก'}</span></div>
+      <div class="settings" style="margin-top:10px">
+        <div class="field"><label for="pfName">ชื่อกลิ่น *</label><input id="pfName" value="${esc(s.name)}" maxlength="160" required></div>
+        <div class="field"><label for="pfFamily">กลุ่มกลิ่นหลัก</label><select id="pfFamily"><option value="">– เลือก –</option>${PF_OPT.families.map(f=>`<option value="${esc(f)}" ${s.family===f?'selected':''}>${esc(f)}</option>`).join('')}</select></div>
+        <div class="field"><label for="pfStat">สถานะ</label><select id="pfStat">${Object.entries(PF_SSTAT).map(([k,[l]])=>`<option value="${k}" ${s.status===k?'selected':''}>${esc(l)}</option>`).join('')}</select></div>
+        <div class="field"><label for="pfBrief">บรีฟ / ลูกค้า</label><select id="pfBrief"><option value="">– ไม่ผูกกับบรีฟ –</option>${briefOpts}</select></div>
+        <div class="field"><label for="pfFormula">สูตรต้นทุน (หน้า "คำนวณ")</label><select id="pfFormula"><option value="">– ยังไม่เชื่อม –</option>${fOpts}</select>${fc&&fc.total!=null?`<div class="muted" style="font-size:12px;margin-top:3px">ต้นทุนวัตถุดิบ ${fc.total.toLocaleString('th-TH',{maximumFractionDigits:0})} ฿/กก.${fc.complete?'':' · ราคาวัตถุดิบยังไม่ครบ'}</div>`:''}</div>
+      </div>
+      <div id="pfFields">${pfGroups(PF_SCENT_FIELDS, d, 'INT')}</div>
+      <div class="pf-group"><div class="row" style="justify-content:space-between"><h4>ใช้ผลิตเป็นสินค้า · % หัวน้ำหอมต่อประเภท</h4>${ro?'':'<button class="btn small" type="button" id="pfAppAdd">+ เพิ่มสินค้า</button>'}</div>
+        <div class="tablebox"><table><thead><tr><th>ประเภทสินค้า</th><th>% หัวน้ำหอม</th><th>เบส / ตัวทำละลาย</th><th>หมายเหตุ</th><th></th></tr></thead><tbody id="pfApps">${apps.map(appRow).join('')||'<tr class="pf-empty"><td colspan="5" class="empty" style="padding:12px">ยังไม่ระบุสินค้า</td></tr>'}</tbody></table></div>
+        <datalist id="pfAppList">${PF_APP.map(([t])=>`<option value="${esc(t)}">`).join('')}</datalist>
+        <div class="muted" style="font-size:12px;margin-top:6px">ช่อง % แสดงค่าที่ใช้กันทั่วไปเป็นตัวอย่างสีจาง ให้ใส่ค่าจริงของสูตร · ระบบกระจายกลิ่นใช้น้ำมันล้วน 100%</div></div>
+      <div class="pf-group"><div class="row" style="justify-content:space-between"><h4>เวอร์ชันทดลองและผลตอบรับ</h4>${ro?'':'<button class="btn small" type="button" id="pfVerAdd">+ เพิ่มเวอร์ชัน</button>'}</div>
+        <div class="tablebox"><table><thead><tr><th>เวอร์ชัน</th><th>วันที่</th><th>สิ่งที่ปรับ</th><th>ผลตอบรับ</th><th>ผล</th><th></th></tr></thead><tbody id="pfVers">${vers.map(verRow).join('')||'<tr class="pf-empty"><td colspan="6" class="empty" style="padding:12px">ยังไม่มีเวอร์ชันทดลอง</td></tr>'}</tbody></table></div></div>
+      </fieldset>
+      <div class="row" style="margin-top:14px;gap:8px;flex-wrap:wrap">${ro?'':'<button class="btn primary" type="submit">บันทึกกลิ่น</button>'}<button class="btn" type="button" id="pfCancel">${ro?'ปิด':'ยกเลิก'}</button>
+        ${s.id&&!ro?`<button class="btn" type="button" id="pfDel" style="margin-left:auto;color:var(--bad)">ลบกลิ่น</button>`:''}<span class="muted" id="pfErr" role="alert" style="color:var(--bad)"></span></div></form>`;
+    window.__pfRows={appRow, verRow};
+  }
+  el.scrollIntoView({behavior:'smooth', block:'start'});
+}
+function pfReadApps(){ return [...document.querySelectorAll('#pfApps tr[data-i]')].map(tr=>({type:tr.querySelector('.pa-type').value.trim(), dosage:tr.querySelector('.pa-dosage').value.trim(), base:tr.querySelector('.pa-base').value.trim(), note:tr.querySelector('.pa-note').value.trim()})).filter(a=>a.type||a.dosage||a.note); }
+function pfReadVers(){ return [...document.querySelectorAll('#pfVers tr[data-i]')].map(tr=>({v:tr.querySelector('.pv-v').value.trim(), date:tr.querySelector('.pv-date').value, change:tr.querySelector('.pv-change').value.trim(), feedback:tr.querySelector('.pv-feedback').value.trim(), result:tr.querySelector('.pv-result').value})).filter(v=>v.v||v.change||v.feedback); }
+function pfSyncEdit(){   /* เก็บค่าที่กรอกไว้ก่อนวาดฟอร์มใหม่ (เช่น เปลี่ยนประเภทบรีฟ) */
+  if(!pfEdit) return; const root=$('#pfForm'); if(!root) return;
+  if(pfEdit.type==='brief'){ const b=pfEdit.obj; b.brand=$('#pfBrand').value; b.kind=$('#pfKindSel').value; b.status=$('#pfStat').value; b.summary=$('#pfSummary').value;
+    b.data=Object.assign({}, b.data, pfCollect(root, PF_BRIEF_FIELDS), {arch:{answers:[...root.querySelectorAll('#pfQuiz select')].map(x=>x.value), result:(pfArchResult([...root.querySelectorAll('#pfQuiz select')].map(x=>x.value))||{}).key||''}}); }
+  else { const s=pfEdit.obj; s.name=$('#pfName').value; s.family=$('#pfFamily').value; s.status=$('#pfStat').value; s.briefId=$('#pfBrief').value; s.formulaId=$('#pfFormula').value;
+    s.data=Object.assign({}, s.data, pfCollect(root, PF_SCENT_FIELDS), {applications:pfReadApps(), versions:pfReadVers()}); }
+}
+async function pfSave(){
+  pfSyncEdit(); const err=$('#pfErr'), btn=$('#pfForm button[type=submit]');
+  if(pfEdit.type==='brief'){ const b=pfEdit.obj; if(!b.brand.trim()){ err.textContent='ใส่ชื่อแบรนด์ / ชื่อลูกค้า'; $('#pfBrand').focus(); return; }
+    const d=b.data; b.contact=d.contact||''; b.phone=d.phone||''; b.email=d.email||'';
+    btn.disabled=true; err.textContent='';
+    try{ const nb=await api('saveBrief', {id:b.id, kind:b.kind, brand:b.brand, status:b.status, contact:b.contact, phone:b.phone, email:b.email, summary:b.summary, data:d});
+      PF.briefs=PF.briefs.filter(x=>x.id!==nb.id); PF.briefs.unshift(nb); pfEdit=null; drawPf(); toast('บันทึกบรีฟ '+nb.brand+' แล้ว'); }
+    catch(e){ err.textContent=errText(e); btn.disabled=false; }
+  } else { const s=pfEdit.obj; if(!s.name.trim()){ err.textContent='ใส่ชื่อกลิ่น'; $('#pfName').focus(); return; }
+    btn.disabled=true; err.textContent='';
+    try{ const ns=await api('saveScent', {id:s.id, name:s.name, briefId:s.briefId, family:s.family, status:s.status, formulaId:s.formulaId, data:s.data});
+      PF.scents=PF.scents.filter(x=>x.id!==ns.id); PF.scents.unshift(ns); pfEdit=null; pfTab='scent'; drawPf(); toast('บันทึกกลิ่น '+ns.code+' แล้ว'); }
+    catch(e){ err.textContent=errText(e); btn.disabled=false; }
+  }
+}
+function pfExportXlsx(){
+  if(typeof XLSX==='undefined'){ toast('โหลดตัวเขียน Excel ไม่สำเร็จ'); return; }
+  const j=v=>pfList(v).join(', ');
+  const bh=['แบรนด์','ประเภทบรีฟ','สถานะ','สรุป','ผู้ติดต่อ','ตำแหน่ง','โทร','อีเมล','LINE','ธุรกิจ','ระดับแบรนด์','ตลาด','ช่องทาง','สโลแกน','คำ 3 คำ','ลูกค้าหลัก','ความรู้สึก','จุดสัมผัสกลิ่น','แนวทางพัฒนา','กลิ่นที่ชอบ','กลิ่นที่ไม่ชอบ','วัตถุดิบยั่งยืน','จุดเด่น','กลิ่นอ้างอิง','หลีกเลี่ยง','สินค้า','SKU','จำนวนต่อล็อต','ราคาขายปลีก','วางจำหน่าย','งบประมาณ','เริ่มใช้','Archetype','ทิศทางกลิ่นตาม Archetype','Mood board','บันทึก','ผู้รับผิดชอบ','สร้างเมื่อ','แก้ล่าสุด'];
+  const br=PF.briefs.map(b=>{ const d=b.data, a=d.arch&&d.arch.result?PF_ARCH[d.arch.result]:null; return [b.brand, PF_KIND[b.kind]||b.kind, (PF_BSTAT[b.status]||[b.status])[0], b.summary, d.contact||'', d.position||'', d.phone||'', d.email||'', d.line||'', d.bizStatus||d.bizType||'', d.positioning||'', j(d.markets), j(d.channels), d.slogan||'', d.words3||'', d.customers||'', j(d.feelings), j(d.touchpoints), d.approach||'', j(d.like), j(d.dislike), j(d.sustainable), j(d.claims), d.refScent||'', d.avoid||'', j(d.products)||j(d.svProducts), d.sku||'', d.qty||'', d.retail||'', d.launch||'', d.budget||'', d.start||'', a?a[0]:'', a?a[5]:'', d.moodboard||'', [d.story,d.concept,d.notes].filter(Boolean).join('\n'), b.owner, b.createdAt, b.updatedAt]; });
+  const sh=['รหัส','ชื่อกลิ่น','กลุ่มกลิ่นหลัก','กลุ่มกลิ่นรอง','สถานะ','บรีฟ / แบรนด์','Archetype','ความรู้สึก','แนวคิด','Top','Heart','Base','ใช้ผลิตเป็น (ประเภท · %)','จุดขาย','IFRA / อย.','เวอร์ชันล่าสุด','สูตรต้นทุน','เจ้าของ','แก้ล่าสุด'];
+  const sr=PF.scents.map(s=>{ const d=s.data, fc=s.formulaId?pfFormulaCost(s.formulaId):null, lv=pfList(d.versions).slice(-1)[0]; return [s.code, s.name, s.family, j(d.subfamilies), (PF_SSTAT[s.status]||[s.status])[0], pfBrand(s.briefId), d.archetype&&PF_ARCH[d.archetype]?PF_ARCH[d.archetype][0]:'', j(d.character), d.concept||'', d.top||'', d.heart||'', d.base||'', pfList(d.applications).map(a=>a.type+(a.dosage?' '+a.dosage+'%':'')).join('; '), j(d.claims), d.ifra||'', lv?(lv.v+' '+(lv.date||'')+' '+(lv.feedback||'')).trim():'', fc?fc.name+(fc.total!=null?' ('+Math.round(fc.total)+' ฿/กก.)':''):s.formulaId, s.owner, s.updatedAt]; });
+  const wb=XLSX.utils.book_new();
+  const w1=XLSX.utils.aoa_to_sheet([bh].concat(br)); w1['!cols']=bh.map(()=>({wch:22})); XLSX.utils.book_append_sheet(wb, w1, 'บรีฟ');
+  const w2=XLSX.utils.aoa_to_sheet([sh].concat(sr)); w2['!cols']=sh.map(()=>({wch:22})); XLSX.utils.book_append_sheet(wb, w2, 'คลังกลิ่น');
+  const dt=new Date(), stamp=`${dt.getFullYear()}${String(dt.getMonth()+1).padStart(2,'0')}${String(dt.getDate()).padStart(2,'0')}`;
+  saveFile(`Perfumer_บรีฟ${PF.briefs.length}_กลิ่น${PF.scents.length}_${stamp}.xlsx`, XLSX.write(wb,{type:'array',bookType:'xlsx'}));
+  toast('ดาวน์โหลดแล้ว');
+}
+/* ---------- events ---------- */
+const pfv=$('#perfView');
+pfv.addEventListener('input', e=>{ const t=e.target; if(t.id==='pfQ'){ pfQ=t.value; drawPfTable(); } });
+pfv.addEventListener('change', e=>{
+  const t=e.target;
+  if(t.id==='pfKind'){ pfKind=t.value; drawPfTable(); return; }
+  if(t.id==='pfStatus'){ pfStatus=t.value; drawPfTable(); return; }
+  if(t.id==='pfKindSel'){ pfSyncEdit(); drawPfEdit(); return; }
+  if(t.id==='pfFormula'){ pfSyncEdit(); drawPfEdit(); return; }
+  if(t.closest('#pfQuiz')){ const ans=[...document.querySelectorAll('#pfQuiz select')].map(x=>x.value), res=pfArchResult(ans);
+    $('#pfArchOut').innerHTML=res?pfArchBox(res.key, `<div class="muted" style="font-size:12px;margin-top:4px">ตอบแล้ว ${res.answered}/8 ข้อ · คะแนน ${res.score}${res.ties.length?' · เสมอกับ '+res.ties.map(k=>PF_ARCH[k][0]).join(', ')+' (ใช้ลำดับตามแบบทดสอบ)':''}</div>`):''; return; }
+  if(t.type==='checkbox' && t.closest('.pf-chips')){ const box=t.closest('.pf-chips'), max=+box.dataset.max; if(max && box.querySelectorAll('input:checked').length>max){ t.checked=false; toast(`เลือกได้ไม่เกิน ${max} ข้อ`); } return; }
+  if(t.classList.contains('pa-type')){ const tr=t.closest('tr'), hint=(PF_APP.find(x=>x[0]===t.value)||[])[1]; if(hint) tr.querySelector('.pa-dosage').placeholder=hint; }
+});
+pfv.addEventListener('click', async e=>{
+  const t=e.target.closest('button'); if(!t) return;
+  if(t.dataset.tab){ if(pfEdit) pfSyncEdit(); pfTab=t.dataset.tab; pfStatus=''; pfEdit=null; drawPf(); return; }
+  if(t.id==='pfNew'){ pfEdit={type:pfTab, obj:pfTab==='brief'?pfNewBrief():pfNewScent(null)}; drawPfEdit(); return; }
+  if(t.dataset.pfOpen){ const o=(pfTab==='brief'?PF.briefs:PF.scents).find(x=>x.id===t.dataset.pfOpen); if(o){ pfEdit={type:pfTab, obj:JSON.parse(JSON.stringify(o))}; drawPfEdit(); } return; }
+  if(t.dataset.pfScentFrom || t.id==='pfScentFrom'){ let b; if(t.id==='pfScentFrom'){ pfSyncEdit(); b=pfEdit.obj; if(!b.id){ return; } } else b=PF.briefs.find(x=>x.id===t.dataset.pfScentFrom); if(!b) return; pfEdit={type:'scent', obj:pfNewScent(b)}; pfTab='scent'; drawPf(); return; }
+  if(t.id==='pfCancel'){ pfEdit=null; drawPfEdit(); return; }
+  if(t.id==='pfAppAdd'){ pfSyncEdit(); pfEdit.obj.data.applications=pfReadApps().concat([{type:'',dosage:'',base:'',note:''}]); drawPfEdit(); setTimeout(()=>{ const r=document.querySelectorAll('#pfApps .pa-type'); if(r.length) r[r.length-1].focus(); },50); return; }
+  if(t.id==='pfVerAdd'){ pfSyncEdit(); const vs=pfReadVers(); pfEdit.obj.data.versions=vs.concat([{v:'V'+(vs.length+1), date:new Date().toISOString().slice(0,10), change:'', feedback:'', result:''}]); drawPfEdit(); return; }
+  if(t.dataset.paRm!=null){ pfSyncEdit(); pfEdit.obj.data.applications=pfReadApps().filter((_,i)=>i!==+t.dataset.paRm); drawPfEdit(); return; }
+  if(t.dataset.pvRm!=null){ pfSyncEdit(); pfEdit.obj.data.versions=pfReadVers().filter((_,i)=>i!==+t.dataset.pvRm); drawPfEdit(); return; }
+  if(t.id==='pfDel'){
+    const o=pfEdit.obj, isB=pfEdit.type==='brief';
+    if(!confirm(isB?`ลบบรีฟ "${o.brand}"? กลิ่นที่ผูกกับบรีฟนี้ต้องย้ายหรือลบก่อน`:`ลบกลิ่น ${o.code} "${o.name}" ออกจากคลัง?`)) return;
+    t.disabled=true;
+    try{ await api(isB?'deleteBrief':'deleteScent', o.id); if(isB) PF.briefs=PF.briefs.filter(x=>x.id!==o.id); else PF.scents=PF.scents.filter(x=>x.id!==o.id); pfEdit=null; drawPf(); toast('ลบแล้ว'); }
+    catch(ex){ $('#pfErr').textContent=errText(ex); t.disabled=false; }
+    return;
+  }
+  if(t.id==='pfXlsx'){ pfExportXlsx(); return; }
+  if(t.id==='pfRefresh'){ t.disabled=true; try{ if(pfEdit) pfSyncEdit(); await loadPf(true); drawPf(); }catch(ex){ toast(errText(ex)); } finally{ t.disabled=false; } }
+});
+pfv.addEventListener('submit', e=>{ e.preventDefault(); if(e.target.id==='pfForm' && pfEdit && pfCanEdit()) pfSave(); });
 function renderAdmin(){
   if(!S.adm) return;
   if(adminTab==='forms') adminTab='dir';

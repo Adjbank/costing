@@ -2724,7 +2724,8 @@ msv.addEventListener('drop', e=>{ if(!msCanEdit()) return; e.preventDefault(); i
    ดู: perfumer / calc / viewDb · สร้างและแก้ไข: perfumer · ลบ: ผู้สร้างหรือ admin (เซิร์ฟเวอร์ตรวจซ้ำ) */
 let PF={briefs:null, scents:null}, pfTab='brief', pfQ='', pfKind='', pfStatus='', pfEdit=null, pfBusy=false;
 const pfCanView=()=>can('perfumer')||can('calc')||can('viewDb'), pfCanEdit=()=>can('perfumer');
-const PF_KIND={ODM:'ODM · บรีฟจ้างผลิต', SV:'SV · กลิ่นประจำแบรนด์ธุรกิจบริการ', INT:'ภายใน · ออกแบบกลิ่นเอง'};
+const PF_KIND={ODM:'ODM · บรีฟจ้างผลิต', SV:'SV · กลิ่นประจำแบรนด์ธุรกิจบริการ', INT:'ภายใน · ออกแบบกลิ่นเอง', QUIZ:'Archetype Quiz · ยังไม่มีบรีฟ'};
+let TFS=null;   /* สถานะการเชื่อม Typeform (admin) */
 const PF_BSTAT={new:['รับบรีฟ','info'], design:['กำลังออกแบบ','warn'], sample:['ส่งตัวอย่าง','warn'], revise:['ปรับแก้','warn'], approved:['ลูกค้าอนุมัติ','ok'], closed:['ปิดงาน','ok'], lost:['ยกเลิก','bad']};
 const PF_SSTAT={draft:['ร่าง','info'], trial:['ทดลอง','warn'], sent:['ส่งตัวอย่าง','warn'], approved:['อนุมัติ','ok'], production:['ใช้ผลิต','ok'], retired:['เลิกใช้','bad']};
 const PF_OPT={
@@ -2780,7 +2781,7 @@ const PF_APP=[['น้ำหอม EDP / Perfume','15-20'],['น้ำหอม 
 /* โครงฟอร์ม: k=คีย์ใน data · t=text|long|number|select|multi · o=ชุดตัวเลือกใน PF_OPT · kinds=แสดงเฉพาะประเภทบรีฟ · max=เลือกได้สูงสุด */
 const PF_BRIEF_FIELDS=[
   {g:'ผู้ติดต่อและแหล่งที่มา', f:[
-    {k:'contact',l:'ชื่อผู้ติดต่อ',t:'text'},{k:'position',l:'ตำแหน่ง',t:'text'},{k:'phone',l:'เบอร์โทรศัพท์',t:'text'},{k:'email',l:'อีเมล',t:'text'},{k:'line',l:'LINE ID',t:'text'},
+    {k:'contact',l:'ชื่อผู้ติดต่อ',t:'text'},{k:'company',l:'ชื่อบริษัท (ถ้าต่างจากแบรนด์)',t:'text'},{k:'position',l:'ตำแหน่ง',t:'text'},{k:'phone',l:'เบอร์โทรศัพท์',t:'text'},{k:'email',l:'อีเมล',t:'text'},{k:'line',l:'LINE ID',t:'text'},
     {k:'website',l:'เว็บไซต์ หรือ Instagram',t:'text'},{k:'moodboard',l:'ลิงก์ไฟล์อ้างอิง / Mood board',t:'text'},{k:'source',l:'รู้จัก Scent & Sense จากช่องทางใด',t:'select',o:'source'}]},
   {g:'ธุรกิจและตลาด', f:[
     {k:'bizStatus',l:'สถานะธุรกิจ',t:'select',o:'bizStatus',kinds:'ODM'},{k:'bizType',l:'ประเภทธุรกิจ',t:'select',o:'bizType',kinds:'SV'},
@@ -2830,8 +2831,10 @@ function pfField(f, v, kind){
   const id='pf_'+f.k, wide=f.t==='long'||f.t==='multi'?' pf-wide':'';
   let inp='';
   if(f.t==='long') inp=`<textarea id="${id}" data-k="${f.k}" rows="3" maxlength="3000">${esc(v||'')}</textarea>`;
-  else if(f.t==='select') inp=`<select id="${id}" data-k="${f.k}"><option value="">– เลือก –</option>${pfOpts(f.o).map(([val,lab])=>`<option value="${esc(val)}" ${v===val?'selected':''}>${esc(lab)}</option>`).join('')}</select>`;
-  else if(f.t==='multi'){ const cur=pfList(v); inp=`<div class="pf-chips" data-k="${f.k}" ${f.max?`data-max="${f.max}"`:''}>${pfOpts(f.o).map(([val,lab])=>`<label class="pf-chip"><input type="checkbox" value="${esc(val)}" ${cur.includes(val)?'checked':''}><span>${esc(lab)}</span></label>`).join('')}</div>`; }
+  else if(f.t==='select'){ const opts=pfOpts(f.o); if(v && !opts.some(([val])=>val===v)) opts.push([v,v]);
+    inp=`<select id="${id}" data-k="${f.k}"><option value="">– เลือก –</option>${opts.map(([val,lab])=>`<option value="${esc(val)}" ${v===val?'selected':''}>${esc(lab)}</option>`).join('')}</select>`; }
+  else if(f.t==='multi'){ const cur=pfList(v), opts=pfOpts(f.o), extra=cur.filter(x=>!opts.some(([val])=>val===x));   /* ค่าที่มาจาก Typeform แต่ไม่อยู่ในตัวเลือก แสดงเป็นชิปเพิ่ม */
+    inp=`<div class="pf-chips" data-k="${f.k}" ${f.max?`data-max="${f.max}"`:''}>${opts.concat(extra.map(x=>[x,x])).map(([val,lab])=>`<label class="pf-chip"><input type="checkbox" value="${esc(val)}" ${cur.includes(val)?'checked':''}><span>${esc(lab)}</span></label>`).join('')}</div>`; }
   else inp=`<input id="${id}" data-k="${f.k}" type="${f.t==='number'?'number':'text'}" value="${esc(v==null?'':v)}" maxlength="300">`;
   return `<div class="field${wide}"><label for="${id}">${esc(f.l)}</label>${inp}</div>`;
 }
@@ -2860,8 +2863,27 @@ const pfLabelOf=k=>{ for(const g of PF_BRIEF_FIELDS) for(const f of g.f) if(f.k=
 /* ---------- โหลดและหน้าหลัก ---------- */
 async function loadPf(force){
   if(PF.briefs && PF.scents && !force) return;
-  const [b,s]=await Promise.all([api('listBriefs'), api('listScents')]); PF.briefs=b; PF.scents=s;
+  const tasks=[api('listBriefs'), api('listScents')]; if(isAdminRole()) tasks.push(api('getTypeformStatus').catch(()=>null));
+  const [b,s,t]=await Promise.all(tasks); PF.briefs=b; PF.scents=s; if(t!==undefined) TFS=t;
+  PF.briefs.forEach(x=>{ const a=x.data&&x.data.arch; if(a && !a.result && pfList(a.answers).some(String)){ const r=pfArchResult(a.answers); if(r) a.result=r.key; } });   /* คำตอบจาก Typeform คิดผล Archetype ที่นี่ */
   if(isAdminRole() && !ADM_FORMS){ try{ await loadAdminForms(false); }catch(e){} }
+}
+const pfSrc=b=>b.createdBy==='typeform'||(b.data&&b.data.tf)?'<span class="chip info" title="นำเข้าจาก Typeform">Typeform</span>':'';
+function drawPfTf(){
+  const el=$('#pfTf'); if(!el) return;
+  if(!isAdminRole() || !TFS){ el.innerHTML=''; return; }
+  const t=TFS, hooksOn=t.forms.filter(f=>f.webhook).length;
+  el.innerHTML=`<details class="help" ${t.connected?'':'open'}><summary>เชื่อม Typeform · ${t.connected?`เชื่อมแล้ว (${esc(t.account)||'บัญชี Typeform'}) · webhook ${hooksOn}/${t.forms.length} ฟอร์ม · นำเข้าแล้ว ${t.imported} บรีฟ`:'ยังไม่ได้เชื่อม'}</summary>
+    <div style="margin-top:8px">${t.connected?`
+      <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button class="btn small primary" type="button" id="tfSync">ดึงคำตอบใหม่</button><button class="btn small" type="button" id="tfSyncAll">ดึงทั้งหมดใหม่</button><button class="btn small" type="button" id="tfOff" style="color:var(--bad)">ยกเลิกการเชื่อม</button>
+        <span class="muted" style="font-size:12px">${t.lastRun?'ดึงล่าสุด '+esc(t.lastRun):''}${t.lastError?' · <span style="color:var(--bad)">webhook ผิดพลาดล่าสุด: '+esc(t.lastError)+'</span>':''}</span></div>
+      <table style="margin-top:8px;font-size:12.5px"><tbody>${t.forms.map(f=>`<tr><td>${esc(PF_KIND[f.kind]||f.kind)}</td><td><a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.title)}</a></td><td>${f.webhook?'<span class="chip ok">webhook เปิด</span>':'<span class="chip warn">webhook ปิด</span>'}</td><td class="muted">${f.lastSync?'ดึงล่าสุด '+fmtSeen(f.lastSync):''}</td></tr>`).join('')}</tbody></table>
+      <p class="muted" style="font-size:12px;margin:8px 0 0">คำตอบใหม่จะเข้ามาเองผ่าน webhook ภายในไม่กี่วินาที (สถานะ "รับบรีฟ" ป้าย Typeform) · ถ้าไม่เข้าให้กด "ดึงคำตอบใหม่" · Archetype Quiz ของแบรนด์ที่มีบรีฟอยู่แล้วจะผูกผลเข้าบรีฟเดิมอัตโนมัติ</p>`
+    :`<p style="margin:0 0 8px;font-size:13px">ให้บรีฟที่ลูกค้ากรอกใน ODM Brief, SV Brief และ Brand Archetype Quiz ไหลเข้ามาเองโดยไม่ต้องคัดลอก</p>
+      <ol style="margin:0 0 10px 18px;padding:0;font-size:13px;line-height:1.7"><li>เข้า Typeform → รูปโปรไฟล์ → <b>Settings → Personal tokens → Generate a new token</b></li><li>ตั้งชื่อ เช่น "Scent & Sense Costing" และติ๊กสิทธิ์ <b>forms:read, responses:read, webhooks:read, webhooks:write</b></li><li>คัดลอก token มาวางด้านล่าง ระบบจะตั้ง webhook ให้ทั้ง 3 ฟอร์มและดึงคำตอบเก่าทั้งหมดให้</li></ol>
+      <form id="tfForm" class="row" style="gap:8px;flex-wrap:wrap" novalidate><input id="tfToken" type="password" autocomplete="off" placeholder="วาง Personal access token ของ Typeform" style="flex:1;min-width:260px;border:1px solid var(--line-strong);border-radius:8px;padding:8px 10px;background:var(--input-bg)"><button class="btn primary small" type="submit">เชื่อมต่อ</button></form>
+      <p class="muted" style="font-size:12px;margin:6px 0 0">token เก็บใน Script Properties ของ Apps Script เท่านั้น ไม่อยู่ในชีตและไม่ส่งกลับมาหน้าเว็บ</p>`}
+    <div class="muted" id="tfMsg" aria-live="polite" style="font-size:12.5px;margin-top:6px"></div></div></details>`;
 }
 function renderPerfView(){
   $('#perfView').innerHTML=`<div class="bh"><h2>Perfumer · ออกแบบกลิ่น</h2><span class="hint">รับบรีฟจากลูกค้า ออกแบบกลิ่น และบันทึกกลิ่นที่พร้อมนำไปผลิตเป็นสินค้าประเภทต่าง ๆ</span></div>
@@ -2869,6 +2891,7 @@ function renderPerfView(){
       <li><b>บรีฟ:</b> บันทึกข้อมูลลูกค้าตามแบบฟอร์ม ODM Brief (จ้างผลิต) หรือ SV Brief (กลิ่นประจำแบรนด์ธุรกิจบริการ) และทำ Brand Archetype Quiz 8 ข้อเพื่อหาตัวตนแบรนด์และทิศทางกลิ่น · บรีฟที่ลูกค้ากรอกใน Typeform ให้คัดลอกคำตอบมาใส่ที่นี่</li>
       <li><b>ออกแบบกลิ่น:</b> กด "สร้างกลิ่นจากบรีฟ" ระบบดึงความรู้สึก ทิศทางกลิ่น และสินค้าที่ต้องการมาให้ แล้วบันทึกพีระมิดกลิ่น เวอร์ชันทดลอง และผลตอบรับ</li>
       <li><b>ส่งต่อการผลิต:</b> ระบุ % หัวน้ำหอมต่อสินค้าแต่ละประเภท เชื่อมกับสูตรต้นทุนในหน้า "คำนวณ" และเปลี่ยนสถานะเป็น "ใช้ผลิต" เมื่อลูกค้าอนุมัติ · ตรวจ IFRA และออก MSDS ได้จากแท็บที่เกี่ยวข้อง</li></ol>`)}
+    <div id="pfTf"></div>
     <div class="pf-tabs" role="tablist"><button type="button" data-tab="brief" class="${pfTab==='brief'?'on':''}">บรีฟลูกค้า <span class="pf-n" id="pfNb"></span></button><button type="button" data-tab="scent" class="${pfTab==='scent'?'on':''}">คลังกลิ่น <span class="pf-n" id="pfNs"></span></button></div>
     <div class="search" id="pfBar"></div>
     <div id="pfEdit"></div>
@@ -2886,7 +2909,13 @@ function drawPf(){
     ${ed?`<button class="btn small primary" type="button" id="pfNew">${isB?'+ สร้างบรีฟ':'+ สร้างกลิ่น'}</button>`:''}
     ${can('export')?`<button class="btn small" type="button" id="pfXlsx">ดาวน์โหลด Excel</button>`:''}
     <button class="btn small" type="button" id="pfRefresh">รีเฟรช</button>`;
-  drawPfEdit(); drawPfTable();
+  drawPfTf(); drawPfEdit(); drawPfTable();
+}
+async function tfRun(fn, args, btn, okText){
+  const msg=$('#tfMsg'); if(btn) btn.disabled=true; if(msg) msg.textContent='กำลังดำเนินการ…';
+  try{ const r=await api(fn, ...args); if(fn==='syncTypeform'){ await loadPf(true); TFS=await api('getTypeformStatus'); drawPf(); $('#tfMsg').textContent=`นำเข้าใหม่ ${r.imported} บรีฟ · ผูกผล Archetype ${r.attached} · ซ้ำ/ข้าม ${r.skipped}`; toast(`ดึงจาก Typeform แล้ว: ใหม่ ${r.imported} บรีฟ`); }
+    else { TFS=r; drawPf(); if(okText) toast(okText); if(fn==='saveTypeformToken'){ tfRun('syncTypeform',[true],null); } } }
+  catch(e){ const m2=$('#tfMsg'); if(m2) m2.textContent=errText(e); toast(errText(e)); if(btn && btn.isConnected) btn.disabled=false; }
 }
 function pfFiltered(){
   const q=pfQ.trim().toLowerCase();
@@ -2899,7 +2928,7 @@ function drawPfTable(){
   if(pfTab==='brief'){
     body.innerHTML=`<div class="tablebox"><table><thead><tr><th>แบรนด์ / ลูกค้า</th><th>ประเภท</th><th>สถานะ</th><th>ผู้ติดต่อ</th><th>ทิศทางกลิ่น</th><th>สินค้า / บริการ</th><th>Archetype</th><th>กลิ่น</th><th>แก้ล่าสุด</th><th></th></tr></thead><tbody>
       ${list.map(b=>{ const d=b.data, prods=pfList(d.products).concat(pfList(d.svProducts)), n=PF.scents.filter(s=>s.briefId===b.id).length, ar=d.arch&&d.arch.result?PF_ARCH[d.arch.result]:null;
-        return `<tr><td style="min-width:180px"><b>${esc(b.brand)}</b>${b.summary?`<div class="muted" style="font-size:12px">${esc(b.summary)}</div>`:''}</td><td style="white-space:nowrap;font-size:12.5px">${esc(PF_KIND[b.kind]||b.kind)}</td><td>${pfChip(b.status,PF_BSTAT)}</td>
+        return `<tr><td style="min-width:180px"><b>${esc(b.brand)}</b> ${pfSrc(b)}${b.summary?`<div class="muted" style="font-size:12px">${esc(b.summary)}</div>`:''}</td><td style="white-space:nowrap;font-size:12.5px">${esc(PF_KIND[b.kind]||b.kind)}</td><td>${pfChip(b.status,PF_BSTAT)}</td>
           <td style="font-size:12.5px">${esc(b.contact)}${b.phone?`<div class="muted">${esc(b.phone)}</div>`:''}</td><td style="font-size:12.5px;max-width:200px">${esc(pfList(d.like).join(', '))||'<span class="muted">–</span>'}</td>
           <td style="font-size:12.5px;max-width:220px">${prods.length?esc(prods.map(p=>p.split(' (')[0]).join(', ')):'<span class="muted">–</span>'}</td><td style="font-size:12.5px;white-space:nowrap">${ar?esc(ar[0].replace('The ','')):'<span class="muted">–</span>'}</td>
           <td class="num">${n||'<span class="muted">0</span>'}</td><td class="muted" style="white-space:nowrap;font-size:12px">${fmtSeen(b.updatedAt)}<br>${esc(b.updatedBy.split('@')[0])}</td>
@@ -2936,7 +2965,7 @@ function drawPfEdit(){
   if(pfEdit.type==='brief'){
     const b=pfEdit.obj, d=b.data||{}, arch=d.arch||{answers:[],result:''}, res=pfArchResult(arch.answers);
     el.innerHTML=`<form id="pfForm" class="card" style="margin:0 0 16px" novalidate><fieldset ${dis} style="border:0;padding:0;margin:0;min-width:0">
-      <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px"><h3 style="margin:0">${b.id?'บรีฟ · '+esc(b.brand):'สร้างบรีฟใหม่'}</h3><span class="muted" style="font-size:12px">${b.id?`สร้างโดย ${esc(b.createdBy||'')} · ${fmtSeen(b.createdAt)}`:'ต้นแบบจาก ODM Brief / SV Brief'}</span></div>
+      <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px"><h3 style="margin:0">${b.id?'บรีฟ · '+esc(b.brand):'สร้างบรีฟใหม่'} ${pfSrc(b)}</h3><span class="muted" style="font-size:12px">${b.id?`สร้างโดย ${esc(b.createdBy||'')} · ${fmtSeen(b.createdAt)}${d.tf&&d.tf.submitted?' · ส่งฟอร์ม '+fmtSeen(d.tf.submitted)+(d.lang==='EN'?' (ตอบเป็นภาษาอังกฤษ แปลงเป็นไทยตามตัวเลือก)':''):''}`:'ต้นแบบจาก ODM Brief / SV Brief'}</span></div>
       <div class="settings" style="margin-top:10px">
         <div class="field"><label for="pfBrand">ชื่อแบรนด์ / ชื่อลูกค้า *</label><input id="pfBrand" value="${esc(b.brand)}" maxlength="200" required></div>
         <div class="field"><label for="pfKindSel">ประเภทบรีฟ</label><select id="pfKindSel">${Object.entries(PF_KIND).map(([k,l])=>`<option value="${k}" ${b.kind===k?'selected':''}>${esc(l)}</option>`).join('')}</select></div>
@@ -3051,9 +3080,14 @@ pfv.addEventListener('click', async e=>{
     return;
   }
   if(t.id==='pfXlsx'){ pfExportXlsx(); return; }
+  if(t.id==='tfSync'){ tfRun('syncTypeform',[false],t); return; }
+  if(t.id==='tfSyncAll'){ tfRun('syncTypeform',[true],t); return; }
+  if(t.id==='tfOff'){ if(confirm('ยกเลิกการเชื่อม Typeform? webhook ของทั้ง 3 ฟอร์มจะถูกลบ บรีฟที่นำเข้าแล้วยังอยู่')) tfRun('disconnectTypeform',[],t,'ยกเลิกการเชื่อมแล้ว'); return; }
   if(t.id==='pfRefresh'){ t.disabled=true; try{ if(pfEdit) pfSyncEdit(); await loadPf(true); drawPf(); }catch(ex){ toast(errText(ex)); } finally{ t.disabled=false; } }
 });
-pfv.addEventListener('submit', e=>{ e.preventDefault(); if(e.target.id==='pfForm' && pfEdit && pfCanEdit()) pfSave(); });
+pfv.addEventListener('submit', e=>{ e.preventDefault();
+  if(e.target.id==='pfForm' && pfEdit && pfCanEdit()) pfSave();
+  if(e.target.id==='tfForm'){ const v=$('#tfToken').value.trim(); if(!v){ $('#tfMsg').textContent='วาง token ก่อน'; return; } tfRun('saveTypeformToken',[v],e.target.querySelector('button'),'เชื่อม Typeform แล้ว กำลังดึงคำตอบเก่าทั้งหมด…'); } });
 function renderAdmin(){
   if(!S.adm) return;
   if(adminTab==='forms') adminTab='dir';

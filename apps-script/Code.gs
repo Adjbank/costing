@@ -60,7 +60,8 @@ function doPost(e) {
     listDocs: listDocs, getDoc: getDoc, issueDoc: issueDoc, voidDoc: voidDoc,
     listRmDocs: listRmDocs, getRmDocFile: getRmDocFile, uploadRmDoc: uploadRmDoc, updateRmDoc: updateRmDoc, deleteRmDoc: deleteRmDoc,
     listBriefs: listBriefs, saveBrief: saveBrief, deleteBrief: deleteBrief, listScents: listScents, saveScent: saveScent, deleteScent: deleteScent,
-    getTypeformStatus: getTypeformStatus, saveTypeformToken: saveTypeformToken, syncTypeform: syncTypeform, disconnectTypeform: disconnectTypeform};
+    getTypeformStatus: getTypeformStatus, saveTypeformToken: saveTypeformToken, syncTypeform: syncTypeform, disconnectTypeform: disconnectTypeform,
+    exportAll: exportAll};
   if (e && e.parameter && e.parameter.tf) return tfWebhook_(e);   // Typeform webhook (ตรวจ secret ใน query string)
   let out;
   try {
@@ -1087,6 +1088,22 @@ function tfImport_(formId, fr) {
     createdAt: fr.submitted_at ? new Date(fr.submitted_at) : now, createdBy: 'typeform', updatedAt: now, updatedBy: 'typeform', data: pfJson_(d), tfToken: token};
   sh_('Briefs').appendRow(HEAD.Briefs.map(function (k) { return row[k]; }));
   return 'imported';
+}
+
+/** ย้ายข้อมูลไป Supabase (ใช้ครั้งเดียว): ส่งออกทุกแท็บเป็น JSON — เฉพาะเจ้าของระบบ */
+function exportAll() {
+  const m = me_();
+  if (!m.isOwner) throw new Error('FORBIDDEN');
+  const out = {};
+  Object.keys(HEAD).forEach(function (n) {
+    out[n] = rows_(n).map(function (r) {
+      const o = {};
+      HEAD[n].forEach(function (k) { const v = r[k]; o[k] = v instanceof Date ? v.toISOString() : v; });
+      return o;
+    });
+  });
+  log_(m.email, 'exportAll', Object.keys(out).map(function (k) { return k + ':' + out[k].length; }).join(' '));
+  return out;
 }
 
 /* ===== เรื่องร้องเรียน: ผู้ใช้ที่มีสิทธิ์เข้าระบบทุกคนส่งเรื่องได้ และเห็นเฉพาะเรื่องของตัวเอง

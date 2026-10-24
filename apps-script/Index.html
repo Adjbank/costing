@@ -4468,7 +4468,8 @@ function renderBtView(){
 }
 function btFiltered(){
   const q=BT.q.trim().toLowerCase();
-  return BT.items.filter(r=>(!BT.form||r.form===BT.form)&&(!BT.coll||(BT.coll==='-'?!r.collection:r.collection===BT.coll))&&(!BT.status||r.status===BT.status)&&(!BT.rdType||r.rdType===BT.rdType)&&(!BT.stock||r.stock===BT.stock)&&(!BT.note||r.note===BT.note)&&(!BT.odor||btArr(r.odorFamilies).includes(BT.odor))
+  return BT.items.filter(r=>(!BT.form||r.form===BT.form)&&(!BT.coll||(BT.coll==='-'?!r.collection:r.collection===BT.coll))&&(!BT.status||r.status===BT.status)&&(!BT.rdType||btArr(r.rdType).includes(BT.rdType))&&(!BT.stock||r.stock===BT.stock)&&(!BT.note||r.note===BT.note)&&(!BT.odor||btArr(r.odorFamilies).includes(BT.odor))
+    &&(!BT.use||btArr(r.uses).includes(BT.use))&&(!BT.ben||btArr(r.benefits).includes(BT.ben))&&(!BT.reg||BT_REGS[BT.reg](r))
     &&(!q||[r.regNo,r.nameTh,r.nameEn,r.latin,r.synonyms,r.synonymsTh,r.family,r.familyTh,r.rmCode,r.cas,r.descriptors,r.constituents,r.origin,r.part,btArr(r.uses).join(' '),btArr(r.benefits).join(' ')].join(' ').toLowerCase().includes(q)));
 }
 function btImg(r){ return r.imageUrl?`<img src="${esc(r.imageUrl)}" alt="${esc(btName(r))}" loading="lazy">`:'<span class="muted" style="font-size:12px">ไม่มีรูป</span>'; }
@@ -4476,14 +4477,23 @@ function drawBt(){
   if(!BT.items) return;
   if(BT.open){ $('#btBody').innerHTML=btDetail(BT.open); return; }
   const list=btFiltered(), sel=(id,val,opts,all)=>`<select id="${id}"><option value="">${all}</option>${opts.map(([k,l])=>`<option value="${esc(k)}" ${val===k?'selected':''}>${esc(l)}</option>`).join('')}</select>`;
-  $('#btBody').innerHTML=`<div class="search" style="flex-wrap:wrap;gap:8px">
+  const list_=BT.sub==='list';
+  $('#btBody').innerHTML=`<div class="pf-tabs" role="tablist" style="margin:0 0 10px"><button type="button" data-btsub="list" class="${BT.sub==='list'?'on':''}">รายการ</button><button type="button" data-btsub="map" class="${BT.sub==='map'?'on':''}">แผนที่แหล่งวัตถุดิบ</button><button type="button" data-btsub="dash" class="${BT.sub==='dash'?'on':''}">แดชบอร์ดงานวิจัย</button></div>
+    <div class="search" style="flex-wrap:wrap;gap:8px">
       <input id="btQ" type="search" autocomplete="off" placeholder="ค้นหาชื่อ ชื่อวิทยาศาสตร์ วงศ์ รหัส สารสำคัญ การใช้…" value="${esc(BT.q)}" style="flex:1;min-width:220px">
       ${sel('btForm',BT.form,BT_FORM.map(x=>[x,x]),'ทุกรูปแบบ')}${sel('btColl',BT.coll,[['Thai Palette','Thai Palette'],['-','อื่น ๆ']],'ทุกคอลเลกชัน')}${sel('btStatus',BT.status,Object.entries(BT_STATUS).map(([k,v])=>[k,v[0]]),'ทุกสถานะ')}
       ${sel('btRd',BT.rdType,Object.entries(BT_RD),'ทุกงาน R&D')}${sel('btStock',BT.stock,[['yes','มีสต็อก'],['no','ไม่มีสต็อก']],'สต็อกทั้งหมด')}${sel('btNote',BT.note,BT_NOTE.map(x=>[x,x]),'ทุก Note')}${sel('btOdor',BT.odor,BT_ODOR.map(x=>[x,x]),'ทุกกลุ่มกลิ่น')}
-      <div class="pf-tabs" role="tablist" style="margin:0"><button type="button" data-btview="cards" class="${BT.view==='cards'?'on':''}">การ์ด</button><button type="button" data-btview="table" class="${BT.view==='table'?'on':''}">ตาราง</button></div>
+      ${sel('btUse',BT.use,Object.entries(BT_USES),'ทุกการใช้งาน')}${sel('btBen',BT.ben,Object.entries(BT_BEN),'ทุกสรรพคุณ')}${sel('btReg',BT.reg,Object.entries(BT_REGN),'กฎระเบียบทั้งหมด')}
+      ${list_?`<div class="pf-tabs" role="tablist" style="margin:0"><button type="button" data-btview="cards" class="${BT.view==='cards'?'on':''}">การ์ด</button><button type="button" data-btview="table" class="${BT.view==='table'?'on':''}">ตาราง</button></div>`:''}
       ${BT.canEdit?'<button class="btn primary" type="button" id="btNew">+ เพิ่มพืช</button>':''}<button class="btn" type="button" id="btRefresh">รีเฟรช</button>
-      <span class="muted" style="font-size:12.5px">${list.length} / ${BT.items.length} รายการ</span></div>
-    <div id="btMain">${BT.view==='table'?btTable(list):btCards(list)}</div>`;
+      <span class="muted" style="font-size:12.5px">${list.length} / ${BT.items.length} รายการ</span>${BT.q||BT.form||BT.coll||BT.status||BT.rdType||BT.stock||BT.note||BT.odor||BT.use||BT.ben||BT.reg?'<button class="btn small" type="button" id="btClear">ล้างตัวกรอง</button>':''}</div>
+    <div id="btMain">${btMainHtml(list)}</div>`;
+  if(BT.sub==='map' && !btGeo()){ btLoadGeo().then(()=>{ if(BT.sub==='map'&&!BT.open&&$('#btMain')) $('#btMain').innerHTML=btMainHtml(btFiltered()); }).catch(e=>{ const m=$('#btMain'); if(m) m.innerHTML=`<div class="msg bad">${esc(errText(e))}</div>`; }); }
+}
+function btMainHtml(list){
+  if(BT.sub==='map') return btGeo()?btRenderMap(list):'<div class="empty">กำลังโหลดแผนที่…</div>';
+  if(BT.sub==='dash') return btRenderDash(list);
+  return BT.view==='table'?btTable(list):btCards(list);
 }
 function btCards(list){
   if(!list.length) return '<div class="empty">ไม่พบรายการ</div>';
@@ -4496,7 +4506,7 @@ function btTable(list){
   if(!list.length) return '<div class="empty">ไม่พบรายการ</div>';
   const part=list.slice(0,BT.shown*3);
   return `<div class="tablebox"><table><thead><tr><th>เลขทะเบียน</th><th>ชื่อ</th><th>ชื่อวิทยาศาสตร์</th><th>รูปแบบ</th><th>Note</th><th>กลุ่มกลิ่น</th><th>แหล่ง</th><th>RM</th><th>สต็อก</th><th>R&D</th><th></th></tr></thead><tbody>
-    ${part.map(r=>`<tr><td class="mono">${esc(r.regNo)}</td><td><b>${esc(btName(r))}</b>${r.nameTh&&r.nameEn?`<div class="muted" style="font-size:12px">${esc(r.nameEn)}</div>`:''}</td><td style="font-size:12.5px"><i>${esc(r.latin||'')}</i></td><td>${esc(r.form||'')}</td><td>${esc(r.note||'')}</td><td style="font-size:12.5px">${esc(btArr(r.odorFamilies).join(', '))}</td><td style="font-size:12.5px">${esc(r.origin||'')}</td><td class="mono" style="font-size:12px">${esc(r.rmCode||'')}</td><td>${r.stock==='yes'?'<span class="chip ok">มี</span>':''}</td><td style="font-size:12.5px">${esc(BT_RD[r.rdType]||'')}</td><td><button class="btn small" type="button" data-bt-open="${esc(r.regNo)}">เปิด</button></td></tr>`).join('')}</tbody></table></div>
+    ${part.map(r=>`<tr><td class="mono">${esc(r.regNo)}</td><td><b>${esc(btName(r))}</b>${r.nameTh&&r.nameEn?`<div class="muted" style="font-size:12px">${esc(r.nameEn)}</div>`:''}</td><td style="font-size:12.5px"><i>${esc(r.latin||'')}</i></td><td>${esc(r.form||'')}</td><td>${esc(r.note||'')}</td><td style="font-size:12.5px">${esc(btArr(r.odorFamilies).join(', '))}</td><td style="font-size:12.5px">${esc(r.origin||'')}</td><td class="mono" style="font-size:12px">${esc(r.rmCode||'')}</td><td>${r.stock==='yes'?'<span class="chip ok">มี</span>':''}</td><td style="font-size:12.5px">${esc(btArr(r.rdType).map(k=>BT_RD[k]||k).join(', '))}</td><td><button class="btn small" type="button" data-bt-open="${esc(r.regNo)}">เปิด</button></td></tr>`).join('')}</tbody></table></div>
     ${list.length>part.length?`<div style="text-align:center;margin-top:14px"><button class="btn" type="button" id="btMore">แสดงเพิ่ม</button></div>`:''}`;
 }
 const btRow=(l,v)=>v?`<tr><td style="white-space:nowrap;color:var(--muted,#777);vertical-align:top;padding-right:14px">${esc(l)}</td><td>${v}</td></tr>`:'';
@@ -4507,7 +4517,7 @@ function btView(r, f){ const raw=r[f[0]]; const t=f[2];
   return raw==null||raw===''?'':esc(String(raw)).replace(/\n/g,'<br>');
 }
 function btField(r, f){
-  const [k,l,t,wide]=f, v=r[k], fw=wide?' style="grid-column:1/-1"':'';
+  const [k,l,t,wide]=f, fw=wide?' style="grid-column:1/-1"':''; let v=r[k]; if(k==='rdType') v=btArr(v)[0]||'';
   if(t.startsWith('multi:')){ const cur=btArr(v); return `<div class="field"${fw}><label>${esc(l)}</label><div class="bt-checks">${btMulti(t.slice(6)).map(([x,lab])=>`<label><input type="checkbox" data-btm="${k}" value="${esc(x)}" ${cur.includes(x)?'checked':''}>${esc(lab)}</label>`).join('')}</div></div>`; }
   if(t.startsWith('select:')) return `<div class="field"${fw}><label>${esc(l)}</label><select data-btk="${k}">${btOpt(t.slice(7)).map(([x,lab])=>`<option value="${esc(x)}" ${String(v||'')===String(x)?'selected':''}>${esc(lab)}</option>`).join('')}</select></div>`;
   if(t==='long') return `<div class="field"${fw}><label>${esc(l)}</label><textarea data-btk="${k}" rows="2" maxlength="3500">${esc(v||'')}</textarea></div>`;
@@ -4528,7 +4538,7 @@ function btDetail(r){
     body+=btExtras(r);
   }
   return `${head}<div class="bt-head">${imgBox}<div style="flex:1;min-width:280px"><h2 style="margin:0">${esc(btName(r))}</h2><div class="muted"><i>${esc(r.latin||'')}</i>${r.nameTh&&r.nameEn?' · '+esc(r.nameEn):''}</div>
-      <div class="bt-chips">${r.form?`<span class="chip">${esc(r.form)}</span>`:''}${r.collection?`<span class="chip info">${esc(r.collection)}</span>`:''}${r.note?`<span class="chip info">Note ${esc(r.note)}</span>`:''}${r.stock==='yes'?'<span class="chip ok">มีสต็อก</span>':''}${r.rdType?`<span class="chip warn">${esc(BT_RD[r.rdType]||r.rdType)}</span>`:''}</div>
+      <div class="bt-chips">${r.form?`<span class="chip">${esc(r.form)}</span>`:''}${r.collection?`<span class="chip info">${esc(r.collection)}</span>`:''}${r.note?`<span class="chip info">Note ${esc(r.note)}</span>`:''}${r.stock==='yes'?'<span class="chip ok">มีสต็อก</span>':''}${btArr(r.rdType).map(k=>`<span class="chip warn">${esc(BT_RD[k]||k)}</span>`).join('')}</div>
       ${!ed&&BT.canEdit?`<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn primary" type="button" id="btEdit">แก้ไขข้อมูล</button>${isAdminRole()?'<button class="btn small" type="button" id="btDelete" style="color:var(--bad)">ลบรายการ</button>':''}</div>`:''}</div></div>
     <div style="margin-top:14px">${body}</div>`;
 }
@@ -4578,7 +4588,7 @@ async function btOpen(regNo, edit){
 }
 function btCollect(r){
   const box=$('#btForm'); if(!box) return r;
-  box.querySelectorAll('[data-btk]').forEach(i=>{ const k=i.dataset.btk; let v=i.value.trim(); if(i.dataset.btlist) v=v?v.split('\n').map(x=>x.trim()).filter(Boolean):[]; else if(i.type==='number') v=v===''?null:Number(v); r[k]=v; });
+  box.querySelectorAll('[data-btk]').forEach(i=>{ const k=i.dataset.btk; let v=i.value.trim(); if(i.dataset.btlist) v=v?v.split('\n').map(x=>x.trim()).filter(Boolean):[]; else if(i.type==='number') v=v===''?null:Number(v); r[k]=k==='rdType'?(v?[v]:[]):v; });
   ['odorFamilies','uses','benefits'].forEach(k=>{ r[k]=[...box.querySelectorAll(`[data-btm="${k}"]:checked`)].map(i=>i.value); });
   return r;
 }
@@ -4587,9 +4597,9 @@ function btResize(file){
   return new Promise((res,rej)=>{ const img=new Image(), u=URL.createObjectURL(file); img.onload=()=>{ const s=Math.min(1,1100/Math.max(img.width,img.height)), c=document.createElement('canvas'); c.width=Math.round(img.width*s); c.height=Math.round(img.height*s); const g=c.getContext('2d'); g.fillStyle='#fff'; g.fillRect(0,0,c.width,c.height); g.drawImage(img,0,0,c.width,c.height); URL.revokeObjectURL(u); c.toBlob(b=>{ if(!b) return rej(new Error('ย่อรูปไม่สำเร็จ')); const fr=new FileReader(); fr.onload=()=>res(String(fr.result).split(',')[1]); fr.onerror=()=>rej(new Error('อ่านรูปไม่สำเร็จ')); fr.readAsDataURL(b); },'image/jpeg',0.86); }; img.onerror=()=>{ URL.revokeObjectURL(u); rej(new Error('เปิดไฟล์รูปไม่ได้')); }; img.src=u; });
 }
 function btUpsert(r){ const i=BT.items.findIndex(x=>x.regNo===r.regNo); if(i>=0) BT.items[i]=r; else BT.items.push(r); BT.items.sort((a,b)=>a.regNo.localeCompare(b.regNo)); }
-$('#btView').addEventListener('input', e=>{ if(e.target.id==='btQ'){ BT.q=e.target.value; BT.shown=60; const m=$('#btMain'); if(m){ const list=btFiltered(); m.innerHTML=BT.view==='table'?btTable(list):btCards(list); } } });
+$('#btView').addEventListener('input', e=>{ if(e.target.id==='btQ'){ BT.q=e.target.value; BT.shown=60; const m=$('#btMain'); if(m){ m.innerHTML=btMainHtml(btFiltered()); } } });
 $('#btView').addEventListener('change', async e=>{
-  const t=e.target, map={btForm:'form', btColl:'coll', btStatus:'status', btRd:'rdType', btStock:'stock', btNote:'note', btOdor:'odor'};
+  const t=e.target, map={btForm:'form', btColl:'coll', btStatus:'status', btRd:'rdType', btStock:'stock', btNote:'note', btOdor:'odor', btUse:'use', btBen:'ben', btReg:'reg'};
   if(map[t.id]){ BT[map[t.id]]=t.value; BT.shown=60; drawBt(); return; }
   if(t.id==='btImgFile' && t.files && t.files[0]){
     const r=BT.open; t.disabled=true; toast('กำลังอัปโหลดรูป…');
@@ -4598,7 +4608,14 @@ $('#btView').addEventListener('change', async e=>{
   }
 });
 $('#btView').addEventListener('click', async e=>{
+  const pl=e.target.closest('[data-bt-place]');   /* หมุด/โพลารอยด์บนแผนที่ (ไม่ใช่ button) */
+  if(pl){ BT.place=BT.place===pl.dataset.btPlace?'':pl.dataset.btPlace; drawBt(); return; }
   const t=e.target.closest('button'); if(!t) return;
+  if(t.dataset.btsub){ BT.sub=t.dataset.btsub; BT.shown=60; drawBt(); return; }
+  if(t.dataset.btBoard){ BT.board=t.dataset.btBoard; BT.place=''; drawBt(); return; }
+  if(t.dataset.btDk!==undefined){ btApplyDk(t.dataset.btDk); drawBt(); return; }
+  if(t.id==='btClear'){ BT.q=BT.form=BT.coll=BT.status=BT.rdType=BT.stock=BT.note=BT.odor=BT.use=BT.ben=BT.reg=''; drawBt(); return; }
+  if(t.id==='btFull'){ const b=$('#btBoard'); try{ if(document.fullscreenElement) document.exitFullscreen(); else if(b&&b.requestFullscreen) b.requestFullscreen(); }catch(err){} return; }
   if(t.dataset.btview){ BT.view=t.dataset.btview; BT.shown=60; drawBt(); return; }
   if(t.id==='btRefresh'){ t.disabled=true; try{ await loadBt(true); }catch(err){ toast(errText(err)); } drawBt(); return; }
   if(t.id==='btMore'){ BT.shown+=60; drawBt(); return; }
@@ -4626,7 +4643,7 @@ $('#btView').addEventListener('submit', async e=>{
     const d={}; f.querySelectorAll('[data-bx]').forEach(i=>{ d[i.dataset.bx]=i.value.trim(); }); const err=$('#btExtErr');
     if(!d.date){ err.textContent='ใส่วันที่'; return; }
     btn.disabled=true; err.textContent='';
-    try{ const x=await api('saveBotanicalExtraction', BT.open.regNo, d); BT.ext.list.unshift(x); const it=BT.items.find(y=>y.regNo===BT.open.regNo); if(it){ it.extCount=BT.ext.list.length; it.lastExtraction=x.date; if(!it.rdType) it.rdType='extract'; } BT.extForm=false; toast('บันทึกการสกัดแล้ว'+(x.yieldPct!=null?` · Yield ${fmt(x.yieldPct,2)}%`:'')); drawBt(); }
+    try{ const x=await api('saveBotanicalExtraction', BT.open.regNo, d); BT.ext.list.unshift(x); const it=BT.items.find(y=>y.regNo===BT.open.regNo); if(it){ it.extCount=BT.ext.list.length; it.lastExtraction=x.date; { const rt=btArr(it.rdType).slice(); if(!rt.includes('extract')) rt.push('extract'); it.rdType=rt; } } BT.extForm=false; toast('บันทึกการสกัดแล้ว'+(x.yieldPct!=null?` · Yield ${fmt(x.yieldPct,2)}%`:'')); drawBt(); }
     catch(e2){ err.textContent=errText(e2); btn.disabled=false; }
     return;
   }
@@ -4637,6 +4654,204 @@ $('#btView').addEventListener('submit', async e=>{
     catch(e2){ err.textContent=errText(e2); btn.disabled=false; }
   }
 });
+
+/* ===== ทะเบียนพืชหอม: แผนที่แหล่งวัตถุดิบ + แดชบอร์ดงานวิจัย (ย้ายจาก Artifact เดิม) =====
+   แผนที่ใช้ d3 + topojson และข้อมูลแผนที่ (geo-data.js) โหลดตอนเปิดแท็บแผนที่ครั้งแรกเท่านั้น · พิกัดสถานที่ (GAZ) อยู่ในโค้ดนี้ */
+const BT_GEO_URL='https://cdn.jsdelivr.net/gh/Adjbank/costing@a6f68116d714740e9a8a4348f0de6b66b82eeccf/botanicals/geo-data.js';
+/* Gazetteer for the register's map view: key -> [English name, Thai name, latitude, longitude, board].
+   board "th" = Thai province or region (Thailand board), "world" = country or world region (world board).
+   Region points are approximate centres, used for native ranges such as "Mediterranean". */
+const BT_GAZ={
+/* Thailand: regions */
+"TH-N":["Northern Thailand","ภาคเหนือ",18.6,99.4,"th"],"TH-C":["Central Thailand","ภาคกลาง",14.6,100.4,"th"],"TH-S":["Southern Thailand","ภาคใต้",8.2,99.4,"th"],
+/* Thailand: provinces */
+"TH-CMI":["Chiang Mai","เชียงใหม่",18.79,98.98,"th"],"TH-CRI":["Chiang Rai","เชียงราย",19.91,99.83,"th"],"TH-PYO":["Phayao","พะเยา",19.17,99.9,"th"],"TH-NAN":["Nan","น่าน",18.78,100.78,"th"],
+"TH-TAK":["Tak","ตาก",16.87,99.13,"th"],"TH-PLK":["Phitsanulok","พิษณุโลก",16.82,100.26,"th"],"TH-PCT":["Phichit","พิจิตร",16.44,100.35,"th"],"TH-PNB":["Phetchabun","เพชรบูรณ์",16.42,101.16,"th"],
+"TH-LOE":["Loei","เลย",17.49,101.72,"th"],"TH-KKN":["Khon Kaen","ขอนแก่น",16.43,102.83,"th"],"TH-MKM":["Maha Sarakham","มหาสารคาม",16.18,103.3,"th"],"TH-UBN":["Ubon Ratchathani","อุบลราชธานี",15.24,104.85,"th"],
+"TH-KRI":["Kanchanaburi","กาญจนบุรี",14.02,99.53,"th"],"TH-SPB":["Suphan Buri","สุพรรณบุรี",14.47,100.12,"th"],"TH-ATG":["Ang Thong","อ่างทอง",14.59,100.45,"th"],"TH-PTE":["Pathum Thani","ปทุมธานี",14.02,100.53,"th"],
+"TH-NPT":["Nakhon Pathom","นครปฐม",13.82,100.06,"th"],"TH-BKK":["Bangkok","กรุงเทพมหานคร",13.76,100.5,"th"],"TH-SPK":["Samut Prakan","สมุทรปราการ",13.6,100.6,"th"],"TH-SKM":["Samut Songkhram","สมุทรสงคราม",13.41,100.0,"th"],
+"TH-RBR":["Ratchaburi","ราชบุรี",13.53,99.81,"th"],"TH-PKN":["Prachuap Khiri Khan","ประจวบคีรีขันธ์",11.81,99.8,"th"],"TH-CCO":["Chachoengsao","ฉะเชิงเทรา",13.69,101.07,"th"],"TH-PRI":["Prachin Buri","ปราจีนบุรี",14.05,101.37,"th"],
+"TH-SKW":["Sa Kaeo","สระแก้ว",13.82,102.06,"th"],"TH-CTI":["Chanthaburi","จันทบุรี",12.61,102.1,"th"],"TH-TRT":["Trat","ตราด",12.24,102.52,"th"],"TH-CPN":["Chumphon","ชุมพร",10.49,99.18,"th"],
+"TH-SNI":["Surat Thani","สุราษฎร์ธานี",9.14,99.33,"th"],"TH-PNA":["Phang Nga","พังงา",8.45,98.53,"th"],"TH-NRT":["Nakhon Si Thammarat","นครศรีธรรมราช",8.43,99.96,"th"],"TH-TRG":["Trang","ตรัง",7.56,99.61,"th"],
+"TH-SKA":["Songkhla","สงขลา",7.19,100.6,"th"],"TH-YLA":["Yala","ยะลา",6.54,101.28,"th"],"TH-NWT":["Narathiwat","นราธิวาส",6.43,101.82,"th"],
+/* Countries (main production areas) */
+"TH":["Thailand","ไทย",15.0,101.0,"world"],"IN":["India","อินเดีย",22.0,79.0,"world"],"LK":["Sri Lanka","ศรีลังกา",7.8,80.7,"world"],"ID":["Indonesia","อินโดนีเซีย",-2.0,113.0,"world"],"VN":["Vietnam","เวียดนาม",16.0,107.8,"world"],
+"CN":["China","จีน",31.0,108.0,"world"],"TW":["Taiwan","ไต้หวัน",23.7,121.0,"world"],"NP":["Nepal","เนปาล",28.4,84.1,"world"],"AU":["Australia","ออสเตรเลีย",-25.0,134.0,"world"],
+"IT":["Italy","อิตาลี",42.5,12.8,"world"],"ES":["Spain","สเปน",40.0,-3.7,"world"],"FR":["France","ฝรั่งเศส",46.5,2.5,"world"],"BG":["Bulgaria","บัลแกเรีย",42.7,25.5,"world"],"HU":["Hungary","ฮังการี",47.2,19.5,"world"],
+"HR":["Croatia","โครเอเชีย",45.1,15.2,"world"],"GB":["United Kingdom","สหราชอาณาจักร",53.0,-1.5,"world"],"TR":["Turkey","ตุรกี",39.0,35.0,"world"],"GR":["Greece","กรีซ",39.0,22.0,"world"],
+"MA":["Morocco","โมร็อกโก",32.0,-6.0,"world"],"TN":["Tunisia","ตูนิเซีย",34.0,9.5,"world"],"EG":["Egypt","อียิปต์",26.8,30.8,"world"],"SO":["Somalia","โซมาเลีย",6.0,46.0,"world"],"ET":["Ethiopia","เอธิโอเปีย",9.0,40.0,"world"],
+"OM":["Oman","โอมาน",21.0,57.0,"world"],"MG":["Madagascar","มาดากัสการ์",-19.0,46.8,"world"],"KM":["Comoros","คอโมโรส",-11.7,43.3,"world"],"ZA":["South Africa","แอฟริกาใต้",-30.0,25.0,"world"],
+"US":["United States","สหรัฐอเมริกา",39.0,-98.0,"world"],"MX":["Mexico","เม็กซิโก",23.0,-102.0,"world"],"GT":["Guatemala","กัวเตมาลา",15.5,-90.3,"world"],"HT":["Haiti","เฮติ",19.0,-72.3,"world"],
+"BR":["Brazil","บราซิล",-12.0,-50.0,"world"],"AR":["Argentina","อาร์เจนตินา",-34.0,-64.0,"world"],"PY":["Paraguay","ปารากวัย",-23.4,-58.4,"world"],"PE":["Peru","เปรู",-9.0,-75.0,"world"],"EC":["Ecuador","เอกวาดอร์",-1.5,-78.5,"world"],"SV":["El Salvador","เอลซัลวาดอร์",13.8,-88.9,"world"],
+"JP":["Japan","ญี่ปุ่น",34.5,134.5,"world"],"KR":["South Korea","เกาหลีใต้",36.0,127.8,"world"],"RU":["Russia (Siberia)","รัสเซีย (ไซบีเรีย)",57.0,88.0,"world"],
+/* World regions (native ranges) */
+"R-MED":["Mediterranean","เมดิเตอร์เรเนียน",38.0,17.0,"world"],"R-EUR":["Europe","ยุโรป",50.0,10.0,"world"],"R-NEUR":["Northern Europe","ยุโรปเหนือ",60.0,15.0,"world"],"R-SEUR":["Southern Europe","ยุโรปใต้",41.0,12.0,"world"],
+"R-EEUR":["Eastern Europe","ยุโรปตะวันออก",50.0,28.0,"world"],"R-WASIA":["Western Asia","เอเชียตะวันตก",38.0,42.0,"world"],"R-SWASIA":["Southwest Asia","เอเชียตะวันตกเฉียงใต้",32.0,48.0,"world"],"R-CASIA":["Central Asia","เอเชียกลาง",42.0,65.0,"world"],
+"R-ASIA":["Asia","เอเชีย",45.0,95.0,"world"],"R-ME":["Middle East","ตะวันออกกลาง",28.0,45.0,"world"],"R-NAFR":["North Africa","แอฟริกาเหนือ",29.0,12.0,"world"],"R-AFR":["Tropical Africa","แอฟริกาเขตร้อน",4.0,20.0,"world"],
+"R-CAFR":["Central Africa","แอฟริกากลาง",0.0,22.0,"world"],"R-CANARY":["Canary Islands","หมู่เกาะคานารี",28.3,-15.6,"world"],"R-NAM":["North America","อเมริกาเหนือ",45.0,-100.0,"world"],"R-ENAM":["Eastern North America","อเมริกาเหนือตะวันออก",40.0,-80.0,"world"],
+"R-SAM":["South America","อเมริกาใต้",-15.0,-60.0,"world"],"R-CARIB":["Caribbean","แคริบเบียน",18.0,-72.0,"world"],"R-SEASIA":["Southeast Asia","เอเชียตะวันออกเฉียงใต้",12.0,104.0,"world"],"R-RUSE":["Eastern Russia","รัสเซียตะวันออก",50.0,135.0,"world"]
+};
+
+const BT_FAM=[['citrus','ซิตรัส'],['floral','ดอกไม้'],['herbal','สมุนไพร'],['aromatic','มิ้นต์-การบูร'],['spicy','เครื่องเทศ'],['woody','ไม้'],['balsamic','บาลซัม-เรซิน'],['earthy','ดิน-มัสก์'],['fruity','ผลไม้'],['green','เขียว']];
+const BT_FAMN=Object.fromEntries(BT_FAM);
+const BT_EXTRACT_FORMS=new Set(['Essential oil','Absolute','CO2 extract','Concrete','Resinoid','Hydrosol']);
+(function(){ const st=document.createElement('style'); st.textContent=`
+#btView{--wall:#f4f1ec;--wood-1:#eadbc2;--wood-2:#d9bd94;--wood-3:#c19a6b;--wood-4:#9a6f45;--wood-5:#6b472b;--wood-6:#43291a;--string:#2a2a35;--polaroid:#fff;--polaroid-ink:#2b2118;--bt-navy:#091e4b;--bt-copper:#c46d4e}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) #btView{--wall:#0d1f45;--string:#e9dcc6}}
+:root[data-theme="dark"] #btView{--wall:#0d1f45;--string:#e9dcc6}
+.bt-mapbar{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;justify-content:space-between;margin:12px 0}
+.bt-mapkpi{display:flex;flex-wrap:wrap;gap:4px 22px}.bt-mapkpi div{display:grid}.bt-mapkpi b{font-size:26px;font-weight:600;line-height:1}.bt-mapkpi span{font-size:12.5px;opacity:.7}
+.bt-seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:8px;overflow:hidden}.bt-seg button{border:0;background:transparent;padding:7px 14px;cursor:pointer;font:inherit;font-size:13px;color:inherit}.bt-seg button[aria-pressed="true"]{background:var(--bt-navy);color:#fff}
+.bt-board{background:var(--wall);border:1px solid var(--line-strong);border-radius:12px;overflow:hidden;position:relative}.bt-board svg{display:block;width:100%;height:auto}
+.bt-board .land{stroke:#f8f1e4;stroke-width:.6}.bt-board .nb{fill:var(--wood-1);opacity:.55;stroke:#f8f1e4;stroke-width:.8}
+.bt-board .prov{stroke:#f8f1e4;stroke-width:.45;stroke-linejoin:round;opacity:.9}.bt-board .prov.has{opacity:.75}.bt-board .prov:hover{stroke:var(--bt-copper);stroke-width:1.4}
+.bt-board .attrib{font-size:10px;fill:#f8f1e4;opacity:.8}
+.bt-board .str{stroke:var(--string);stroke-width:1;opacity:.55;fill:none}.bt-board .str.on{opacity:1;stroke-width:1.6;stroke:var(--bt-copper)}
+.bt-board .pin{cursor:pointer}.bt-board .pin circle.dot{fill:var(--bt-navy);stroke:#fff;stroke-width:1.5}.bt-board .pin.region circle.dot{fill:var(--bt-copper)}
+.bt-board .pin text{fill:#fff;font:700 10px sans-serif;text-anchor:middle;dominant-baseline:central;pointer-events:none}.bt-board .pin.on circle.dot{fill:var(--bt-copper);stroke-width:2.5}
+.bt-board .pol{cursor:pointer}.bt-board .pol rect.paper{fill:var(--polaroid);filter:drop-shadow(0 2px 3px rgba(0,0,0,.25))}.bt-board .pol.on rect.paper{stroke:var(--bt-copper);stroke-width:2}
+.bt-board .pol text{fill:var(--polaroid-ink)}.bt-board .pol .capth{font:600 9.5px sans-serif}.bt-board .pol .cnt{font:700 9px sans-serif;fill:#8a6a4a}.bt-board .tack{fill:var(--bt-copper);stroke:#fff;stroke-width:1}
+.bt-board .hint{position:absolute;left:12px;bottom:10px;font-size:12px;opacity:.8;background:color-mix(in srgb,var(--wall) 85%,transparent);padding:2px 8px;border-radius:4px}
+.bt-board:fullscreen{display:flex;align-items:center;justify-content:center;border-radius:0}.bt-board:fullscreen svg{height:100vh;width:auto;max-width:100%}
+.bt-legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;opacity:.8;margin-top:10px;align-items:center}.bt-legend i{display:inline-block;width:14px;height:10px;border-radius:2px;vertical-align:middle;margin-right:6px}.bt-legend .dotk{width:10px;height:10px;border-radius:50%}
+.bt-pp{margin-top:18px;display:grid;gap:10px}.bt-pp h3{font-size:17px;display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap;margin:0}.bt-pp h3 small{font-weight:400;opacity:.7;font-size:13px}
+.bt-ptable{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:4px 24px}.bt-ptable button{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;text-align:left;border:0;background:transparent;padding:6px 8px;border-radius:6px;cursor:pointer;font:inherit;color:inherit}
+.bt-ptable button:hover{background:var(--input-bg)}.bt-ptable .bar{grid-column:1/-1;height:3px;background:var(--line-strong);opacity:.5;border-radius:2px;overflow:hidden}.bt-ptable .bar i{display:block;height:100%;background:var(--bt-copper)}.bt-ptable .n{font-variant-numeric:tabular-nums;opacity:.7;font-size:13px}
+.bt-mini{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}.bt-mini button{display:grid;gap:6px;border:0;background:var(--polaroid);padding:8px 8px 10px;cursor:pointer;text-align:left;box-shadow:0 1px 4px rgba(0,0,0,.18);color:var(--polaroid-ink);font:inherit}
+.bt-mini img,.bt-mini .ph{width:100%;aspect-ratio:1;object-fit:cover;background:#efe6d6;display:block}.bt-mini b{font-size:13.5px;line-height:1.35}.bt-mini span{font-style:italic;font-size:13px;color:#6b5a48;line-height:1.2}
+.bt-dash{display:grid;gap:16px;margin-top:12px}.bt-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.bt-kpi{background:var(--bt-navy);color:#fff;border-radius:12px;padding:12px 14px 10px;display:grid;gap:2px;cursor:pointer;border:0;text-align:left;font:inherit}.bt-kpi b{font-size:30px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}.bt-kpi span{font-size:12.5px;color:#cea67d}
+.bt-kpi.lite{background:var(--input-bg);color:inherit;border:1px solid var(--line-strong)}.bt-kpi.lite span{color:inherit;opacity:.7}
+.bt-dpanel{border:1px solid var(--line-strong);border-radius:12px;padding:14px 16px;min-width:0}.bt-dpanel h3{font-size:18px;margin:0 0 8px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}.bt-dpanel h3 small{font-size:12.5px;font-weight:400;opacity:.7}
+.bt-dpanel h4{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;opacity:.65;margin:12px 0 6px}
+.bt-dgrid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:14px;align-items:start}.bt-dgrid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:14px;align-items:start}
+.bt-hbar{display:grid;grid-template-columns:minmax(90px,38%) 1fr auto;gap:4px 10px;align-items:center;font-size:13px;padding:2px 0}.bt-hbar i{display:block;height:9px;border-radius:3px;background:var(--bt-copper)}.bt-hbar i.navy{background:var(--bt-navy)}
+.bt-hbar .v{font-variant-numeric:tabular-nums;opacity:.7;min-width:34px;text-align:right}.bt-hbar button{border:0;background:transparent;text-align:left;padding:0;cursor:pointer;font:inherit;color:inherit}.bt-hbar button:hover{color:var(--bt-copper)}
+.bt-dlist{display:grid;gap:4px}.bt-drow{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:0 10px;align-items:center;border:0;background:transparent;text-align:left;padding:5px 6px;border-radius:8px;cursor:pointer;min-width:0;font:inherit;color:inherit}
+.bt-drow:hover{background:var(--input-bg)}.bt-drow .th{width:40px;height:50px;border-radius:20px 20px 4px 4px;object-fit:cover;background:var(--input-bg);border:1px solid var(--line-strong)}
+.bt-drow .nm{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}.bt-drow .sm{font-size:12px;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.bt-drow .rt{text-align:right;font-size:12px;opacity:.85;display:grid;gap:2px;justify-items:end}.bt-drow .rt b{font-size:15px;font-variant-numeric:tabular-nums}.bt-dfoot{font-size:12px;opacity:.7;margin-top:8px}`; document.head.appendChild(st); })();
+BT.sub='list'; BT.board='world'; BT.place=''; BT.use=''; BT.ben=''; BT.reg='';
+const BT_REGS={ifra:m=>btArr(m.ifraItems).some(s=>!/^Spec/.test(s.type||'')),fda:m=>!!m.fdaThai,alg:m=>!!m.allergens,flag:m=>btArr(m.regFlags).length>0};
+const BT_REGN={ifra:'มีสารจำกัดตาม IFRA 51st',fda:'มีเงื่อนไข อย./ACD',alg:'มีสารก่อภูมิแพ้ (EU)',flag:'ต้องตรวจเพิ่ม'};
+const btIsTh=k=>BT_GAZ[k]&&BT_GAZ[k][4]==='th';
+const btPlaceName=k=>{ const g=BT_GAZ[k]; return g?g[1]:k; };
+const btBestYield=m=>{ const v=[...btArr(m.rdItems).map(x=>+x.yieldPct),...btArr(m.rdLog).map(x=>+x.yieldPct)].filter(x=>x>0); if(+m.bestYield>0) v.push(+m.bestYield); return v.length?Math.max(...v):null; };
+/* ---------- โหลดไลบรารีแผนที่ครั้งแรก ---------- */
+let BT_GEO_P=null, BT_GEO_C=null;
+function btLoadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.async=true; s.onload=res; s.onerror=()=>rej(new Error('โหลดข้อมูลแผนที่ไม่สำเร็จ ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่')); document.head.appendChild(s); }); }
+function btLoadGeo(){
+  if(BT_GEO_P) return BT_GEO_P;
+  BT_GEO_P=(async()=>{
+    if(!window.d3) await btLoadScript('https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js');
+    if(!window.topojson) await btLoadScript('https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js');
+    if(typeof WORLD_TOPO==='undefined') await btLoadScript(BT_GEO_URL);
+  })().catch(e=>{ BT_GEO_P=null; throw e; });
+  return BT_GEO_P;
+}
+const BT_ISO={TH:'764',IN:'356',LK:'144',ID:'360',VN:'704',CN:'156',TW:'158',NP:'524',AU:'036',IT:'380',ES:'724',FR:'250',BG:'100',HU:'348',HR:'191',GB:'826',TR:'792',GR:'300',MA:'504',TN:'788',EG:'818',SO:'706',ET:'231',OM:'512',MG:'450',KM:'174',ZA:'710',US:'840',MX:'484',GT:'320',HT:'332',BR:'076',AR:'032',PY:'600',PE:'604'};
+const BT_MW=1200, BT_MH=780, BT_CW=96, BT_CH=120;
+function btGeo(){
+  if(BT_GEO_C) return BT_GEO_C;
+  if(!window.d3||!window.topojson||typeof WORLD_TOPO==='undefined'||typeof TH_GEO==='undefined') return null;
+  const world=topojson.feature(WORLD_TOPO,WORLD_TOPO.objects.countries).features.filter(f=>f.id!=='010');
+  const wp=d3.geoNaturalEarth1().fitExtent([[150,150],[BT_MW-150,BT_MH-150]],{type:'FeatureCollection',features:world});
+  const thf=TH_GEO.features.find(f=>f.id==='764'), tp=d3.geoMercator().fitExtent([[340,40],[BT_MW-340,BT_MH-40]],thf);
+  const wpath=d3.geoPath(wp), tpath=d3.geoPath(tp);
+  const prov=typeof TH_PROV==='undefined'?[]:TH_PROV.features.map(f=>({id:f.id,en:f.properties.en,th:f.properties.th,f,d:tpath(f)}));
+  return BT_GEO_C={wp,tp,world:world.map(f=>({id:String(f.id),d:wpath(f)})),th:TH_GEO.features.map(f=>({id:f.id,d:tpath(f)})),prov,provOf:{}};
+}
+function btProvOf(G,k){
+  if(k in G.provOf) return G.provOf[k];
+  const g=BT_GAZ[k]; let id=null;
+  if(g&&g[4]==='th'&&!/^TH-[NCS]$/.test(k)) for(const p of G.prov) if(d3.geoContains(p.f,[g[3],g[2]])){ id=p.id; break; }
+  return G.provOf[k]=id;
+}
+const btHash=s=>[...String(s)].reduce((a,c)=>(a*31+c.charCodeAt(0))>>>0,7);
+function btMapPlaces(list,board){
+  const m=new Map();
+  for(const it of list) for(const k of btArr(it.places)){
+    const g=BT_GAZ[k]; if(!g) continue; let key=k; if(board==='world'&&g[4]==='th') key='TH'; if(board==='th'&&g[4]!=='th') continue;
+    if(!m.has(key)) m.set(key,{key,items:[]}); const e=m.get(key); if(!e.items.includes(it)) e.items.push(it);
+  }
+  return [...m.values()].sort((a,b)=>b.items.length-a.items.length||a.key.localeCompare(b.key));
+}
+function btSlots(board){
+  const s=[];
+  if(board==='world'){ for(let x=18;x<=BT_MW-BT_CW-18;x+=117){ s.push([x,14]); s.push([x,BT_MH-BT_CH-14]); } for(const y of [190,330,470]){ s.push([14,y]); s.push([BT_MW-BT_CW-14,y]); } }
+  else for(const y of [24,172,320,468,616]) for(const x of [30,176,BT_MW-BT_CW-176,BT_MW-BT_CW-30]) s.push([x,y]);
+  return s;
+}
+function btAnchor(sx,sy,px,py){ const c=[[sx+BT_CW/2,sy+BT_CH],[sx+BT_CW/2,sy],[sx,sy+BT_CH/2],[sx+BT_CW,sy+BT_CH/2]]; return c.reduce((b,p)=>Math.hypot(p[0]-px,p[1]-py)<Math.hypot(b[0]-px,b[1]-py)?p:b); }
+function btProvLayer(G,list){
+  if(!G.prov.length) return '';
+  const cnt={}; for(const it of list){ const seen=new Set(); for(const k of btArr(it.places)){ const id=btProvOf(G,k); if(id&&!seen.has(id)){ seen.add(id); cnt[id]=(cnt[id]||0)+1; } } }
+  const max=Math.max(1,...Object.values(cnt));
+  return `<g class="provs">${G.prov.map(p=>{ const n=cnt[p.id]||0, lv=n?Math.min(3,1+Math.floor(n/max*2.999)):0; return `<path class="prov${n?' has':''}" d="${p.d}" style="fill:${n?`var(--wood-${3+lv})`:'transparent'}"><title>${esc(p.th)}${n?` · ${n} ชนิด`:''}</title></path>`; }).join('')}</g><text class="attrib" x="${BT_MW-12}" y="${BT_MH-10}" text-anchor="end">เส้นแบ่งจังหวัด © OpenStreetMap contributors (ODbL) · geoBoundaries</text>`;
+}
+function btRenderMap(list){
+  const G=btGeo(); if(!G) return '<div class="empty">กำลังโหลดแผนที่…</div>';
+  const board=BT.board||'world', proj=board==='world'?G.wp:G.tp;
+  const places=btMapPlaces(list,board).map(p=>{ const g=BT_GAZ[p.key], xy=proj([g[3],g[2]]); return {...p,x:xy[0],y:xy[1],region:/^R-|^TH-[NCS]$/.test(p.key)}; });
+  const sel=places.find(p=>p.key===BT.place)||null; if(!sel) BT.place='';
+  const free=btSlots(board), cards=[];
+  if(board==='th'){
+    const pick=places.slice(0,10), mid=BT_MW/2, rows=[24,172,320,468,616]; let L=pick.filter(p=>p.x<mid), R=pick.filter(p=>p.x>=mid);
+    while(L.length>5){ R.push(L.sort((a,b)=>b.x-a.x).shift()); } while(R.length>5){ L.push(R.sort((a,b)=>a.x-b.x).shift()); }
+    [[L,190],[R,BT_MW-190-BT_CW]].forEach(([side,x])=>{ side.sort((a,b)=>a.y-b.y); const r0=Math.round((5-side.length)/2); side.forEach((p,i)=>cards.push({p,sx:x,sy:rows[r0+i]})); });
+  } else for(const p of places.slice(0,16)){ if(!free.length) break; let bi=0,bd=1e9; free.forEach((s,i)=>{ const d=Math.hypot(s[0]+BT_CW/2-p.x,s[1]+BT_CH/2-p.y); if(d<bd){ bd=d; bi=i; } }); const [sx,sy]=free.splice(bi,1)[0]; cards.push({p,sx,sy}); }
+  const hasC=new Set(places.filter(p=>BT_ISO[p.key]).map(p=>BT_ISO[p.key])), fill=(id,on)=>`var(--wood-${on?4+btHash(id)%3:1+btHash(id)%3})`;
+  const land=board==='world'?G.world.map(c=>`<path class="land" d="${c.d}" style="fill:${fill(c.id,hasC.has(c.id))}"/>`).join(''):G.th.map(c=>c.id==='764'?`<path class="land" d="${c.d}" style="fill:var(--wood-3)"/>`:`<path class="nb" d="${c.d}"/>`).join('')+btProvLayer(G,list);
+  const rep=p=>p.items.find(i=>i.collection&&i.imageUrl)||p.items.find(i=>i.imageUrl);
+  const strs=cards.map(({p,sx,sy})=>{ const [ax,ay]=btAnchor(sx,sy,p.x,p.y); return `<path class="str${sel===p?' on':''}" d="M${ax.toFixed(1)},${ay.toFixed(1)} L${p.x.toFixed(1)},${p.y.toFixed(1)}"/>`; }).join('');
+  const pins=places.map(p=>{ const n=p.items.length, r=Math.min(18,5+2.2*Math.sqrt(n)); return `<g class="pin${p.region?' region':''}${sel===p?' on':''}" data-bt-place="${p.key}" tabindex="0" role="button" aria-label="${esc(btPlaceName(p.key))}: ${n} ชนิด"><circle class="dot" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r.toFixed(1)}"/>${r>=8.5?`<text x="${p.x.toFixed(1)}" y="${p.y.toFixed(1)}">${n}</text>`:''}<title>${esc(btPlaceName(p.key))} · ${n} ชนิด</title></g>`; }).join('');
+  const pols=cards.map(({p,sx,sy})=>{ const im=rep(p), rot=((btHash(p.key)%7)-3)*.9, nm=btPlaceName(p.key);
+    return `<g class="pol${sel===p?' on':''}" data-bt-place="${p.key}" tabindex="0" role="button" aria-label="${esc(nm)}" transform="rotate(${rot} ${sx+BT_CW/2} ${sy+BT_CH/2})"><rect class="paper" x="${sx}" y="${sy}" width="${BT_CW}" height="${BT_CH}"/>
+      ${im?`<image href="${esc(im.imageUrl)}" x="${sx+7}" y="${sy+7}" width="${BT_CW-14}" height="${BT_CW-14}" preserveAspectRatio="xMidYMid slice"/>`:`<rect x="${sx+7}" y="${sy+7}" width="${BT_CW-14}" height="${BT_CW-14}" fill="#efe6d6"/>`}
+      <text class="capth" x="${sx+BT_CW/2}" y="${sy+BT_CW+3}" text-anchor="middle">${esc(nm.length>15?nm.slice(0,14)+'…':nm)}</text><text class="cnt" x="${sx+BT_CW/2}" y="${sy+BT_CH-4}" text-anchor="middle">${p.items.length} ชนิด</text><circle class="tack" cx="${sx+BT_CW/2}" cy="${sy+4}" r="3.5"/></g>`; }).join('');
+  const mapped=list.filter(i=>btArr(i.places).length), nCountry=places.filter(p=>!p.region).length, top=places.slice(0,24), max=top.length?top[0].items.length:1;
+  const srt=a=>a.slice().sort((x,y)=>(x.nameEn||'').localeCompare(y.nameEn||''));
+  return `<div class="bt-mapbar"><div class="bt-mapkpi"><div><b>${mapped.length.toLocaleString('th-TH')}</b><span>ชนิดพืชบนแผนที่</span></div><div><b>${places.length}</b><span>จุดแหล่งปลูก</span></div><div><b>${nCountry}</b><span>${board==='world'?'ประเทศ':'จังหวัด'}</span></div><div><b>${list.length-mapped.length}</b><span>ยังไม่ระบุแหล่ง</span></div></div>
+      <span style="display:flex;gap:8px;flex-wrap:wrap"><div class="bt-seg" role="group" aria-label="เลือกแผนที่"><button type="button" data-bt-board="world" aria-pressed="${board==='world'}">โลก</button><button type="button" data-bt-board="th" aria-pressed="${board==='th'}">ประเทศไทย</button></div><button class="btn small" type="button" id="btFull">เต็มจอ ↗</button></span></div>
+    <div class="bt-board" id="btBoard"><svg viewBox="0 0 ${BT_MW} ${BT_MH}" role="img" aria-label="${board==='world'?'แผนที่โลก':'แผนที่ประเทศไทย'}"><defs><filter id="btgrain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.003 0.11" numOctaves="2" seed="7" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 0.3  0 0 0 0 0.18  0 0 0 0 0.08  0 0 0 0.35 0" result="c"/><feComposite in="c" in2="SourceGraphic" operator="in" result="g"/><feBlend in="SourceGraphic" in2="g" mode="multiply"/></filter></defs>
+      <g filter="url(#btgrain)">${land}</g>${strs}${pins}${pols}</svg><span class="hint">แตะหมุดหรือรูปเพื่อดูพืชในแหล่งนั้น</span></div>
+    <div class="bt-legend"><span><i style="background:var(--wood-5)"></i>${board==='world'?'ประเทศที่มีแหล่งวัตถุดิบในทะเบียน':'ประเทศไทย'}</span>${board==='world'?'<span><i style="background:var(--wood-2)"></i>ประเทศอื่น</span>':''}<span><i class="dotk" style="background:#091e4b"></i>จังหวัด / ประเทศ</span><span><i class="dotk" style="background:#c46d4e"></i>ภูมิภาค (ถิ่นกำเนิดกว้าง)</span></div>
+    <p class="muted" style="font-size:12.5px;margin:6px 0 0">ที่มาของตำแหน่ง: พืชไทยตามการ์ด Thai Palette · น้ำมันหอมระเหยตามแหล่งผลิตหลักทางการค้า (ยังต้องตรวจทาน) · สมุนไพรตามถิ่นกำเนิดในฐานข้อมูลเดิม</p>
+    <div class="bt-pp">${sel?`<h3><span>พืชจาก ${esc(btPlaceName(sel.key))} <small>${sel.items.length} ชนิด</small></span><button class="btn small" type="button" data-bt-place="">ดูทุกแหล่ง</button></h3><div class="bt-mini">${srt(sel.items).map(m=>`<button type="button" data-bt-open="${esc(m.regNo)}">${m.imageUrl?`<img src="${esc(m.imageUrl)}" alt="" loading="lazy">`:'<span class="ph"></span>'}<b>${esc(btName(m))}</b><span>${esc(m.latin||'')}</span></button>`).join('')}</div>`
+      :`<h3><span>แหล่งที่มีพืชมากที่สุด</span></h3><div class="bt-ptable">${top.map(p=>`<button type="button" data-bt-place="${p.key}"><span>${esc(btPlaceName(p.key))}</span><span class="n">${p.items.length}</span><span class="bar"><i style="width:${(p.items.length/max*100).toFixed(1)}%"></i></span></button>`).join('')}</div>`}</div>`;
+}
+/* ---------- แดชบอร์ดงานวิจัย ---------- */
+function btRenderDash(list){
+  const n=v=>(+v||0).toLocaleString('th-TH'), pct=v=>v.toLocaleString('th-TH',{maximumFractionDigits:2});
+  const eo=list.filter(m=>BT_EXTRACT_FORMS.has(m.form)), acc=list.filter(m=>m.form==='Accord'), has=(m,k)=>btArr(m.rdType).includes(k);
+  const kpi=(v,label,cls,filt)=>`<button class="bt-kpi${cls?' '+cls:''}" type="button" data-bt-dk="${filt||''}"><b>${v}</b><span>${label}</span></button>`;
+  const kpis=`<div class="bt-kpis">${[kpi(n(eo.length),'น้ำมันหอมระเหยและสารสกัด','','form:Essential oil'),kpi(n(acc.length),'น้ำหอมปรุง (Accord)','','form:Accord'),kpi(n(list.filter(m=>has(m,'extract')||has(m,'upcycle')).length),'สกัดเองแล้ว','lite','rd:extract'),kpi(n(list.filter(m=>has(m,'planned')||has(m,'trial')).length),'แผน / กำลังทดลอง','lite','rd:planned'),
+    kpi(n(list.reduce((s,m)=>s+(+m.extCount||0),0)),'ครั้งที่สกัด (ทีม)','lite',''),kpi(n(list.filter(m=>m.stock==='yes').length),'มีในคลัง','lite','stock:yes'),kpi(`${n(list.filter(m=>m.collection==='Thai Palette').length)}<small style="font-size:14px;font-weight:400"> / 100</small>`,'Thai Palette · เป้าหมาย 100 ชนิด','lite','coll:Thai Palette')].join('')}</div>`;
+  const stages=[['แผนการสกัด',list.filter(m=>has(m,'planned')).length,'rd:planned'],['ทดลองแล้ว ยังไม่ได้ผล',list.filter(m=>has(m,'trial')).length,'rd:trial'],['สกัดเองได้แล้ว',list.filter(m=>has(m,'extract')).length,'rd:extract'],['สกัดจาก Upcycle',list.filter(m=>has(m,'upcycle')).length,'rd:upcycle'],['ปรุงกลิ่นทดแทน',list.filter(m=>has(m,'accord')).length,'rd:accord'],['สั่งซื้อ',list.filter(m=>has(m,'buy')).length,'rd:buy'],['กำลังประเมินกลิ่น',list.filter(m=>m.status==='eval').length,'status:eval'],['ใช้งานจริง',list.filter(m=>m.status==='active').length,'status:active'],['มีในคลัง',list.filter(m=>m.stock==='yes').length,'stock:yes']];
+  const smax=Math.max(1,...stages.map(s=>s[1]));
+  const pipe=`<div class="bt-dpanel"><h3>สถานะงานวิจัย (pipeline)<small>${n(list.length)} รายการ</small></h3>${stages.map(([k,v,f])=>`<div class="bt-hbar"><button type="button" data-bt-dk="${f}">${k}</button><i class="${/status|stock/.test(f)?'navy':''}" style="width:${(v/smax*100).toFixed(1)}%"></i><span class="v">${n(v)}</span></div>`).join('')}</div>`;
+  const bars=(items,keys,get,name,prefix)=>{ const c={}; items.forEach(m=>get(m).forEach(k=>c[k]=(c[k]||0)+1)); const mx=Math.max(1,...Object.values(c)); return keys.filter(k=>c[k]).sort((a,b)=>c[b]-c[a]).map(k=>`<div class="bt-hbar"><button type="button" data-bt-dk="${prefix}:${k}">${esc(name(k))}</button><i style="width:${(c[k]/mx*100).toFixed(1)}%"></i><span class="v">${n(c[k])}</span></div>`).join('')||'<p class="muted" style="margin:0">–</p>'; };
+  const imgOf=m=>m.imageUrl?`<img class="th" src="${esc(m.imageUrl)}" alt="" loading="lazy">`:'<span class="th"></span>';
+  const row=m=>{ const y=btBestYield(m); return `<button class="bt-drow" type="button" data-bt-open="${esc(m.regNo)}">${imgOf(m)}<span><span class="nm">${esc(btName(m))}</span><span class="sm">${esc(m.regNo)} · ${esc(btArr(m.odorFamilies).map(k=>BT_FAMN[k]).filter(Boolean).join(', ')||m.descriptors||'')}${m.note?' · '+esc(m.note):''}</span><span class="sm">${esc(btArr(m.rdType).map(k=>BT_RD[k]||k).join(' · ')||(BT_STATUS[m.status]||[''])[0])}${m.stock==='yes'?' · มีในคลัง':''}</span></span>
+      <span class="rt">${y!=null?`<b>${pct(y)}%</b><span>วัดจริง</span>`:m.oilPct?`<b style="opacity:.6">${esc(m.oilPct)}%</b><span>อ้างอิง</span>`:'<span>ยังไม่มีผล yield</span>'}${m.lastExtraction?`<span>สกัดล่าสุด ${esc(m.lastExtraction)}</span>`:''}</span></button>`; };
+  const recency=m=>m.lastExtraction||m.updatedAt||'';
+  const group=(items,title,filt)=>{ const top=items.slice().sort((a,b)=>recency(b).localeCompare(recency(a))).slice(0,8);
+    return `<div class="bt-dpanel"><h3><button type="button" class="btn small" data-bt-dk="${filt}">${title}</button><small>${n(items.length)} รายการ</small></h3>${items.length?`<div class="bt-dgrid3"><div><h4>กลุ่มกลิ่น</h4>${bars(items,BT_FAM.map(f=>f[0]),m=>btArr(m.odorFamilies),k=>BT_FAMN[k]||k,'fam')}</div><div><h4>ระดับโน้ต</h4>${bars(items,['Top','Middle','Base'],m=>m.note?[m.note]:[],k=>k,'note')}</div><div><h4>สถานะ</h4>${bars(items,Object.keys(BT_STATUS),m=>[m.status||'active'],k=>BT_STATUS[k][0],'status')}${bars(items,Object.keys(BT_RD),m=>btArr(m.rdType),k=>BT_RD[k]||k,'rd')}</div></div>
+      <h4>รายการล่าสุด</h4><div class="bt-dlist">${top.map(row).join('')}</div>${items.length>top.length?`<p class="bt-dfoot">และอีก ${n(items.length-top.length)} รายการ · ดูในแท็บรายการ</p>`:''}`:'<p class="muted" style="margin:0">ไม่มีรายการในกลุ่มนี้ตามตัวกรองที่เลือก</p>'}</div>`; };
+  const ys=list.map(m=>[m,btBestYield(m)]).filter(x=>x[1]!=null).sort((a,b)=>b[1]-a[1]).slice(0,12), ymax=Math.max(1,...ys.map(x=>x[1]));
+  const yieldP=`<div class="bt-dpanel"><h3>%yield ที่วัดได้ (สูงสุด 12 อันดับ)</h3>${ys.length?ys.map(([m,y])=>`<div class="bt-hbar"><button type="button" data-bt-open="${esc(m.regNo)}">${esc(btName(m))}</button><i style="width:${(y/ymax*100).toFixed(1)}%"></i><span class="v">${pct(y)}%</span></div>`).join(''):'<p class="muted" style="margin:0">ยังไม่มีผล yield</p>'}<p class="bt-dfoot">จากการสกัดของแผนก RD และบันทึกของทีม ไม่ใช่ค่าจากเอกสาร</p></div>`;
+  const recent=list.filter(m=>m.lastExtraction).sort((a,b)=>b.lastExtraction.localeCompare(a.lastExtraction)).slice(0,8);
+  const recentP=`<div class="bt-dpanel"><h3>ความเคลื่อนไหวล่าสุด</h3>${recent.length?`<div class="bt-dlist">${recent.map(m=>`<button class="bt-drow" type="button" data-bt-open="${esc(m.regNo)}">${imgOf(m)}<span><span class="nm">${esc(btName(m))}</span><span class="sm">สกัดล่าสุด ${esc(m.lastExtraction)} (${n(m.extCount)} ครั้ง)</span></span><span class="rt">${pfChip(m.status,BT_STATUS)}</span></button>`).join('')}</div>`:'<p class="muted" style="margin:0">ยังไม่มีบันทึกการสกัดในระบบ ใช้ปุ่ม "บันทึกการสกัด" ในหน้ารายละเอียดของพืช</p>'}</div>`;
+  const rev=list.filter(m=>m.reviewNote||m.status==='eval'), flags=list.filter(m=>btArr(m.regFlags).length);
+  const reviewP=`<div class="bt-dpanel"><h3>ต้องตรวจสอบ<small>${n(rev.length)} · ติดธงกฎระเบียบ ${n(flags.length)}</small></h3><div class="bt-dlist">${rev.slice(0,8).map(m=>`<button class="bt-drow" type="button" data-bt-open="${esc(m.regNo)}">${imgOf(m)}<span><span class="nm">${esc(btName(m))}</span><span class="sm">${esc(m.reviewNote||(BT_STATUS[m.status]||[''])[0])}</span></span><span class="rt">${btArr(m.regFlags).length?`<span style="color:var(--bad)">⚑ ${btArr(m.regFlags).length}</span>`:''}</span></button>`).join('')||'<p class="muted" style="margin:0">–</p>'}</div>${rev.length>8?`<p class="bt-dfoot">และอีก ${n(rev.length-8)} รายการ</p>`:''}</div>`;
+  return `<div class="bt-dash"><div><h3 style="margin:0">แดชบอร์ดการวิจัยวัตถุดิบ</h3><div class="muted" style="font-size:13px">สรุปงานวิจัยน้ำมันหอมระเหยและน้ำหอมปรุง ตามตัวกรองที่เลือก · อัปเดตอัตโนมัติ · ${new Date().toLocaleDateString('th-TH',{dateStyle:'medium'})}</div></div>${kpis}
+    <div class="bt-dgrid2">${group(eo,'น้ำมันหอมระเหยและสารสกัด','form:Essential oil')}${group(acc,'น้ำหอมปรุง (Accord)','form:Accord')}</div><div class="bt-dgrid3">${pipe}${yieldP}${recentP}</div>${reviewP}</div>`;
+}
+/* ตัวกรองจากแดชบอร์ด: "key:value" → ตั้งค่าตัวกรองของแท็บรายการ */
+function btApplyDk(dk){
+  if(!dk) return; const i=dk.indexOf(':'), k=dk.slice(0,i), v=dk.slice(i+1), map={form:'form',coll:'coll',status:'status',rd:'rdType',stock:'stock',note:'note',fam:'odor'};
+  if(map[k]) BT[map[k]]=BT[map[k]]===v?'':v;
+}
 
 async function boot(){
   showGate('loading');

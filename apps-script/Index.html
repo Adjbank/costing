@@ -2213,9 +2213,9 @@ function docIfraMax(p){
 }
 function docDefaults(type, f){
   const p=f.p, m=metaOf(p), base={product:(m.sampleName||p.name)+(/fragrance oil/i.test(m.sampleName||p.name)?'':' Fragrance Oil'), customer:m.customer, brand:m.brand, sampleCode:m.sampleCode, address:'', date:new Date().toISOString().slice(0,10)};
-  if(type==='IFRA') return Object.assign(base, {amendment:'51st Amendment to the IFRA Standards (July 2023)', cats:[{cls:'9', level:''},{cls:'7B', level:''}], maxByCat:docIfraMax(p)});
+  if(type==='IFRA') return Object.assign(base, {amendment:'51st Amendment to the IFRA Standards (July 2023)', cats:[{cls:'9', level:''},{cls:'7B', level:''}], maxByCat:docIfraMax(p), preparedBy:'', approvedBy:''});
   if(DOC_GEN[type]) return docGenDefaults(type, base, f);
-  return Object.assign(base, {application:'For blending into various finished products', hazards:['H226','H315','H319'], comp:docComposition(p), coverage:docLevels(p).coverage,
+  return Object.assign(base, {preparedBy:'', approvedBy:'', application:'For blending into various finished products', hazards:['H226','H315','H319'], comp:docComposition(p), coverage:docLevels(p).coverage,
     props:{appearance:'Clear liquid', odour:'Characteristic odour', flash:'60 °C', density:'Not available', solubility:'Insoluble', shelf:'2 years'}, transport:'UN1266'});
 }
 /* รหัสของเหลวไวไฟที่สอดคล้องกับจุดวาบไฟ (เกณฑ์ GHS/CLP ข้อ 2.6) */
@@ -2328,10 +2328,8 @@ function docGenHtml(type, d, meta){
   const val=f=>{ const v=d[f.k]; if(f.t==='select'){ const o=f.o.find(x=>x[0]===v); return o?o[2]:v; } if(f.t==='date') return v?docDate(v):''; return v; };
   const kv=fs=>`<table class="dkv">${fs.filter(f=>val(f)).map(f=>`<tr><td>${esc(f.e)}</td><td>${esc(val(f))}</td></tr>`).join('')}</table>`;
   const F=keys=>keys.map(k=>all.find(f=>f.k===k)).filter(Boolean);
-  const sec=(n,t)=>`<div class="dsec">${n}. ${t}</div>`;
-  const ident=`<table class="dkv"><tr><td>Product name</td><td><b>${esc(d.product)}</b></td></tr>${d.customer?`<tr><td>Customer</td><td>${esc(d.customer)}</td></tr>`:''}${d.brand?`<tr><td>Brand</td><td>${esc(d.brand)}</td></tr>`:''}${d.sampleCode?`<tr><td>Sample code</td><td>${esc(d.sampleCode)}</td></tr>`:''}<tr><td>Manufacturer</td><td>${esc(COMPANY.name)}<br>${esc(COMPANY.address)}</td></tr></table>`;
+  const sec=docSec, ident=docIdent(d), sign=docSign;
   const table=`<table class="dt"><thead><tr>${G.cols.map(c=>`<th>${esc(c.e)}</th>`).join('')}</tr></thead><tbody>${d.rows.map(r=>`<tr>${G.cols.map(c=>`<td${c.w?'':' style="text-align:center"'}>${esc(r[c.k]||'-')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
-  const sign=(who)=>`<table class="dt" style="margin-top:26px"><tbody><tr>${who.map(([l,n])=>`<td style="width:${100/who.length}%;height:70px;vertical-align:bottom;text-align:center">${esc(n||'')}<br><span class="dsmall">${l}</span></td>`).join('')}</tr></tbody></table>`;
   let body='';
   if(type==='STAB') body=`${sec(1,'Product Information')}${ident}${sec(2,'Test Details')}${kv(F(['productType','dosage','batch','mode','startDate','endDate','method']))}${sec(3,'Results')}${table}
     <p class="dsmall">Evaluation scale: “No change” = identical to the reference sample stored at 4 °C.</p>${sec(4,'Conclusion')}${kv(F(['conclusion','shelf','remarks']))}${sign([['Tested by',d.testedBy],['Approved by',d.approvedBy]])}`;
@@ -2339,10 +2337,22 @@ function docGenHtml(type, d, meta){
     ${sec(3,'Test Conditions')}${kv(F(['startDate','endDate','method']))}${sec(4,'Results')}${table}${sec(5,'Conclusion')}${kv(F(['conclusion','remarks']))}${sign([['Tested by',d.testedBy],['Approved by',d.approvedBy]])}`;
   else body=`${sec(1,'Product Information')}${ident}${kv(F(['formulaCode','description','application','dosage']))}${sec(2,'Physical and Chemical Specification')}${table}
     ${sec(3,'Storage and Shelf Life')}${kv(F(['storage','shelf','packaging']))}${sec(4,'Regulatory Information')}${kv(F(['regulatory']))}${sign([['Quality Control',''],['Approved by',d.approvedBy]])}`;
-  return `${docHead(esc(M.t).toUpperCase(), `Document No. ${esc(no)}${meta.rev?` · Rev ${meta.rev}`:''} · Date ${docDate(d.date)}`)}${body}
+  return `${docHead(esc(M.t).toUpperCase(), docSubLine(d, meta))}${body}
     <p class="dsmall" style="margin-top:22px">This report relates only to the sample(s) tested under the stated conditions. ${type==='SPEC'?'Specifications apply to each production batch; results outside the specification require Quality Control review before release.':'Results may not apply to other formulations, packaging components or storage conditions.'}</p>
-    <p class="dsmall dfoot">${esc(M.t)} No. ${esc(no)}${meta.rev?` · Rev ${meta.rev}`:''} · Issued by ${esc(shortName(meta.issuedBy||S.me.email))}</p>`;
+    ${docFoot(type, meta)}`;
 }
+/* ส่วนประกอบหน้าพิมพ์ที่ใช้ร่วมกันทั้ง 5 ประเภท: หัวข้อมีเลข · ตารางข้อมูลผลิตภัณฑ์ · ช่องลงนาม · บรรทัดเลขที่เอกสาร */
+const docSec=(n,t)=>`<div class="dsec">${n}. ${t}</div>`;
+const docKv=rows=>`<table class="dkv">${rows.filter(([,v])=>v).map(([l,v,raw])=>`<tr><td>${esc(l)}</td><td>${raw?v:esc(v)}</td></tr>`).join('')}</table>`;
+function docIdent(d, extra, after){
+  return docKv([['Product name',`<b>${esc(d.product)}</b>`,1],['Customer',d.customer],['Brand',d.brand],['Sample code',d.sampleCode],...(extra||[]),
+    ['Manufacturer',`${esc(COMPANY.name)}<br>${esc(COMPANY.address)}`,1],...(after||[])]);
+}
+const docSign=who=>`<table class="dt" style="margin-top:26px"><tbody><tr>${who.map(([l,n])=>`<td style="width:${100/who.length}%;height:70px;vertical-align:bottom;text-align:center">${esc(n||'')}<br><span class="dsmall">${l}</span></td>`).join('')}</tr></tbody></table>`;
+const docSubLine=(d, meta, dateLabel)=>`Document No. ${esc(meta.docNo||'DRAFT')}${meta.rev?` · Rev ${meta.rev}`:''} · ${dateLabel||'Date'} ${docDate(d.date)}`;
+const docFoot=(type, meta)=>`<p class="dsmall dfoot">${esc(DOC_META[type].t)} No. ${esc(meta.docNo||'DRAFT')}${meta.rev?` · Rev ${meta.rev}`:''} · Issued by ${esc(shortName(meta.issuedBy||S.me.email))}</p>`;
+/* ช่องผู้จัดทำ / ผู้อนุมัติ ของ MSDS และ IFRA (STAB / PACK / SPEC กำหนดใน DOC_GEN.concl) */
+const DOC_SIGN_FIELDS=[{k:'preparedBy',l:'ผู้จัดทำ',e:'Prepared by'},{k:'approvedBy',l:'ผู้อนุมัติ',e:'Approved by'}];
 /* แท็บย่อยของหมวด "เอกสารวัตถุดิบ": ออกเอกสาร (#docView) · ตรวจ IFRA / อย. (#chkView) */
 function docSubTabs(active){ return `<div class="pf-tabs" role="tablist" style="margin-bottom:14px"><button type="button" data-dtab="doc" class="${active==='doc'?'on':''}">ออกเอกสาร</button><button type="button" data-dtab="chk" class="${active==='chk'?'on':''}">ตรวจ IFRA / อย.</button></div>`; }
 ['#docView','#chkView'].forEach(id=>$(id).addEventListener('click', e=>{ const b=e.target.closest('button[data-dtab]'); if(!b||b.dataset.dtab===S.view) return; showView(b.dataset.dtab); }));
@@ -2398,30 +2408,31 @@ function drawDocForm(){
       <div class="field"><label>ลูกค้า (Customer)</label><input data-d="customer" value="${esc(d.customer)}" maxlength="200"></div>
       <div class="field"><label>แบรนด์ (Brand)</label><input data-d="brand" value="${esc(d.brand)}" maxlength="120"></div>
       <div class="field"><label>วันที่ออกเอกสาร</label><input data-d="date" type="date" value="${esc(d.date)}"></div>
-      ${type==='IFRA'?`<div class="field" style="grid-column:1/-1"><label>ที่อยู่ลูกค้า (Customer Address)</label><input data-d="address" value="${esc(d.address)}" maxlength="300" placeholder="เช่น 58, 60, 62, 64, 66 Soi Saranakhom 10, Saranakhom Road, Si Kan, Don Mueang, Bangkok 10210, Thailand"></div>`:''}
     </div>`;
+  const h3=(t, first)=>`<h3 style="font-size:14px;margin-top:${first?4:16}px">${t}</h3>`;
+  const signBox=`${h3('ผู้รับผิดชอบ')}<div class="settings" style="margin-top:4px">${DOC_SIGN_FIELDS.map(x=>docGenField(x, d[x.k], inp)).join('')}</div>`;
   let body='';
   if(DOC_GEN[type]) body=docGenBody(type, d, inp);
   else if(type==='IFRA'){
     const mx=d.maxByCat||{}, hasRules=CHK && CHK.rules.some(r=>r.source==='IFRA'), cov=docLevels(f.p).coverage;
-    body=`<div class="field" style="margin-bottom:12px"><label>IFRA Amendment ที่อ้างอิง</label><input data-d="amendment" value="${esc(d.amendment)}" maxlength="120" style="${inp}"></div>
+    body=`<div class="settings" style="margin-top:4px">${[{k:'amendment',l:'IFRA Amendment ที่อ้างอิง',w:1},{k:'address',l:'ที่อยู่ลูกค้า (Customer Address)',w:1,ph:'เช่น 58 Soi Saranakhom 10, Saranakhom Road, Si Kan, Don Mueang, Bangkok 10210, Thailand'}].map(x=>docGenField(x, d[x.k], inp)).join('')}</div>
       ${helpBox('คำแนะนำการเลือกหมวดและระดับ IFRA', `<ul>
         <li>เลือกหมวดตาม<b>สินค้าสำเร็จที่ลูกค้านำหัวน้ำหอมไปผสม</b> ไม่ใช่ตามตัวหัวน้ำหอม ถ้าไม่ทราบให้สอบถามลูกค้าก่อนออกเอกสาร</li>
         <li>สินค้าที่ใช้ได้หลายรูปแบบให้เลือกทุกหมวดที่เกี่ยวข้อง แต่ละหมวดมีค่าสูงสุดต่างกัน หมวดที่เข้มงวดกว่าจะได้ระดับต่ำกว่า</li>
         <li>"ระดับที่แนะนำ" = ระดับที่ลูกค้าจะใช้จริง และต้องไม่เกินค่าสูงสุดตามข้อกำหนด (ระบบไม่ให้ออกเอกสารถ้าเกิน)</li>
         <li>ค่าสูงสุดคำนวณจากข้อกำหนดที่โหลดไว้ ถ้ามีวัตถุดิบไม่มีข้อมูล CAS ค่านี้อาจสูงเกินจริง ให้ครบก่อนออกเอกสาร</li>
         <li>ตัวอย่างหมวดตามประเภทสินค้า (ตรวจกับ IFRA ฉบับล่าสุดอีกครั้ง):<table><thead><tr><th>ประเภทสินค้า</th><th>หมวด</th></tr></thead><tbody>${IFRA_PRESETS.map(([l,c])=>`<tr><td>${l}</td><td>${c.join(', ')}</td></tr>`).join('')}</tbody></table></li></ul>`)}
-      <h3 style="font-size:14px">หมวดการใช้งานและระดับสูงสุดที่แนะนำ (Suggested Compound Level %)</h3>
+      ${h3('หมวดการใช้งานและระดับสูงสุดที่แนะนำ (Suggested Compound Level %)')}
       <div class="muted" style="font-size:12.5px;margin:4px 0 8px">${hasRules?`คอลัมน์ "สูงสุดตามข้อกำหนด" คำนวณจากข้อกำหนด IFRA ที่โหลดไว้และองค์ประกอบวัตถุดิบ (ครอบคลุม ${fmt(cov,0)}% ของสูตร) · ค่าที่กรอกต้องไม่เกินค่านี้`:'ยังไม่มีข้อกำหนด IFRA ในระบบ จึงคำนวณค่าสูงสุดให้ไม่ได้ กรอกระดับที่ประเมินเองและยืนยันกับเอกสารต้นทาง'}</div>
       <div class="tablebox"><table><thead><tr><th>Class</th><th>Application Example</th><th class="num">สูงสุดตามข้อกำหนด %</th><th class="num">ระดับที่แนะนำ %</th><th></th></tr></thead><tbody>
         ${d.cats.map((c,i)=>{ const m=mx[c.cls]; const over=m!=null && toNum(c.level)>m+1e-9; return `<tr data-i="${i}"><td><select data-cat="cls" style="${inp};width:auto">${Object.keys(IFRA_APP).map(k=>`<option value="${k}" ${k===c.cls?'selected':''}>${k}</option>`).join('')}</select></td><td style="font-size:12.5px">${esc(IFRA_APP[c.cls]||'')}</td>
           <td class="num">${m==null?(hasRules?'<span class="muted">ไม่จำกัด*</span>':'–'):fmt(m,2)}</td><td class="num"><input data-cat="level" type="number" min="0" max="100" step="any" value="${esc(c.level)}" style="${inp};width:110px;text-align:right${over?';border-color:var(--bad)':''}"></td><td><button class="x" type="button" data-catdel="${i}" aria-label="ลบ">×</button></td></tr>`; }).join('')}
       </tbody></table></div>
-      <div class="row" style="margin-top:8px"><select id="docPreset" aria-label="เพิ่มหมวดตามประเภทสินค้า" style="${inp};width:auto;max-width:300px"><option value="">เพิ่มหมวดตามประเภทสินค้า…</option>${IFRA_PRESETS.map(([l,c],i)=>`<option value="${i}">${l} → ${c.join(', ')}</option>`).join('')}</select><button class="btn small" type="button" id="docCatAdd">เพิ่มหมวด</button>${hasRules?'<button class="btn small" type="button" id="docCatFill">ใส่ค่าสูงสุดตามข้อกำหนดให้ทุกหมวด</button>':''}<span class="muted" style="font-size:12px">*ไม่จำกัด = ไม่พบสารในสูตรที่มีข้อกำหนดในหมวดนั้น (ตามข้อมูลที่โหลด) ยังควรใส่ระดับใช้งานจริง</span></div>`;
+      <div class="row" style="margin-top:8px"><select id="docPreset" aria-label="เพิ่มหมวดตามประเภทสินค้า" style="${inp};width:auto;max-width:300px"><option value="">เพิ่มหมวดตามประเภทสินค้า…</option>${IFRA_PRESETS.map(([l,c],i)=>`<option value="${i}">${l} → ${c.join(', ')}</option>`).join('')}</select><button class="btn small" type="button" id="docCatAdd">เพิ่มหมวด</button>${hasRules?'<button class="btn small" type="button" id="docCatFill">ใส่ค่าสูงสุดตามข้อกำหนดให้ทุกหมวด</button>':''}<span class="muted" style="font-size:12px">*ไม่จำกัด = ไม่พบสารในสูตรที่มีข้อกำหนดในหมวดนั้น (ตามข้อมูลที่โหลด) ยังควรใส่ระดับใช้งานจริง</span></div>${signBox}`;
   } else {
     const H=new Set(d.hazards), P=sdsPStatements(d.hazards);
-    body=`<div class="field" style="margin-bottom:12px"><label>การใช้งาน (Recommended Use)</label><input data-d="application" value="${esc(d.application)}" maxlength="200" style="${inp}"></div>
-      <h3 style="font-size:14px">Section 2 · การจำแนกความเป็นอันตราย (GHS)</h3>
+    body=`<div class="settings" style="margin-top:4px">${docGenField({k:'application',l:'การใช้งาน (Recommended Use)',w:1}, d.application, inp)}</div>
+      ${h3('Section 2 · การจำแนกความเป็นอันตราย (GHS)')}
       <div class="checks" style="margin:6px 0 10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">${GHS_H.map(([c,t,cls])=>`<label><input type="checkbox" data-h="${c}" ${H.has(c)?'checked':''}><span><b>${c}</b> ${esc(t)}<br><span class="muted" style="font-size:11.5px">${esc(cls)}</span></span></label>`).join('')}</div>
       <div class="muted" style="font-size:12.5px">Signal word: <b>${sdsSignal(d.hazards)}</b> · Pictograms: ${sdsPictos(d.hazards).join(', ')||'–'} · Precautionary statements ${P.length} รายการ (สร้างอัตโนมัติจากรายการที่เลือก)</div>
       ${(()=>{ const fh=flashHint(d); return fh ? `<div class="msg ${fh.ok?'ok':'warn'}" style="margin:8px 0 0">${esc(fh.txt)}${fh.ok?' · รหัสที่เลือกสอดคล้องกัน':` · รหัสที่เลือกอยู่ตอนนี้: ${fh.have.join(', ')||'ไม่มี'}`} ${fh.ok?'':'<button class="btn small" type="button" id="docFlashFix" style="margin-left:8px">ใช้ตามจุดวาบไฟ</button>'}</div>` : '<div class="muted" style="font-size:12.5px;margin-top:6px">ใส่จุดวาบไฟ (Section 9) เพื่อให้ระบบแนะนำรหัสของเหลวไวไฟที่สอดคล้องกัน</div>'; })()}
@@ -2431,14 +2442,15 @@ function drawDocForm(){
         <li><b>ต้องสอดคล้องกันทุก Section:</b> Classification, Hazard statements, Signal word, สัญลักษณ์ และ P-statements สร้างจากรายการที่เลือกชุดเดียวกัน (เอกสารเดิมที่ระบุ H226 คู่กับ H225 เป็นตัวอย่างที่ขัดกัน)</li>
         <li><b>Section 3:</b> แสดงเป็นช่วง % ใส่สารที่เป็นอันตรายหรือสารที่ต้องแสดงให้ครบ ส่วนที่ไม่ทราบองค์ประกอบรวมเป็น FRAGRANCE ควรเพิ่มข้อมูล CAS ให้ครอบคลุมสูงสุดก่อนออก</li>
         <li><b>Section 9 / 14:</b> ใช้ค่าจากผลทดสอบล็อตจริงถ้ามี ส่วนข้อมูลการขนส่ง (UN) ตรวจกับกฎ ADR/IMDG ฉบับล่าสุดตามผลการจำแนก</li></ul>`)}
-      <h3 style="font-size:14px;margin-top:16px">Section 3 · องค์ประกอบ (คำนวณจากสูตร + ตารางองค์ประกอบวัตถุดิบ ครอบคลุม ${fmt(d.coverage,0)}% ของสูตร)</h3>
+      ${h3(`Section 3 · องค์ประกอบ (คำนวณจากสูตร + ตารางองค์ประกอบวัตถุดิบ ครอบคลุม ${fmt(d.coverage,0)}% ของสูตร)`)}
       <div class="tablebox" style="margin-top:6px"><table><thead><tr><th>INCI Name</th><th>CAS No.</th><th>EC No.</th><th>Percentage (%)</th><th></th></tr></thead><tbody>
         ${d.comp.map((r,i)=>`<tr data-i="${i}"><td><input data-comp="name" value="${esc(r.name)}" style="${inp}"></td><td><input data-comp="cas" value="${esc(r.cas)}" style="${inp};width:130px"></td><td><input data-comp="ec" value="${esc(r.ec)}" style="${inp};width:110px"></td><td><input data-comp="range" value="${esc(r.range)}" style="${inp};width:110px"></td><td><button class="x" type="button" data-compdel="${i}" aria-label="ลบ">×</button></td></tr>`).join('')}
       </tbody></table></div>
       <div class="row" style="margin-top:8px"><button class="btn small" type="button" id="docCompAdd">เพิ่มแถว</button><button class="btn small" type="button" id="docCompReset">คำนวณใหม่จากสูตร</button>${d.coverage<99.5?'<span class="muted" style="font-size:12px">วัตถุดิบที่ไม่มีข้อมูล CAS ถูกรวมใน "FRAGRANCE" ตรวจสอบและเพิ่มสารที่ต้องแสดงเอง</span>':''}</div>
-      <h3 style="font-size:14px;margin-top:16px">Section 9 · คุณสมบัติทางกายภาพ</h3>
-      <div class="settings" style="margin-top:6px">${[['appearance','Appearance'],['odour','Odour'],['flash','Flash point'],['density','Relative density'],['solubility','Water solubility'],['shelf','Shelf life']].map(([k,l])=>`<div class="field"><label>${l}</label><input data-prop="${k}" value="${esc(d.props[k])}" maxlength="80"></div>`).join('')}</div>
-      <div class="field"><label>Section 14 · การขนส่ง</label><select data-d="transport" style="${inp};width:auto"><option value="UN1266" ${d.transport==='UN1266'?'selected':''}>UN 1266 Perfumery products with flammable solvents · Class 3 · PG III</option><option value="UN1169" ${d.transport==='UN1169'?'selected':''}>UN 1169 Extracts, aromatic, liquid · Class 3 · PG III</option><option value="none" ${d.transport==='none'?'selected':''}>Not regulated for transport</option></select></div>`;
+      ${h3('Section 9 · คุณสมบัติทางกายภาพ')}
+      <div class="settings" style="margin-top:4px">${[['appearance','Appearance'],['odour','Odour'],['flash','Flash point'],['density','Relative density'],['solubility','Water solubility'],['shelf','Shelf life']].map(([k,l])=>`<div class="field"><label>${l}</label><input data-prop="${k}" value="${esc(d.props[k])}" maxlength="80"></div>`).join('')}</div>
+      ${h3('Section 14 · การขนส่ง')}
+      <div class="settings" style="margin-top:4px">${docGenField({k:'transport',l:'ประเภทการขนส่ง (UN)',t:'select',w:1,o:[['UN1266','UN 1266 Perfumery products with flammable solvents · Class 3 · PG III'],['UN1169','UN 1169 Extracts, aromatic, liquid · Class 3 · PG III'],['none','Not regulated for transport']]}, d.transport, inp)}</div>${signBox}`;
   }
   box.innerHTML=`<div class="card" style="margin-top:18px">${head}${body}
     <div class="row" style="margin-top:16px;gap:10px"><button class="btn" type="button" id="docPreview">ดูตัวอย่าง (ฉบับร่าง)</button><button class="btn primary" type="button" id="docIssue">ออกเอกสารและพิมพ์</button><span class="muted" style="font-size:12.5px">ออกแล้วได้เลขที่เอกสารอัตโนมัติ บันทึกลงทะเบียน และแก้ไขไม่ได้</span></div>
@@ -2447,35 +2459,32 @@ function drawDocForm(){
 /* --- สร้าง HTML เอกสาร --- */
 const docHead=(title, sub)=>`<div class="dh"><div class="dlogo"><img src="${LOGO.h}" alt="Scent &amp; Sense" style="height:62px;width:auto;display:block"></div><div class="dtitle"><h1>${title}</h1>${sub?`<div class="dsub">${sub}</div>`:''}</div></div>`;
 function ifraHtml(d, meta){
-  const no=meta.docNo||'DRAFT';
-  return `${docHead('CERTIFICATE OF CONFORMITY OF FRAGRANCE<br>MIXTURES WITH IFRA STANDARDS','')}
-    <p class="dsmall" style="text-align:center;text-decoration:underline">This Certificate assesses the conformity of a fragrance mixture with IFRA Standards and provides restrictions for use as necessary. It is based only on those materials subject to IFRA Standards for the toxicity endpoint(s) described in each Standard.</p>
-    <hr>
-    <p><u class="dlab">CERTIFYING PARTY:</u><br>${COMPANY.upper} ${esc(COMPANY.address)}</p>
-    <p><u class="dlab">CERTIFICATE DELIVERED TO:</u><br>Customer: ${esc(d.customer||'-')}${d.brand?` (Brand: ${esc(d.brand)})`:''}${d.address?`<br>${esc(d.address)}`:''}</p>
-    <p><u class="dlab">SCOPE OF THE CERTIFICATE:</u><br>Product: “${esc(d.product)}”${d.sampleCode?` (Sample code: ${esc(d.sampleCode)})`:''}</p>
-    <hr>
-    <p><u class="dlab">COMPULSORY INFORMATION:</u></p>
+  /* หัวข้อและข้อความตามแบบฟอร์มใบรับรองของ IFRA จัดเป็นหัวข้อมีเลขแบบเดียวกับเอกสารอื่น */
+  return `${docHead('CERTIFICATE OF CONFORMITY OF FRAGRANCE<br>MIXTURES WITH IFRA STANDARDS', docSubLine(d, meta))}
+    <p class="dsmall" style="text-align:center">This Certificate assesses the conformity of a fragrance mixture with IFRA Standards and provides restrictions for use as necessary. It is based only on those materials subject to IFRA Standards for the toxicity endpoint(s) described in each Standard.</p>
+    ${docSec(1,'Certifying Party')}${docKv([['Company',`${esc(COMPANY.name)}<br>${esc(COMPANY.address)}`,1]])}
+    ${docSec(2,'Certificate Delivered To')}${docKv([['Customer',d.customer||'-'],['Brand',d.brand],['Address',d.address]])}
+    ${docSec(3,'Scope of the Certificate')}${docKv([['Product name',`<b>${esc(d.product)}</b>`,1],['Sample code',d.sampleCode]])}
+    ${docSec(4,'Compulsory Information')}
     <p>We certify that the above mixture is in compliance with the Standards of the INTERNATIONAL FRAGRANCE ASSOCIATION (IFRA), up to and including the ${esc(d.amendment)}, provided it is used in the following category(ies) at a maximum concentration level of:</p>
-    <table class="dt"><thead><tr><th>Application Example</th><th>Class</th><th>Suggested Compound Level (%)</th></tr></thead><tbody>
-      ${d.cats.map(c=>`<tr><td><i>${esc(IFRA_APP[c.cls]||'')}</i></td><td style="text-align:center"><i>${esc(c.cls)}</i></td><td style="text-align:center"><i>${fmt(toNum(c.level)||0,2)} %</i></td></tr>`).join('')}</tbody></table>
+    <table class="dt"><thead><tr><th>Application Example</th><th>Class</th><th>Suggested Compound Level (%)*</th></tr></thead><tbody>
+      ${d.cats.map(c=>`<tr><td>${esc(IFRA_APP[c.cls]||'')}</td><td style="text-align:center">${esc(c.cls)}</td><td style="text-align:center">${fmt(toNum(c.level)||0,2)} %</td></tr>`).join('')}</tbody></table>
     <p class="dsmall"><i>*Actual use level or maximum use level</i></p>
-    <p>For other kinds of application or use at higher concentration levels, a new evaluation may be needed; please contact ${COMPANY.upper}</p>
-    <p style="margin-top:28px"><span>Signature <i>(if generated electronically, no signature)</i></span><span style="float:right">Date: ${docDate(d.date)}</span></p>
-    <p class="dsmall" style="margin-top:48px">Disclaimer: This Certificate provides restrictions for use of the specified product based only on those materials restricted by IFRA Standards for the toxicity endpoint(s) described in each Standard. This Certificate does not provide certification of a comprehensive safety assessment of all product constituents. This certificate is the responsibility of the fragrance supplier issuing it. It has not been prepared or endorsed by IFRA in anyway.</p>
-    <p class="dsmall dfoot">Certificate No. ${esc(no)}${meta.rev?` · Rev ${meta.rev}`:''} · Issued by ${esc(shortName(meta.issuedBy||S.me.email))}</p>`;
+    <p>For other kinds of application or use at higher concentration levels, a new evaluation may be needed; please contact ${COMPANY.upper}.</p>
+    ${docSign([['Prepared by',d.preparedBy],['Approved by',d.approvedBy]])}
+    <p class="dsmall">Signature: if generated electronically, no signature is required.</p>
+    <p class="dsmall" style="margin-top:22px">Disclaimer: This Certificate provides restrictions for use of the specified product based only on those materials restricted by IFRA Standards for the toxicity endpoint(s) described in each Standard. This Certificate does not provide certification of a comprehensive safety assessment of all product constituents. This certificate is the responsibility of the fragrance supplier issuing it. It has not been prepared or endorsed by IFRA in anyway.</p>
+    ${docFoot('IFRA', meta)}`;
 }
 function sdsHtml(d, meta){
-  const H=d.hazards, P=sdsPStatements(H), sec=(n,t)=>`<div class="dsec">Section ${n}: ${t}</div>`, li=a=>`<ul>${a.map(x=>`<li>${x}</li>`).join('')}</ul>`;
-  const flam=H.find(c=>/^H22[456]$/.test(c)), rev=`Revision Date: ${docDate(d.date)}`, no=meta.docNo||'DRAFT';
+  const H=d.hazards, P=sdsPStatements(H), sec=docSec, li=a=>`<ul>${a.map(x=>`<li>${x}</li>`).join('')}</ul>`;
+  const flam=H.find(c=>/^H22[456]$/.test(c));
   const tr = d.transport==='none' ? '<p>Not regulated as dangerous goods for transport.</p>'
     : `<p><b>IMDG (Maritime transport):</b></p>${li([`Proper shipping name: ${d.transport==='UN1169'?'Extracts, aromatic, liquid':'Perfumery products with flammable solvents'}`,'Class: 3 – Flammable liquids','Packing group: III',`UN number: ${d.transport==='UN1169'?'UN 1169':'UN 1266'}`,'EMS code: F-E, S-D'])}
        <p><b>ADR/RID (Road/Rail transport):</b></p>${li(['Class: 3 – Flammable liquids',`UN number: ${d.transport==='UN1169'?'UN 1169':'UN 1266'}`,'Label: 3 (Flammable liquid)','Tunnel restriction code: D/E'])}`;
-  return `${docHead('Safety Data Sheet (SDS)', `According to Globally Harmonized System of Classification and Labelling of Chemicals (GHS)<br>${rev} · Document No. ${esc(no)}${meta.rev?` Rev ${meta.rev}`:''}`)}
-    ${sec(1,'Identification of the substance/mixture and of the company/undertaking')}
-    <table class="dkv"><tr><td class="dn">1.1</td><td colspan="2"><b>Product Identification</b></td></tr><tr><td></td><td>Customer Company Name</td><td>${esc(d.customer||'-')}</td></tr><tr><td></td><td>Customer Brand Name</td><td>${esc(d.brand||'-')}</td></tr><tr><td></td><td>Product Name</td><td>${esc(d.product)}</td></tr>${d.sampleCode?`<tr><td></td><td>Sample Code</td><td>${esc(d.sampleCode)}</td></tr>`:''}
-      <tr><td class="dn">1.2</td><td colspan="2"><b>Recommended Use of the Product</b></td></tr><tr><td></td><td>Application</td><td>${esc(d.application)}</td></tr>
-      <tr><td class="dn">1.3</td><td colspan="2"><b>Manufacturer Details</b></td></tr><tr><td></td><td>Company</td><td>${esc(COMPANY.name)}<br>${esc(COMPANY.address)}</td></tr><tr><td></td><td>Phone</td><td>${esc(COMPANY.phone)}</td></tr></table>
+  return `${docHead('SAFETY DATA SHEET (MSDS)', `According to the Globally Harmonized System of Classification and Labelling of Chemicals (GHS)<br>${docSubLine(d, meta, 'Revision date')}`)}
+    ${sec(1,'Identification of the Substance/Mixture and of the Company')}
+    ${docIdent(d, [['Recommended use',d.application]], [['Telephone',COMPANY.phone]])}
     ${sec(2,'Hazards Identification')}
     <p><b>2.1 Classification of Substance or Mixture</b><br>Classification according to Regulation (EC) No. 1272/2008</p>
     ${H.length?li(GHS_H.filter(([c])=>H.includes(c)).map(([c,t,cls])=>`${esc(cls)} : ${c} – ${esc(t)}`)):'<p>Not classified as hazardous according to GHS criteria.</p>'}
@@ -2527,7 +2536,9 @@ function sdsHtml(d, meta){
     <p><b>13.1 General</b></p>${li(['Do not discharge into drains, water courses, or the environment.'])}<p><b>13.2 Waste</b></p>${li(['Recycle or dispose of in accordance with applicable local/national regulations via licensed waste disposal contractors. Do not contaminate soil or water.'])}<p><b>13.3 Contaminated packaging</b></p>${li(['Empty containers should be rinsed or fully emptied prior to disposal. Ensure labels remain intact. Dispose of via licensed waste handler.'])}
     ${sec(14,'Transport Information')}${tr}
     ${sec(15,'Regulatory Information')}${li(['Classified under GHS/CLP Regulation (EC) No. 1272/2008','Subject to IFRA Standards for use in cosmetic products','REACH: All components with CAS/EC numbers are listed on the permitted inventory'])}
-    ${sec(16,'Other Information')}${li(['This document is prepared for safety and operational purposes only.','It does not constitute a product quality guarantee.','Information is based on SDS data for key fragrance ingredients and international standards.',`Preparation date: ${docDate(d.date)}`,`Document No. ${esc(no)}${meta.rev?` · Rev ${meta.rev}`:''} · Prepared by ${esc(shortName(meta.issuedBy||S.me.email))}`])}<hr>`;
+    ${sec(16,'Other Information')}${li(['This document is prepared for safety and operational purposes only.','It does not constitute a product quality guarantee.','Information is based on SDS data for key fragrance ingredients and international standards.',`Preparation date: ${docDate(d.date)}`])}
+    ${docSign([['Prepared by',d.preparedBy],['Approved by',d.approvedBy]])}
+    ${docFoot('SDS', meta)}`;
 }
 function showDoc(type, d, meta){
   const html = DOC_GEN[type] ? docGenHtml(type, d, meta) : type==='IFRA' ? ifraHtml(d, meta) : sdsHtml(d, meta);

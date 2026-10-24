@@ -1525,7 +1525,7 @@ async function deletePdBase(ctx: Ctx, id: string) {
 }
 function pdFormulaData(f: Any) {
   return { category: str(f.category, 80), baseName: str(f.baseName, 200), mode: PD_MODES[f.mode] ? String(f.mode) : "standard", customer: str(f.customer, 200), brand: str(f.brand, 200),
-    fragranceFormulaId: str(f.fragranceFormulaId, 60), fragranceName: str(f.fragranceName, 200), fragranceCode: str(f.fragranceCode, 60), fragrancePrice: numOrNull(f.fragrancePrice),
+    fragranceFormulaId: str(f.fragranceFormulaId, 60), fragranceScentId: str(f.fragranceScentId, 60), fragranceName: str(f.fragranceName, 200), fragranceCode: str(f.fragranceCode, 60), fragrancePrice: numOrNull(f.fragrancePrice),
     batchG: numOrNull(f.batchG), targetPrice: numOrNull(f.targetPrice), note: str(f.note, 3000), lines: pdLines(f.lines), approvedBy: str(f.approvedBy, 120), approvedAt: str(f.approvedAt, 40) };
 }
 const fmOut = (r: Any) => ({ id: String(r.id), code: String(r.code || ""), projectId: String(r.project_id || ""), name: String(r.name), baseId: String(r.base_id || ""), status: String(r.status), ...pdFormulaData(r.data || {}),
@@ -1550,6 +1550,7 @@ async function savePdFormula(ctx: Ctx, f: Any) {
     if (JSON.stringify(data).length > RD_DATA_MAX) throw new Error("ข้อมูลใหญ่เกินไป");
     const projectId = str(f.projectId, 40);
     if (projectId && !(await db`select 1 from costing.projects where id = ${projectId}`).length) throw new Error("ไม่พบโครงการนี้");
+    if (data.fragranceScentId && !(await db`select 1 from costing.scents where id = ${data.fragranceScentId}`).length) throw new Error("ไม่พบกลิ่นนี้ในคลังกลิ่น");
     const baseId = str(f.baseId, 60);
     if (baseId && !(await db`select 1 from costing.pd_bases where id = ${baseId}`).length) throw new Error("ไม่พบเบสนี้");
     const status = PD_STATUS[f.status] ? String(f.status) : "draft";

@@ -31,7 +31,7 @@ if ($env:GOOGLE_CLIENT_ID) { $clientId = $env:GOOGLE_CLIENT_ID }
 
 if (-not $apiUrl -or $apiUrl -match 'REPLACE_ME') { throw "site.config.json: set 'apiUrl' to the Apps Script API URL (ends with /exec). See GITHUB-PAGES.md" }
 if (-not $clientId -or $clientId -match 'REPLACE_ME') { throw "site.config.json: set 'googleClientId'. See GITHUB-PAGES.md" }
-if ($apiUrl -notmatch '^https://script\.google\.com/(a/macros/[^/]+/|macros/)s/[^/]+/exec$') { throw "apiUrl does not look like an Apps Script web app URL: $apiUrl" }
+if ($apiUrl -notmatch '^https://script\.google\.com/(a/macros/[^/]+/|macros/)s/[^/]+/exec$' -and $apiUrl -notmatch '^https://[a-z0-9]{20}\.supabase\.co/functions/v1/api$') { throw "apiUrl must be an Apps Script web app URL or a Supabase Edge Function URL: $apiUrl" }
 if ($clientId -notmatch '^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$') { throw "googleClientId does not look like a Google OAuth client ID: $clientId" }
 
 $html = [IO.File]::ReadAllText($src, [Text.Encoding]::UTF8)

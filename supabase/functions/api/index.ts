@@ -2095,6 +2095,68 @@ async function deleteFdaRequest(ctx: Ctx, id: string) {
   });
 }
 
+/* ===== ส่วนประกอบ INCI ของวัตถุดิบ (Breakdown Ingredients) — ใช้คำนวณรายการส่วนประกอบบนฉลาก สคบ. และ Allergen =====
+   ดูได้ทุกคนใน R&D · แก้ไข/นำเข้าได้เฉพาะสิทธิ์ ra · การคำนวณฉลากทำฝั่งหน้าเว็บ */
+const INCI_REF_KINDS: Record<string, number> = { a26: 1, a83: 1, claim: 1, banned: 1, supplier: 1 };
+function inciComps(v: unknown) {
+  return (Array.isArray(v) ? v : []).slice(0, 120).map((c: Any) => {
+    const p = c && c.pct !== "" && c.pct !== null && c.pct !== undefined ? Number(String(c.pct).replace(/,/g, "")) : null;
+    if (p !== null && (!isFinite(p) || p < 0 || p > 100)) throw new Error("% ของ " + str(c && c.inci, 60) + " ต้องอยู่ระหว่าง 0-100");
+    const o: Any = { inci: str(c && c.inci, 250), cas: str(c && c.cas, 160), pct: p === null ? null : Math.round(p * 1e6) / 1e6 };
+    if (c && c.ec) o.ec = str(c.ec, 60); if (c && c.origin) o.origin = str(c.origin, 60); if (c && c.noi !== undefined && c.noi !== null && c.noi !== "" && isFinite(Number(c.noi))) o.noi = Number(c.noi);
+    return o;
+  }).filter((c: Any) => c.inci);
+}
+const inciOut = (r: Any) => ({ code: String(r.code), name: String(r.name || ""), comps: r.comps || [], note: String(r.note || ""), status: String(r.status || ""), src: String(r.src || ""), files: r.files || [], updatedAt: iso(r.updated_at), updatedBy: String(r.updated_by || "") });
+async function listInci(ctx: Ctx) {
+  const m = await needAny(ctx, FDA_VIEW), db = ctx.db;
+  const items = await db`select * from costing.rm_inci order by code`, refs = await db`select kind, inci, cas, data from costing.inci_ref order by kind, inci`;
+  return { items: items.map(inciOut), refs: refs.map((r: Any) => ({ kind: String(r.kind), inci: String(r.inci), cas: String(r.cas || ""), ...(r.data || {}) })), canEdit: FDA_EDIT.some((p) => hasPerm(m, p)) };
+}
+function inciRow(it: Any, email: string) {
+  const code = str(it && it.code, 40).toUpperCase(); if (!/^RM-[0-9A-Z]+-[0-9A-Z]+-[0-9A-Z]+$/.test(code)) throw new Error("รหัสวัตถุดิบไม่ถูกต้อง: " + (code || "(ว่าง)"));
+  const comps = inciComps(it.comps);
+  return { code, name: str(it.name, 300), comps, note: str(it.note, 1000), status: comps.length ? (it.status === "check" ? "check" : "") : "pending", src: str(it.src, 200), files: fdaFiles(it.files), updated_at: new Date(), updated_by: email };
+}
+async function saveInci(ctx: Ctx, it: Any) {
+  return await locked(ctx, async (c) => {
+    const m = await needAny(c, FDA_EDIT), db = c.db, row = inciRow(it || {}, m.email);
+    await db`insert into costing.rm_inci ${db({ ...row, comps: db.json(row.comps), files: db.json(row.files) })} on conflict (code) do update set name = excluded.name, comps = excluded.comps, note = excluded.note, status = excluded.status, src = excluded.src, files = excluded.files, updated_at = excluded.updated_at, updated_by = excluded.updated_by`;
+    await log(db, m.email, "saveInci", row.code + " · " + row.comps.length + " INCI");
+    return inciOut((await db`select * from costing.rm_inci where code = ${row.code}`)[0]);
+  });
+}
+async function deleteInci(ctx: Ctx, code: string) {
+  return await locked(ctx, async (c) => {
+    const m = await need(c, "manageUsers"), db = c.db; code = String(code || "").toUpperCase();
+    if (!(await db`delete from costing.rm_inci where code = ${code} returning code`).length) throw new Error("ไม่พบรหัสนี้");
+    await log(db, m.email, "deleteInci", code); return { ok: true };
+  });
+}
+/** นำเข้าแบบชุด (จากไฟล์ Breakdown) · keepExisting = ไม่ทับรหัสที่มี INCI อยู่แล้วด้วยแถวที่ไม่มี INCI · refs = แทนที่รายชื่ออ้างอิงตามชนิดที่ส่งมา */
+async function importInci(ctx: Ctx, rows: Any, refs?: Any) {
+  return await locked(ctx, async (c) => {
+    const m = await needAny(c, FDA_EDIT), db = c.db; rows = Array.isArray(rows) ? rows : [];
+    if (rows.length > 600) throw new Error("นำเข้าได้ครั้งละไม่เกิน 600 รหัส");
+    const out = { created: 0, updated: 0, kept: 0, skipped: 0, errors: [] as string[], refs: 0 };
+    for (let i = 0; i < rows.length; i++) {
+      let row: Any; try { row = inciRow(rows[i] || {}, m.email); } catch (e) { out.skipped++; if (out.errors.length < 10) out.errors.push(`แถว ${i + 1}: ${(e as Error).message}`); continue; }
+      const ex = (await db`select comps from costing.rm_inci where code = ${row.code}`)[0];
+      if (ex && !row.comps.length && (ex.comps || []).length) { out.kept++; continue; }
+      await db`insert into costing.rm_inci ${db({ ...row, comps: db.json(row.comps), files: db.json(row.files) })} on conflict (code) do update set name = excluded.name, comps = excluded.comps, note = excluded.note, status = excluded.status, src = excluded.src, files = excluded.files, updated_at = excluded.updated_at, updated_by = excluded.updated_by`;
+      if (ex) out.updated++; else out.created++;
+    }
+    if (Array.isArray(refs) && refs.length) {
+      const kinds = [...new Set(refs.map((r: Any) => String(r && r.kind)).filter((k) => INCI_REF_KINDS[k]))];
+      for (const k of kinds) await db`delete from costing.inci_ref where kind = ${k}`;
+      for (const r of refs.slice(0, 2000)) { const k = String(r && r.kind); if (!INCI_REF_KINDS[k] || !str(r.inci, 250)) continue;
+        const { kind: _k, inci: _i, cas: _c, ...rest } = r; await db`insert into costing.inci_ref ${db({ id: "ir-" + uuid(12), kind: k, inci: str(r.inci, 250), cas: str(r.cas, 160), data: db.json(rest) })}`; out.refs++; }
+    }
+    await log(db, m.email, "importInci", JSON.stringify(out).slice(0, 300));
+    return out;
+  });
+}
+
 /* ===== เตือนวันหมดอายุเลขจดแจ้งทางอีเมล =====
    ส่งด้วย Gmail ของผู้ใช้ผ่าน Google Apps Script (สคริปต์แยก ตั้ง trigger รายวัน) ซึ่งเรียก ?fdaCron=<secret>
    GET = ดึงรายการที่ถึงรอบเตือนพร้อมอีเมลที่จัดรูปแล้ว · POST {keys} = ยืนยันว่าส่งแล้ว (ไม่เตือนซ้ำรอบเดิม) */
@@ -2218,6 +2280,7 @@ const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   listPdTrials, savePdTrial, sendPdTrial, decidePdTrial, issuePdTrialStock,
   listRdStock, listRdStockTx, saveRdStockItem, deleteRdStockItem, addRdStockTx, importRdStock,
   listFda, saveFdaReg, renewFdaReg, deleteFdaReg, saveFdaRequest, deleteFdaRequest, getFdaAlert, saveFdaAlert, resetFdaAlertSecret,
+  listInci, saveInci, deleteInci, importInci,
   listBotanicals, getBotanicalPrices, saveBotanicalPrice, saveBotanical, deleteBotanical, uploadBotanicalImage, listBotanicalExtractions, saveBotanicalExtraction, deleteBotanicalExtraction, importBotanicals, importBotanicalImage,
   importAll, importRmFile, finishMigration,
 };

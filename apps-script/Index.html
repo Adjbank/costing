@@ -4304,7 +4304,7 @@ function pdFormulaPage(f){
       </div><div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">${sel?`${pfChip(sel.status,PF_SSTAT)}<button class="btn small" type="button" data-pd-scentopen="${esc(sel.id)}">เปิดกลิ่นในคลัง</button>${sel.status==='draft'||sel.status==='trial'?'<span class="chip warn">กลิ่นยังไม่ผ่านการอนุมัติจากลูกค้า</span>':''}${sc?`<span class="muted" style="font-size:12px">ราคาน้ำหอม ${fmt(sc.price,2)} ฿/กก. ${sc.src==='formula'?'จากสูตรต้นทุนของกลิ่น':'จากต้นทุนที่บันทึกไว้กับกลิ่น'+(sc.at?' ('+rdDate(sc.at)+')':'')}${sc.src==='formula'&&!sc.complete?' · ราคาวัตถุดิบในสูตรกลิ่นยังไม่ครบ':''} · ใช้ราคาขายแทนต้นทุนได้โดยแก้ในช่อง "ราคาน้ำหอม"</span>`:'<span class="chip warn">กลิ่นนี้ยังไม่มีต้นทุน</span><span class="muted" style="font-size:12px">ผูกสูตรต้นทุนกับกลิ่นใน Perfumer หรือใส่ราคาน้ำหอมเอง</span>'}`:'<span class="muted" style="font-size:12px">ไม่ได้เลือกกลิ่นจากคลัง? ใส่ชื่อ รหัส และราคาน้ำหอมเอง</span>'}</div></div>
       <div class="pf-group"><h4>ส่วนประกอบ (เบส + น้ำหอม)</h4>${pdLinesTable(f, c, ed&&!lock, {})}${pdSummary(f, c)}</div>
       </fieldset>
-      <div class="row" style="margin-top:14px;gap:8px;flex-wrap:wrap;align-items:center">${ed?`<button class="btn primary" type="submit">บันทึก</button><select id="pdStatus" aria-label="สถานะ">${Object.entries(PD_STATUS).map(([k,[l]])=>`<option value="${k}" ${f.status===k?'selected':''}>${l}</option>`).join('')}</select>`:''}<button class="btn" type="button" id="pdPrint">พิมพ์ใบสูตร</button>${ed&&f.id&&!lock?'<button class="btn small" type="button" id="pdDelete" style="color:var(--bad);margin-left:auto">ลบสูตร</button>':''}<span class="muted" id="pdErr" role="alert" style="color:var(--bad)"></span></div></form>
+      <div class="row" style="margin-top:14px;gap:8px;flex-wrap:wrap;align-items:center">${ed?`<button class="btn primary" type="submit">บันทึก</button><select id="pdStatus" aria-label="สถานะ">${Object.entries(PD_STATUS).map(([k,[l]])=>`<option value="${k}" ${f.status===k?'selected':''}>${l}</option>`).join('')}</select>`:''}<button class="btn" type="button" id="pdPrint">พิมพ์ใบสูตร</button>${f.id&&fdaCanView()?`<button class="btn" type="button" data-pd-inci="${esc(f.id)}">ส่วนประกอบฉลาก (INCI)</button>`:""}${ed&&f.id&&!lock?'<button class="btn small" type="button" id="pdDelete" style="color:var(--bad);margin-left:auto">ลบสูตร</button>':''}<span class="muted" id="pdErr" role="alert" style="color:var(--bad)"></span></div></form>
     ${ptCard(f)}`;
 }
 function pdBasePage(b){
@@ -5285,9 +5285,9 @@ function drawFda(){
   const due=regs.filter((r,i)=>(st[i]==='urgent'||st[i]==='soon')&&r.decision!=='renew').length, renewed=regs.filter(r=>(r.history||[]).length).length;
   const k=(v,l,f,cls)=>`<button type="button" class="field" data-fdaf="${f}" style="min-width:120px;text-align:left;border:1px solid ${FDA.f===f&&FDA.sub==='regs'?'var(--accent,#2b6)':'var(--line)'};border-radius:10px;padding:8px 10px;background:var(--card,transparent);cursor:pointer"><label style="cursor:pointer">${l}</label><div style="font-size:22px;font-weight:600;${cls||''}">${v}</div></button>`;
   const openReqs=(FDA.reqs||[]).filter(q=>!['เรียบร้อย','ยกเลิกใบจดแจ้ง'].includes(q.status)).length;
-  $('#fdaBody').innerHTML=`<div class="settings" style="margin-bottom:10px">${k(regs.length,'เลขจดแจ้งทั้งหมด','')}${k(cnt('ok')+cnt('soon')+cnt('urgent'),'ใช้งานอยู่','active')}${k(due,'ใกล้หมดอายุ ≤ 180 วัน (ยังไม่ต่อ)','due',due?'color:var(--warn,#8a5200)':'')}${k(cnt('expired'),'หมดอายุแล้ว','expired',cnt('expired')?'color:var(--bad)':'')}${k(cnt('no'),'ไม่ต่ออายุ','no')}${k(renewed,'ต่ออายุแล้ว','renewed')}</div>
-    <div class="pf-tabs" role="tablist" style="margin:0 0 10px"><button type="button" data-fdasub="regs" class="${FDA.sub==='regs'?'on':''}">ทะเบียนเลขจดแจ้ง <span class="pf-n">${regs.length}</span></button><button type="button" data-fdasub="reqs" class="${FDA.sub==='reqs'?'on':''}">คำขอจดแจ้ง <span class="pf-n">${(FDA.reqs||[]).length}</span>${openReqs?` <span class="badge">${openReqs}</span>`:''}</button>${FDA.canEdit?`<button type="button" data-fdasub="alert" class="${FDA.sub==='alert'?'on':''}">ตั้งค่าการเตือนทางอีเมล</button>`:''}</div>
-    ${FDA.sub==='alert'?fdaAlertView():FDA.sub==='reqs'?fdaReqView():fdaRegView()}`;
+  $('#fdaBody').innerHTML=`<div class="settings" style="margin-bottom:10px"${FDA.sub==='inci'||FDA.sub==='label'?' hidden':''}>${k(regs.length,'เลขจดแจ้งทั้งหมด','')}${k(cnt('ok')+cnt('soon')+cnt('urgent'),'ใช้งานอยู่','active')}${k(due,'ใกล้หมดอายุ ≤ 180 วัน (ยังไม่ต่อ)','due',due?'color:var(--warn,#8a5200)':'')}${k(cnt('expired'),'หมดอายุแล้ว','expired',cnt('expired')?'color:var(--bad)':'')}${k(cnt('no'),'ไม่ต่ออายุ','no')}${k(renewed,'ต่ออายุแล้ว','renewed')}</div>
+    <div class="pf-tabs" role="tablist" style="margin:0 0 10px"><button type="button" data-fdasub="regs" class="${FDA.sub==='regs'?'on':''}">ทะเบียนเลขจดแจ้ง <span class="pf-n">${regs.length}</span></button><button type="button" data-fdasub="reqs" class="${FDA.sub==='reqs'?'on':''}">คำขอจดแจ้ง <span class="pf-n">${(FDA.reqs||[]).length}</span>${openReqs?` <span class="badge">${openReqs}</span>`:''}</button><button type="button" data-fdasub="label" class="${FDA.sub==='label'?'on':''}">ส่วนประกอบฉลาก</button><button type="button" data-fdasub="inci" class="${FDA.sub==='inci'?'on':''}">ฐานข้อมูล INCI${INC.items?` <span class="pf-n">${INC.items.length}</span>`:''}</button>${FDA.canEdit?`<button type="button" data-fdasub="alert" class="${FDA.sub==='alert'?'on':''}">ตั้งค่าการเตือนทางอีเมล</button>`:''}</div>
+    ${FDA.sub==='inci'?incDbView():FDA.sub==='label'?incLabView():FDA.sub==='alert'?fdaAlertView():FDA.sub==='reqs'?fdaReqView():fdaRegView()}`;
 }
 function fdaRegView(){
   return `<div class="search" style="flex-wrap:wrap;gap:8px"><input id="fdaQ" type="search" autocomplete="off" placeholder="ค้นหาเลขจดแจ้ง ชื่อการค้า ชื่อผลิตภัณฑ์…" value="${esc(FDA.q)}" style="flex:1;min-width:220px">
@@ -5439,7 +5439,7 @@ $('#fdaView').addEventListener('click', async e=>{
   if(t.id==='fdaReqDelete'){ const f=FDA.rform; if(!confirm(`ลบคำขอลำดับ ${f.seq}?`)) return; t.disabled=true; try{ await api('deleteFdaRequest', f.id); await loadFda(true); FDA.rform=null; toast('ลบแล้ว'); drawFda(); }catch(err){ toast(errText(err)); t.disabled=false; } return; }
 });
 $('#fdaView').addEventListener('submit', async e=>{
-  e.preventDefault(); const f=e.target, btn=f.querySelector('button[type=submit]'), err=$('#fdaErr');
+  if(e.target.id==='incForm') return; e.preventDefault(); const f=e.target, btn=f.querySelector('button[type=submit]'), err=$('#fdaErr');
   const grab=(attr)=>{ const d={}; f.querySelectorAll(`[${attr}]`).forEach(i=>{ d[i.getAttribute(attr)]=i.value.trim(); }); return d; };
   btn.disabled=true; err.textContent='';
   try{
@@ -5450,6 +5450,230 @@ $('#fdaView').addEventListener('submit', async e=>{
     if(f.id==='fdaReqForm'){ const d=grab('data-fq'); d.id=FDA.rform.id; d.files=fdaFilesParse(d.files); d.projectId=FDA.rform.projectId||''; const o=await api('saveFdaRequest', d); fdaUpsert(FDA.reqs,o); FDA.reqs.sort((a,b)=>b.seq-a.seq); FDA.rform=null; toast(`บันทึกคำขอลำดับ ${o.seq} แล้ว`); drawFda(); return; }
   }catch(e2){ err.textContent=errText(e2); btn.disabled=false; }
 });
+
+/* ---------- ส่วนประกอบวัตถุดิบ (INCI breakdown) + คำนวณส่วนประกอบบนฉลาก (สคบ. / อย.) ---------- */
+let INC={items:null, by:null, refs:[], canEdit:false, q:'', f:'', shown:100, edit:null, lab:{src:'pd', pdId:'', pfId:'', pfPct:100, manual:'', type:'leave', list:'a26', fragName:'FRAGRANCE'}};
+const incNz=s=>String(s||'').toUpperCase().replace(/\(\s*อย\.?\s*แบน\s*\)/g,'').replace(/\s+/g,' ').trim();
+const incIsFrag=s=>/^(FRAGRANCE|PARFUM|PERFUME|AROMA|FLAVOU?R)( \(PARFUM\))?$/.test(incNz(s));
+const incBannedName=s=>/อย\.?\s*แบน/.test(String(s||''));
+const INC_ALIAS={'WATER':'AQUA','DI WATER':'AQUA','DEIONIZED WATER':'AQUA','DEIONISED WATER':'AQUA','PURIFIED WATER':'AQUA','น้ำ':'AQUA','น้ำ DI':'AQUA','น้ำบริสุทธิ์':'AQUA','AQUA (WATER)':'AQUA','WATER (AQUA)':'AQUA'};
+const INC_ST={'':['มีข้อมูล','ok'], pending:['รอข้อมูล','warn'], check:['รอตรวจ','info']};
+async function loadInci(force){
+  if(INC.items && !force) return;
+  const r=await api('listInci'); INC.items=r.items; INC.refs=r.refs||[]; INC.canEdit=!!r.canEdit; INC.by=new Map(INC.items.map(i=>[i.code,i]));
+  INC.banned=new Set(INC.refs.filter(x=>x.kind==='banned').map(x=>incNz(x.inci)));
+  INC.supplier=new Map(INC.refs.filter(x=>x.kind==='supplier').map(x=>[x.cas,x.inci]));
+}
+const incSum=it=>(it.comps||[]).reduce((s,c)=>s+(toNum(c.pct)||0),0);
+const incHasBan=it=>(it.comps||[]).some(c=>incBannedName(c.inci)||INC.banned.has(incNz(c.inci)));
+const incSupp=code=>{ const m=String(code||'').match(/^RM-(\d{3})/); return m&&INC.supplier?INC.supplier.get('RM-'+m[1])||'':''; };
+/* รายการสารก่อภูมิแพ้ (allergen) ที่ต้องแสดงบนฉลาก: 26 สาร หรือ 83 สาร (รวม 26) — จับคู่ด้วยชื่อ INCI ชื่อเรียกอื่น หรือ CAS */
+function incAllergens(list){
+  const byName=new Map(), byCas=new Map();
+  INC.refs.filter(r=>r.kind==='a26'||(list==='a83'&&r.kind==='a83')).forEach(r=>{ const o={inci:r.inci, cas:r.cas, kind:r.kind};
+    [r.inci,...String(r.alt||'').split('|')].map(incNz).filter(Boolean).forEach(n=>{ if(!byName.has(n)) byName.set(n,o); });
+    String(r.cas||'').split(/[\/,]/).map(s=>s.trim()).filter(s=>/^\d+-\d+-\d$/.test(s)).forEach(c=>{ if(!byCas.has(c)) byCas.set(c,o); }); });
+  return c=>byName.get(incNz(c.inci))||String(c.cas||'').split(/[\/,]/).map(s=>s.trim()).map(x=>byCas.get(x)).find(Boolean)||null;
+}
+/* คำนวณ: lines = [{code, name, pct (% ในผลิตภัณฑ์), via}] → ส่วนประกอบบนฉลากเรียงจากมากไปน้อย */
+function incCalc(lines, opt){
+  const isAl=incAllergens(opt.list), thr=opt.type==='rinse'?0.01:0.001, FR=opt.fragName||'FRAGRANCE';
+  const agg=new Map(), warn=[], missing=[], used=[]; let lineSum=0;
+  const add=(key, o, share, src)=>{ let a=agg.get(key); if(!a){ a={key, inci:o.inci, cas:o.cas||'', pct:0, frag:0, cont:0, own:0, al:o.al||null, banned:!!o.banned, unknown:!!o.unknown, src:new Map()}; agg.set(key,a); }
+    a.pct+=share; if(o.fromFrag) a.frag+=share; else a.own+=share; if(o.cont) a.cont+=share; if(!a.cas&&o.cas) a.cas=o.cas; if(o.banned) a.banned=true;
+    a.src.set(src,(a.src.get(src)||0)+share); };
+  for(const ln of lines){
+    const pct=toNum(ln.pct)||0; if(!(pct>0)) continue; lineSum+=pct;
+    const code=normCode(ln.code||''), it=code?INC.by.get(code):null, label=code||ln.name||'(ไม่ระบุ)';
+    if(ln.fragUnknown){ add('FRAG', {inci:FR}, pct, label); warn.push(`น้ำหอม "${ln.name||'–'}" ${fmtP(pct)}% ไม่มีสูตรในระบบ → แสดงเป็น ${FR} รวม และยังไม่ได้ตรวจ allergen`); used.push({...ln, code, st:'frag'}); continue; }
+    if(!code&&ln.name){ const nm=INC_ALIAS[incNz(ln.name)]||incNz(ln.name), al=isAl({inci:nm,cas:''}); add(al?incNz(al.inci):nm, {inci:al?al.inci:nm, al, banned:INC.banned.has(nm)}, pct, 'ระบุชื่อเอง'); used.push({...ln, pct, st:'name'}); continue; }
+    if(!it||!(it.comps||[]).length){ missing.push({...ln, code, pct, st:it?'pending':'none'}); add('?'+label, {inci:`[${label}${ln.name&&code?' '+ln.name:''}]`, unknown:true}, pct, label); continue; }
+    const S=incSum(it), alOf=it.comps.map(c=>isAl(c)), fragRM=it.comps.some(c=>incIsFrag(c.inci));
+    const alSum=it.comps.reduce((s,c,i)=>s+(alOf[i]?toNum(c.pct)||0:0),0), contained=S>100.5&&Math.abs(S-alSum-100)<=0.5;
+    const base=contained?S-alSum:100;
+    if(!contained&&S>100.5) warn.push(`${code} ส่วนประกอบรวม ${fmtP(S)}% (เกิน 100) — ตรวจข้อมูลวัตถุดิบ`);
+    if(S<99.5) warn.push(`${code} ส่วนประกอบรวม ${fmtP(S)}% (ไม่ครบ 100) — บนฉลากจะขาด ${fmtP(pct*(100-S)/100)}%`);
+    if(/ห้ามใช้ในผลิตภัณฑ์สัมผัสผิว/.test(it.note||'')) warn.push(`${code} ${it.name}: ${it.note}`);
+    used.push({...ln, code, pct, st:'ok', it});
+    it.comps.forEach((c,i)=>{ const cp=toNum(c.pct)||0; if(!(cp>0)) return; const al=alOf[i], banned=incBannedName(c.inci)||INC.banned.has(incNz(c.inci));
+      if(banned) warn.push(`${code} มีสารต้องห้าม: ${incNz(c.inci)} (${fmtP(pct*cp/100)}% ในผลิตภัณฑ์)`);
+      if(incIsFrag(c.inci)){ add('FRAG', {inci:FR}, pct*cp/base, code); return; }
+      if(contained&&al){ add(incNz(al.inci), {inci:al.inci, cas:al.cas, al, fromFrag:true, cont:true, banned}, pct*cp/100, code); return; }
+      const nm=al?al.inci:incNz(c.inci); add(al?incNz(al.inci):nm, {inci:nm, cas:c.cas, al, fromFrag:!!al&&(fragRM||contained||it.comps.length>1), banned}, pct*cp/base, code); });
+  }
+  /* allergen ที่มาจากน้ำหอม/น้ำมันหอมระเหยและต่ำกว่าเกณฑ์ ไม่ต้องแยกแสดง → รวมใน FRAGRANCE (หรือเป็นส่วนหนึ่งของน้ำมัน) */
+  const rows=[], below=[];
+  for(const a of agg.values()){ if(a.al && !a.banned && a.own<=0 && a.pct<thr) below.push(a); else rows.push(a); }
+  /* allergen ใต้เกณฑ์ที่มาจากวัตถุดิบน้ำหอม: บวกกลับเข้า FRAGRANCE ให้ % รวมครบ (ส่วนที่อยู่ในน้ำมันหอมระเหยนับรวมในน้ำมันแล้ว) */
+  const fr=rows.find(r=>r.key==='FRAG'); below.forEach(b=>{ if(fr) fr.pct+=b.frag-b.cont; });
+  rows.sort((a,b)=>b.pct-a.pct);
+  if(Math.abs(lineSum-100)>0.01) warn.unshift(`สูตรรวม ${fmtP(lineSum)}% (ไม่เท่ากับ 100)`);
+  return {rows, below, warn:[...new Set(warn)], missing, used, lineSum, thr};
+}
+/* แหล่งสูตร → รายการ RM และ % ในผลิตภัณฑ์ */
+function incPfLines(pf, pctInProduct){
+  const ls=(pf&&pf.p&&pf.p.lines)||[], W=ls.reduce((s,l)=>s+(toNum(l.amt)>0?toNum(l.amt):0),0); if(!(W>0)) return [];
+  return ls.filter(l=>toNum(l.amt)>0).map(l=>{ const e=(!l.code&&l.nameIn&&typeof lookup==='function')?lookup(l):null; return {code:l.code||(e&&e.code)||'', name:l.nameIn||(e&&e.name)||'', pct:pctInProduct*toNum(l.amt)/W, via:'frag'}; });
+}
+function incLabLines(){
+  const L=INC.lab;
+  if(L.src==='manual') return String(L.manual||'').split('\n').map(s=>s.trim()).filter(Boolean).map(s=>{ const m=s.match(/(RM-[0-9A-Z]+-[0-9A-Z]+-[0-9A-Z]+)/i), n=s.replace(/RM-[0-9A-Z]+-[0-9A-Z]+-[0-9A-Z]+/i,' ').match(/(\d+(?:[.,]\d+)?)\s*%?\s*$/); return {code:m?m[1]:'', name:m?'':s.replace(/[\d.,%\s]+$/,''), pct:n?toNum(n[1].replace(',','.')):0}; });
+  if(L.src==='pf'){ const pf=pfFormulas().find(x=>x.id===L.pfId); return pf?incPfLines(pf, toNum(L.pfPct)||100):[]; }
+  const f=(PD.list||[]).find(x=>x.id===L.pdId); if(!f) return [];
+  const out=[];
+  (f.lines||[]).forEach(ln=>{ const pct=toNum(ln.pct)||0; if(!(pct>0)) return;
+    if(!ln.frag){ out.push({code:ln.code||'', name:ln.name||'', pct}); return; }
+    const sc=(PF.scents||[]).find(s=>s.id===f.fragranceScentId), fid=f.fragranceFormulaId||(sc&&sc.formulaId)||'', pf=fid?pfFormulas().find(x=>x.id===fid):null;
+    const fc=normCode(f.fragranceCode||'');
+    if(pf&&(pf.p.lines||[]).length) out.push(...incPfLines(pf, pct));
+    else if(fc&&INC.by&&INC.by.has(fc)) out.push({code:fc, name:f.fragranceName||'', pct, via:'frag'});
+    else out.push({code:'', name:f.fragranceName||'น้ำหอม', pct, fragUnknown:true}); });
+  return out;
+}
+/* ---------- หน้าฐานข้อมูล INCI ---------- */
+function incFiltered(){
+  const q=INC.q.trim().toLowerCase();
+  return INC.items.filter(it=>{ if(INC.f==='pending'&&it.comps.length) return false; if(INC.f==='has'&&!it.comps.length) return false; if(INC.f==='ban'&&!incHasBan(it)) return false; if(INC.f==='sum'&&!(it.comps.length&&Math.abs(incSum(it)-100)>0.5)) return false;
+    return !q||[it.code,it.name,it.note,...it.comps.map(c=>c.inci+' '+c.cas)].join(' ').toLowerCase().includes(q); });
+}
+function incDbView(){
+  if(!INC.items){ loadInci().then(drawFda).catch(e=>{ const m=$('#fdaMain'); if(m) m.innerHTML=`<div class="msg bad">${esc(errText(e))}</div>`; }); return '<div id="fdaMain"><div class="empty">กำลังโหลด…</div></div>'; }
+  const all=INC.items, has=all.filter(i=>i.comps.length).length, ban=all.filter(incHasBan).length, off=all.filter(i=>i.comps.length&&Math.abs(incSum(i)-100)>0.5).length;
+  const k=(v,l,f,cls)=>`<button type="button" class="chip ${INC.f===f?'ok':''}" data-incf="${f}" style="cursor:pointer;${cls||''}">${l} <b>${v}</b></button>`;
+  return `<div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:8px">${k(all.length,'ทั้งหมด','')}${k(has,'มีส่วนประกอบ','has')}${k(all.length-has,'รอข้อมูล','pending')}${k(ban,'มีสารต้องห้าม','ban')}${k(off,'รวมไม่เท่ากับ 100%','sum')}</div>
+    <div class="search" style="flex-wrap:wrap;gap:8px"><input id="incQ" type="search" autocomplete="off" placeholder="ค้นหารหัส RM ชื่อวัตถุดิบ ชื่อ INCI หรือ CAS…" value="${esc(INC.q)}" style="flex:1;min-width:220px">
+      ${INC.canEdit?'<button class="btn primary" type="button" id="incNew">+ เพิ่มวัตถุดิบ</button><label class="btn small" style="cursor:pointer">นำเข้า Excel<input type="file" id="incImport" accept=".xlsx,.xls" hidden></label>':''}<button class="btn small" type="button" id="incExport">ส่งออก Excel</button><button class="btn" type="button" id="incRefresh">รีเฟรช</button></div>
+    <div class="muted" style="font-size:12.5px;margin:6px 0">ข้อมูลแยกส่วนประกอบของวัตถุดิบแต่ละรหัส (INCI · CAS · %) ใช้คำนวณรายการส่วนประกอบบนฉลาก · ไฟล์นำเข้าใช้รูปแบบเดียวกับ "List ชื่อสาร Breakdown Ingredients" (คอลัมน์ รหัส RM · ชื่อ · INCI · CAS · % · EC · Origin · NOI แถวละ 1 สาร) · รหัสที่ไฟล์ไม่มีส่วนประกอบจะไม่ทับข้อมูลเดิม</div>
+    ${INC.edit?incForm(INC.edit):''}<div id="fdaMain">${incTable(incFiltered())}</div>`;
+}
+function incTable(list){
+  if(!list.length) return '<div class="empty">ไม่พบวัตถุดิบ</div>';
+  const part=list.slice(0,INC.shown);
+  return `<div class="tablebox"><table><thead><tr><th>รหัส RM</th><th>วัตถุดิบ</th><th>ส่วนประกอบ (INCI · %)</th><th class="num">รวม %</th><th>สถานะ</th><th>หมายเหตุ / ที่มา</th><th></th></tr></thead><tbody>
+    ${part.map(it=>{ const s=incSum(it), ban=incHasBan(it); return `<tr><td class="mono" style="white-space:nowrap">${esc(it.code)}<div class="muted" style="font-size:11px">${esc(incSupp(it.code))}</div></td><td style="font-size:13px"><b>${esc(it.name)}</b></td>
+      <td style="font-size:12px;max-width:420px">${it.comps.length?it.comps.slice(0,6).map(c=>`<span style="white-space:nowrap${incBannedName(c.inci)?';color:var(--bad);font-weight:600':''}">${esc(incNz(c.inci))} <span class="muted">${fmtP(toNum(c.pct))}%</span></span>`).join(' · ')+(it.comps.length>6?` <span class="muted">+${it.comps.length-6}</span>`:''):'<span class="muted">–</span>'}</td>
+      <td class="num" ${it.comps.length&&Math.abs(s-100)>0.5?'style="color:var(--warn,#8a5200);font-weight:600"':''}>${it.comps.length?fmtP(s):'–'}</td>
+      <td>${pfChip(it.status||'',INC_ST)}${ban?' <span class="chip bad">สารต้องห้าม</span>':''}</td>
+      <td style="font-size:12px;max-width:260px">${esc(it.note||'')}${(it.files||[]).length?`<div>${fdaFilesHtml(it.files.map(f=>({...f,label:f.url&&!f.name?'ลิงก์':(f.name||'ไฟล์').slice(0,28)})))}</div>`:''}<div class="muted" style="font-size:11px">${esc(it.src||'')}</div></td>
+      <td><button class="btn small" type="button" data-incedit="${esc(it.code)}">${INC.canEdit?'แก้ไข':'ดู'}</button></td></tr>`; }).join('')}</tbody></table></div>
+    ${list.length>part.length?`<div style="text-align:center;margin-top:12px"><button class="btn" type="button" id="incMore">แสดงเพิ่ม (อีก ${list.length-part.length})</button></div>`:''}`;
+}
+const incCompsText=cs=>(cs||[]).map(c=>[c.inci, c.cas||'', c.pct==null?'':c.pct].join(' | ')).join('\n');
+const incCompsParse=t=>String(t||'').split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{ const p=l.split(/\s*[|\t]\s*/); const pct=toNum(p[p.length-1]); return {inci:p[0], cas:p.length>2?p[1]:'', pct:isFinite(pct)?pct:null}; });
+function incForm(code){
+  const it=code==='__new'?{code:'',name:'',comps:[],note:'',status:'',src:'',files:[]}:INC.by.get(code); if(!it) return '';
+  const ro=INC.canEdit?'':'disabled', s=incSum(it);
+  return `<form id="incForm" class="card" style="margin:10px 0" novalidate><h4 style="margin:0 0 8px">${it.code?`<span class="mono">${esc(it.code)}</span> · ${esc(it.name)}`:'เพิ่มวัตถุดิบ'}${it.code?` <span class="muted" style="font-weight:400;font-size:12.5px">${esc(incSupp(it.code))}${it.updatedAt?` · แก้ล่าสุด ${fmtSeen(it.updatedAt)} ${/^import:/.test(it.updatedBy||'')?'(นำเข้าจากไฟล์)':rdPerson(it.updatedBy)}`:''}</span>`:''}</h4>
+    <fieldset ${ro} style="border:0;padding:0;margin:0;min-width:0"><div class="settings">
+      ${it.code?'':fdaIn('data-ic','code','รหัส RM *','','','maxlength="40" required placeholder="RM-xxx-xxx-xxxx"')}
+      <div class="field" style="grid-column:span 2"><label>ชื่อวัตถุดิบ</label><input data-ic="name" value="${esc(it.name||'')}" maxlength="300"></div>
+      <div class="field"><label>สถานะ</label><select data-ic="status"><option value="" ${!it.status?'selected':''}>มีข้อมูล</option><option value="check" ${it.status==='check'?'selected':''}>รอตรวจ</option></select></div>
+      <div class="field" style="grid-column:1/-1"><label>ส่วนประกอบ — บรรทัดละสาร: ชื่อ INCI | CAS | % ${it.comps.length?`<span class="muted">(รวมตอนนี้ ${fmtP(s)}%)</span>`:''}</label><textarea data-ic="comps" rows="${Math.min(14,Math.max(4,it.comps.length+1))}" style="font-family:monospace;font-size:12.5px" placeholder="FRAGRANCE |  | 92.5&#10;LIMONENE | 5989-27-5 | 5&#10;LINALOOL | 78-70-6 | 2.5">${esc(incCompsText(it.comps))}</textarea>
+        <div class="muted" style="font-size:12px;margin-top:4px">น้ำหอม: ส่วนที่ไม่ใช่ allergen ใช้ชื่อ FRAGRANCE · น้ำมันหอมระเหยที่ใบรับรองระบุ allergen แยกจากน้ำมัน 100% ใส่ได้ตามเอกสาร (ระบบนับ allergen เป็นส่วนหนึ่งของน้ำมัน) · สารต้องห้ามให้ต่อท้ายชื่อด้วย (อย.แบน)</div></div>
+      <div class="field" style="grid-column:1/-1"><label>หมายเหตุ</label><input data-ic="note" value="${esc(it.note||'')}" maxlength="1000"></div>
+      <div class="field" style="grid-column:1/-1"><label>เอกสาร (บรรทัดละไฟล์: ป้าย | ชื่อไฟล์ | ลิงก์)</label><textarea data-ic="files" rows="2">${esc(fdaFilesText(it.files))}</textarea></div></div></fieldset>
+    <div class="row" style="gap:8px;margin-top:8px;align-items:center">${INC.canEdit?'<button class="btn primary" type="submit">บันทึก</button>':''}<button class="btn" type="button" id="incCancel">ปิด</button>${it.code&&INC.canEdit&&isAdminRole()?'<button class="btn small" type="button" id="incDelete" style="color:var(--bad);margin-left:auto">ลบ</button>':''}<span class="muted" id="fdaErr" role="alert" style="color:var(--bad)"></span></div></form>`;
+}
+function incExportDb(){
+  if(typeof XLSX==='undefined'){ toast('โหลดตัวเขียน Excel ไม่สำเร็จ'); return; }
+  const rows=incFiltered(), aoa=[['รหัส RM','ชื่อวัตถุดิบ','INCI','CAS','%','EC','Origin','NOI','หมายเหตุ']];
+  rows.forEach(it=>{ if(!it.comps.length) aoa.push([it.code,it.name,'','','','','','',it.note]); else it.comps.forEach((c,i)=>aoa.push([it.code,it.name,c.inci,c.cas,c.pct,c.ec||'',c.origin||'',c.noi==null?'':c.noi,i?'':it.note])); });
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa),'INCI'); saveFile(`INCI Breakdown_${rows.length}รหัส_${fdaToday()}.xlsx`, XLSX.write(wb,{type:'array',bookType:'xlsx'}));
+}
+/* นำเข้าไฟล์ Excel รูปแบบ Breakdown: ทุกชีตที่คอลัมน์แรกเป็นรหัส RM (ข้ามชีตรายการ allergen/claim) · ถ้ารหัสอยู่หลายชีต เลือกชีตที่มีสารต้องห้าม/สี ก่อน แล้วเลือกชุดที่รวมใกล้ 100% · อ่านเฉพาะ 8 คอลัมน์แรก (ไม่อ่านคอลัมน์ต้นทุน) */
+async function incImportFile(file){
+  if(typeof XLSX==='undefined'){ toast('โหลดตัวอ่าน Excel ไม่สำเร็จ'); return; }
+  const wb=XLSX.read(await file.arrayBuffer(),{type:'array'}), by={};
+  const num=s=>{ const n=parseFloat(String(s).replace(/,/g,'')); return isFinite(n)?n:null; }, cl=s=>String(s==null?'':s).replace(/\s+/g,' ').trim();
+  wb.SheetNames.filter(n=>!/allergen|claim|ซัพ/i.test(n)).forEach((n,si)=>{ const prio=/ต้องห้าม|สี/.test(n)?9:si/100;
+    XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:false,defval:''}).slice(1).forEach(r=>{ r=r.map(cl); const code=r[0].toUpperCase(); if(!/^RM-[0-9A-Z]+-[0-9A-Z]+-[0-9A-Z]+$/.test(code)) return;
+      const e=(by[code]=by[code]||{}), g=(e[n]=e[n]||{n,prio,name:'',comps:[]}); if(r[1]&&!g.name) g.name=r[1];
+      if(r[2]){ const pct=num(r[4]); if(pct!=null&&pct>=0&&pct<=100) g.comps.push({inci:r[2], cas:r[3]==='-'?'':r[3], pct, ...(r[5]?{ec:r[5]}:{}), ...(r[6]?{origin:r[6]}:{}), ...(num(r[7])!=null?{noi:num(r[7])}:{})}); } }); });
+  const rows=[]; Object.entries(by).forEach(([code,e])=>{ const gs=Object.values(e).map(g=>({...g,sum:g.comps.reduce((s,c)=>s+c.pct,0)})).filter(g=>g.comps.length); if(!gs.length) return;
+    const top=gs.filter(g=>g.prio>=9), pick=(top.length?top:gs).sort((a,b)=>Math.abs(a.sum-100)-Math.abs(b.sum-100)||b.prio-a.prio)[0], ex=INC.by.get(code);
+    rows.push({code, name:pick.name||(ex&&ex.name)||Object.values(e).map(g=>g.name).find(Boolean)||'', comps:pick.comps, note:ex?ex.note:'', status:ex&&ex.status==='check'?'check':'', src:pick.n, files:ex?ex.files:[]}); });
+  if(!rows.length){ toast('ไม่พบข้อมูลส่วนประกอบในไฟล์ (คอลัมน์ A ต้องเป็นรหัส RM)'); return; }
+  const chg=rows.filter(r=>{ const ex=INC.by.get(r.code); return !ex||JSON.stringify(ex.comps.map(c=>[incNz(c.inci),c.cas,+c.pct]))!==JSON.stringify(r.comps.map(c=>[incNz(c.inci),c.cas,+c.pct])); });
+  if(!chg.length){ toast(`ไฟล์มี ${rows.length} รหัส · ข้อมูลตรงกับในระบบทั้งหมด`); return; }
+  if(!confirm(`พบ ${rows.length} รหัสที่มีส่วนประกอบในไฟล์\nใหม่ / เปลี่ยนแปลง ${chg.length} รหัส (${chg.filter(r=>!INC.by.has(r.code)).length} รหัสใหม่)\nนำเข้าทับข้อมูลส่วนประกอบเดิมของรหัสเหล่านี้?`)) return;
+  let c=0,u=0; const errs=[];
+  for(let i=0;i<chg.length;i+=300){ const r=await api('importInci', chg.slice(i,i+300)); c+=r.created; u+=r.updated; errs.push(...(r.errors||[])); }
+  await loadInci(true); drawFda(); toast(`นำเข้าแล้ว: ใหม่ ${c} · ปรับปรุง ${u}${errs.length?` · ข้าม ${errs.length}`:''}`); if(errs.length) console.warn(errs);
+}
+/* ---------- หน้าคำนวณส่วนประกอบบนฉลาก ---------- */
+function incLabView(){
+  if(!INC.items){ Promise.all([loadInci(), loadPd(false).catch(()=>{})]).then(drawFda).catch(e=>{ const m=$('#fdaMain'); if(m) m.innerHTML=`<div class="msg bad">${esc(errText(e))}</div>`; }); return '<div id="fdaMain"><div class="empty">กำลังโหลด…</div></div>'; }
+  if(!PD.list && pdCanView()){ loadPd(false).then(drawFda).catch(()=>{}); }
+  const L=INC.lab, pds=(PD.list||[]).slice().sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||''))), pfs=pfFormulas().sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+  const src=`<div class="field"><label>แหล่งสูตร</label><select data-il="src"><option value="pd" ${L.src==='pd'?'selected':''}>สูตรผลิตภัณฑ์ (PD)</option><option value="pf" ${L.src==='pf'?'selected':''}>สูตรน้ำหอม (Perfumer / คำนวณต้นทุน)</option><option value="manual" ${L.src==='manual'?'selected':''}>ใส่รหัส RM และ % เอง</option></select></div>`;
+  const pick=L.src==='pd'?`<div class="field" style="grid-column:span 2"><label>สูตรผลิตภัณฑ์</label><select data-il="pdId"><option value="">– เลือกสูตร –</option>${pds.map(f=>`<option value="${esc(f.id)}" ${L.pdId===f.id?'selected':''}>${esc(f.code)} · ${esc(f.name||'')}${f.brand?' · '+esc(f.brand):''}</option>`).join('')}</select>${PD.list?'':'<div class="muted" style="font-size:12px">ไม่มีสิทธิ์ดูสูตรผลิตภัณฑ์ หรือกำลังโหลด</div>'}</div>`
+    :L.src==='pf'?`<div class="field" style="grid-column:span 2"><label>สูตรน้ำหอม</label><select data-il="pfId"><option value="">– เลือกสูตร –</option>${pfs.map(f=>`<option value="${esc(f.id)}" ${L.pfId===f.id?'selected':''}>${esc(f.name)}</option>`).join('')}</select></div><div class="field"><label>% น้ำหอมในผลิตภัณฑ์</label><input data-il="pfPct" type="number" step="any" min="0" max="100" value="${esc(L.pfPct)}"></div>`
+    :`<div class="field" style="grid-column:1/-1"><label>บรรทัดละวัตถุดิบ: รหัส RM (หรือชื่อ INCI เช่น AQUA) ตามด้วย % ในผลิตภัณฑ์ · วางจาก Excel ได้</label><textarea data-il="manual" rows="6" style="font-family:monospace;font-size:12.5px" placeholder="AQUA  80.5&#10;RM-037-003-0886  12&#10;RM-001-003-0003  6&#10;RM-008-009-0541  1.5">${esc(L.manual)}</textarea></div>`;
+  const opts=`<div class="field"><label>ประเภทผลิตภัณฑ์</label><select data-il="type"><option value="leave" ${L.type==='leave'?'selected':''}>ทิ้งไว้บนผิว (leave-on) · แสดง allergen ≥ 0.001%</option><option value="rinse" ${L.type==='rinse'?'selected':''}>ล้างออก (rinse-off) · แสดง allergen ≥ 0.01%</option></select></div>
+    <div class="field"><label>รายการ allergen</label><select data-il="list"><option value="a26" ${L.list==='a26'?'selected':''}>26 สาร</option><option value="a83" ${L.list==='a83'?'selected':''}>83 สาร (รวม 26 สาร)</option></select></div>
+    <div class="field"><label>ชื่อแสดงน้ำหอม</label><select data-il="fragName">${['FRAGRANCE','PARFUM','FRAGRANCE (PARFUM)'].map(x=>`<option ${L.fragName===x?'selected':''}>${x}</option>`).join('')}</select></div>`;
+  return `<div class="card" style="margin:0 0 12px"><div class="settings">${src}${pick}${opts}</div><div class="muted" style="font-size:12.5px;margin-top:6px">ระบบแตกส่วนประกอบของวัตถุดิบทุกตัว (รวมสูตรน้ำหอมที่ผูกไว้) ตามฐานข้อมูล INCI แล้วรวมสารชื่อเดียวกัน เรียงจากมากไปน้อย · allergen ที่มาจากน้ำหอม/น้ำมันหอมระเหยและต่ำกว่าเกณฑ์จะรวมอยู่ใน ${esc(L.fragName)} · ผลลัพธ์เป็นร่างให้ RA ตรวจทานก่อนใช้บนฉลากจริง</div></div>
+    <div id="fdaMain">${incLabResult()}</div>`;
+}
+function incLabResult(){
+  const L=INC.lab, lines=incLabLines();
+  if(!lines.length) return `<div class="empty">${L.src==='manual'?'ใส่รหัส RM และ %':'เลือกสูตรเพื่อคำนวณ'}</div>`;
+  const r=incCalc(lines, L); INC.lastCalc=r;
+  const txt=r.rows.map(a=>a.inci).join(', ');
+  return `${r.missing.length?`<div class="msg bad" style="margin-bottom:8px"><b>วัตถุดิบยังไม่มีข้อมูลส่วนประกอบ ${r.missing.length} รายการ</b> (แสดงในวงเล็บ [ ] บนรายการ) — เพิ่มข้อมูลในแท็บ "ฐานข้อมูล INCI": ${r.missing.map(m=>`<span class="chip">${esc(m.code||m.name)} · ${fmtP(m.pct)}%${m.st==='none'?' · ไม่มีในฐาน':''}</span>`).join(' ')}</div>`:''}
+    ${r.warn.length?`<div class="msg warn" style="margin-bottom:8px"><ul style="margin:0;padding-left:18px">${r.warn.map(w=>`<li>${esc(w)}</li>`).join('')}</ul></div>`:''}
+    <div class="card" style="margin:0 0 12px"><h4 style="margin:0 0 6px">ส่วนประกอบบนฉลาก (Ingredients)</h4><textarea id="incLabTxt" rows="4" readonly style="width:100%;font-size:13px">${esc(txt)}</textarea>
+      <div class="row" style="gap:8px;margin-top:6px;flex-wrap:wrap;align-items:center"><button class="btn primary" type="button" id="incLabCopy">คัดลอก</button><button class="btn small" type="button" id="incLabExport">ส่งออก Excel</button><span class="muted" style="font-size:12px">${r.rows.length} รายการ · สูตรรวม ${fmtP(r.lineSum)}% · สารที่น้อยกว่า 1% เรียงลำดับใดก็ได้ตามหลักการแสดงฉลาก</span></div></div>
+    <div class="tablebox"><table><thead><tr><th class="num">#</th><th>INCI</th><th>CAS</th><th class="num">% ในผลิตภัณฑ์</th><th>ประเภท</th><th>มาจากวัตถุดิบ</th></tr></thead><tbody>
+      ${r.rows.map((a,i)=>`<tr${a.unknown?' style="color:var(--bad)"':''}><td class="num">${i+1}</td><td><b>${esc(a.inci)}</b></td><td class="mono" style="font-size:12px">${esc(a.cas)}</td><td class="num">${fmtP(a.pct)}</td>
+        <td style="font-size:12px">${a.al?`<span class="chip warn">allergen ${a.al.kind==='a26'?'26':'83'}</span>`:''}${a.banned?' <span class="chip bad">สารต้องห้าม</span>':''}${a.unknown?'<span class="chip bad">ไม่มีข้อมูล</span>':''}${a.key==='FRAG'?'<span class="chip info">น้ำหอม</span>':''}</td>
+        <td style="font-size:11.5px">${[...a.src.entries()].sort((x,y)=>y[1]-x[1]).slice(0,4).map(([c,v])=>`${esc(c)} <span class="muted">${fmtP(v)}</span>`).join(' · ')}${a.src.size>4?` <span class="muted">+${a.src.size-4}</span>`:''}</td></tr>`).join('')}</tbody></table></div>
+    ${r.below.length?`<details style="margin-top:10px"><summary class="muted" style="cursor:pointer">allergen ต่ำกว่าเกณฑ์ ${fmtP(r.thr)}% ไม่ต้องแยกแสดง (${r.below.length} สาร)</summary><div style="font-size:12.5px;margin-top:6px">${r.below.sort((a,b)=>b.pct-a.pct).map(a=>`<span class="chip">${esc(a.inci)} ${fmtP(a.pct)}%</span>`).join(' ')}</div></details>`:''}
+    <details style="margin-top:10px"><summary class="muted" style="cursor:pointer">วัตถุดิบที่ใช้คำนวณ (${r.used.length+r.missing.length})</summary><div class="tablebox" style="margin-top:6px"><table><thead><tr><th>รหัส RM</th><th>ชื่อ</th><th class="num">% ในผลิตภัณฑ์</th><th>ข้อมูล INCI</th></tr></thead><tbody>
+      ${[...r.used,...r.missing].map(u=>`<tr><td class="mono">${esc(u.code||'–')}</td><td style="font-size:12.5px">${esc(u.it?u.it.name:u.name)}${u.via==='frag'?' <span class="chip info">ในน้ำหอม</span>':''}</td><td class="num">${fmtP(toNum(u.pct))}</td><td>${u.st==='ok'?`<span class="chip ok">${u.it.comps.length} INCI</span>`:u.st==='frag'?'<span class="chip warn">น้ำหอมไม่มีสูตร</span>':u.st==='name'?'<span class="chip info">ใช้ชื่อที่ระบุเป็น INCI</span>':u.st==='pending'?'<span class="chip warn">รอข้อมูล</span>':'<span class="chip bad">ไม่มีในฐาน</span>'}${u.code&&INC.by.has(u.code)?` <button class="btn small" type="button" data-incedit="${esc(u.code)}" data-incgo="1">${INC.canEdit?'แก้ไข':'ดู'}</button>`:''}</td></tr>`).join('')}</tbody></table></div></details>`;
+}
+function incLabExport(){
+  const r=INC.lastCalc; if(!r||typeof XLSX==='undefined') return;
+  const L=INC.lab, name=L.src==='pd'?((PD.list||[]).find(f=>f.id===L.pdId)||{}).code:L.src==='pf'?(pfFormulas().find(f=>f.id===L.pfId)||{}).name:'กำหนดเอง';
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['ส่วนประกอบบนฉลาก',name||''],['Ingredients',r.rows.map(a=>a.inci).join(', ')],[],['#','INCI','CAS','% ในผลิตภัณฑ์','allergen','สารต้องห้าม','มาจากวัตถุดิบ'],...r.rows.map((a,i)=>[i+1,a.inci,a.cas,+a.pct.toFixed(6),a.al?a.al.kind:'',a.banned?'ใช่':'',[...a.src.keys()].join(', ')]),[],['allergen ต่ำกว่าเกณฑ์',''],...r.below.map(a=>['',a.inci,a.cas,+a.pct.toFixed(6)]),[],['คำเตือน'],...r.warn.map(w=>['',w])]),'ฉลาก');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['รหัส RM','ชื่อ','% ในผลิตภัณฑ์','ข้อมูล INCI'],...[...r.used,...r.missing].map(u=>[u.code,u.it?u.it.name:u.name,+toNum(u.pct).toFixed(6),u.st])]),'วัตถุดิบ');
+  saveFile(`ส่วนประกอบฉลาก_${String(name||'').replace(/[\\/:*?"<>|]/g,'_')}_${fdaToday()}.xlsx`, XLSX.write(wb,{type:'array',bookType:'xlsx'}));
+}
+/* ---------- events (แท็บ INCI / ฉลาก) ---------- */
+$('#fdaView').addEventListener('input', e=>{
+  if(e.target.id==='incQ'){ INC.q=e.target.value; INC.shown=100; const m=$('#fdaMain'); if(m) m.innerHTML=incTable(incFiltered()); }
+  if(e.target.dataset.il==='manual'||e.target.dataset.il==='pfPct'){ INC.lab[e.target.dataset.il]=e.target.value; const m=$('#fdaMain'); if(m) m.innerHTML=incLabResult(); }
+});
+$('#fdaView').addEventListener('change', e=>{
+  const k=e.target.dataset.il; if(k&&k!=='manual'&&k!=='pfPct'){ INC.lab[k]=e.target.value; drawFda(); return; }
+  if(e.target.id==='incImport'&&e.target.files[0]){ const f=e.target.files[0]; e.target.value=''; incImportFile(f).catch(err=>toast(errText(err))); }
+});
+$('#fdaView').addEventListener('click', async e=>{
+  const t=e.target.closest('button'); if(!t) return;
+  if(t.dataset.incf!==undefined){ INC.f=INC.f===t.dataset.incf?'':t.dataset.incf; INC.shown=100; drawFda(); return; }
+  if(t.dataset.incedit){ INC.edit=t.dataset.incedit; if(t.dataset.incgo) FDA.sub='inci'; drawFda(); const f=$('#incForm'); if(f) f.scrollIntoView({block:'start'}); return; }
+  if(t.id==='incNew'){ INC.edit='__new'; drawFda(); return; }
+  if(t.id==='incCancel'){ INC.edit=null; drawFda(); return; }
+  if(t.id==='incMore'){ INC.shown+=100; drawFda(); return; }
+  if(t.id==='incRefresh'){ t.disabled=true; try{ await loadInci(true); }catch(err){ toast(errText(err)); } drawFda(); return; }
+  if(t.id==='incExport'){ incExportDb(); return; }
+  if(t.id==='incLabCopy'){ copyField($('#incLabTxt'),'คัดลอกส่วนประกอบแล้ว'); return; }
+  if(t.id==='incLabExport'){ incLabExport(); return; }
+  if(t.id==='incDelete'){ const code=INC.edit; if(!confirm(`ลบข้อมูลส่วนประกอบของ ${code}?`)) return; t.disabled=true; try{ await api('deleteInci', code); await loadInci(true); INC.edit=null; toast('ลบแล้ว'); drawFda(); }catch(err){ toast(errText(err)); t.disabled=false; } return; }
+});
+$('#fdaView').addEventListener('submit', async e=>{
+  if(e.target.id!=='incForm') return; e.preventDefault(); e.stopImmediatePropagation();
+  const f=e.target, btn=f.querySelector('button[type=submit]'), err=$('#fdaErr'), d={}; f.querySelectorAll('[data-ic]').forEach(i=>{ d[i.dataset.ic]=i.value.trim(); });
+  const ex=INC.edit==='__new'?null:INC.by.get(INC.edit); d.code=ex?ex.code:d.code; d.comps=incCompsParse(d.comps); d.files=fdaFilesParse(d.files); d.src=ex?ex.src:'';
+  if(d.comps.some(c=>c.pct==null||!c.inci)){ err.textContent='ทุกบรรทัดต้องมีชื่อ INCI และ % (รูปแบบ: ชื่อ | CAS | %)'; return; }
+  if(!ex&&INC.by.has(String(d.code).toUpperCase().trim())){ err.textContent='มีรหัสนี้แล้ว · ค้นหาแล้วกดแก้ไข'; return; }
+  btn.disabled=true; err.textContent='';
+  try{ const o=await api('saveInci', d); const i=INC.items.findIndex(x=>x.code===o.code); if(i>=0) INC.items[i]=o; else { INC.items.push(o); INC.items.sort((a,b)=>a.code.localeCompare(b.code)); } INC.by.set(o.code,o); INC.edit=null; toast(`บันทึก ${o.code} แล้ว`); drawFda(); }
+  catch(e2){ err.textContent=errText(e2); btn.disabled=false; }
+}, true);
+/* จากหน้าสูตร PD: ปุ่ม "ส่วนประกอบฉลาก" */
+$('#pdView').addEventListener('click', e=>{ const b=e.target.closest('button[data-pd-inci]'); if(!b) return; FDA.sub='label'; INC.lab.src='pd'; INC.lab.pdId=b.dataset.pdInci; showView('fda'); });
 
 async function boot(){
   showGate('loading');

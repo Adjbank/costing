@@ -2095,6 +2095,117 @@ async function deleteFdaRequest(ctx: Ctx, id: string) {
   });
 }
 
+/* ===== เตือนวันหมดอายุเลขจดแจ้งทางอีเมล =====
+   ส่งด้วย Gmail ของผู้ใช้ผ่าน Google Apps Script (สคริปต์แยก ตั้ง trigger รายวัน) ซึ่งเรียก ?fdaCron=<secret>
+   GET = ดึงรายการที่ถึงรอบเตือนพร้อมอีเมลที่จัดรูปแล้ว · POST {keys} = ยืนยันว่าส่งแล้ว (ไม่เตือนซ้ำรอบเดิม) */
+const FDA_ALERT_DAYS = "180,90,60,30,14,7";
+function fdaAlertDaysList(v: unknown) {
+  const a = [...new Set(String(v || FDA_ALERT_DAYS).split(",").map((s) => Math.round(Number(s.trim()))).filter((n) => n > 0 && n <= 730))].sort((x, y) => y - x);
+  return a.length ? a : FDA_ALERT_DAYS.split(",").map(Number);
+}
+const fdaTodayBkk = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date());
+const fdaDaysLeft = (exp: string, today: string) => Math.round((Date.parse(exp + "T00:00:00Z") - Date.parse(today + "T00:00:00Z")) / 86400000);
+const fdaThDate = (d: string) => { if (!d) return "-"; const [y, m, dd] = d.split("-"); return `${+dd}/${+m}/${+y + 543}`; };
+async function fdaAlertRecipients(db: Db) {
+  const rows = await db`select u.email from costing.users u join costing.roles r on r.id = u.role where u.active is not false and (r.perms->>'ra') = 'true' order by u.email`;
+  const extra = splitList(await getSetting(db, "fdaAlertExtra")).map(normEmail).filter((e) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e));
+  return [...new Set([...rows.map((r: Any) => normEmail(r.email)), ...extra])];
+}
+/** stage = รอบเตือนที่เล็กที่สุดที่ครอบจำนวนวันที่เหลือ (−1 = หมดอายุแล้ว) · เตือนเมื่อ stage ใหม่ < stage ที่เคยเตือนสำหรับวันหมดอายุเดียวกัน */
+async function fdaAlertItems(db: Db) {
+  const days = fdaAlertDaysList(await getSetting(db, "fdaAlertDays")), max = days[0], today = fdaTodayBkk();
+  const regs = await db`select * from costing.fda_regs where cancelled = false and decision <> 'no' and expiry <> '' order by expiry`;
+  const due: Any[] = [], fresh: Any[] = [];
+  regs.forEach((r: Any) => {
+    const n = fdaDaysLeft(String(r.expiry), today); if (n > max || n < -30) return;
+    const stage = n < 0 ? -1 : days.filter((d) => n <= d).pop()!, a = (r.data && r.data.alert) || {};
+    const it = { id: String(r.id), regNo: String(r.reg_no), expiry: String(r.expiry), daysLeft: n, stage, tradeName: String(r.trade_name || ""), productName: String(r.product_name || ""), decision: String(r.decision || "") };
+    due.push(it); if (a.expiry !== it.expiry || a.stage === undefined || stage < Number(a.stage)) fresh.push(it);
+  });
+  return { days, today, due, fresh };
+}
+function fdaAlertMail(x: Any, url: string) {
+  const dec = (d: string) => d === "renew" ? "ตัดสินใจต่ออายุแล้ว (ยังไม่บันทึกการต่อ)" : "ยังไม่ตัดสินใจ";
+  const left = (n: number) => n < 0 ? `หมดอายุแล้ว ${-n} วัน` : n === 0 ? "หมดอายุวันนี้" : `เหลือ ${n} วัน`;
+  const esc = (s: string) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" } as Record<string, string>)[c]);
+  const row = (i: Any) => `<tr><td style="padding:4px 8px;border:1px solid #ddd;font-family:monospace">${esc(i.regNo)}</td><td style="padding:4px 8px;border:1px solid #ddd">${esc(i.productName)}<br><span style="color:#666;font-size:12px">${esc(i.tradeName)}</span></td><td style="padding:4px 8px;border:1px solid #ddd;white-space:nowrap">${fdaThDate(i.expiry)}</td><td style="padding:4px 8px;border:1px solid #ddd;white-space:nowrap;color:${i.daysLeft <= 30 ? "#b00020" : "#8a5200"};font-weight:600">${left(i.daysLeft)}</td><td style="padding:4px 8px;border:1px solid #ddd;font-size:12px">${dec(i.decision)}</td></tr>`;
+  const table = (list: Any[]) => `<table style="border-collapse:collapse;font-size:13px"><tr style="background:#f3f3f3"><th style="padding:4px 8px;border:1px solid #ddd">เลขที่จดแจ้ง</th><th style="padding:4px 8px;border:1px solid #ddd">ผลิตภัณฑ์</th><th style="padding:4px 8px;border:1px solid #ddd">วันหมดอายุ</th><th style="padding:4px 8px;border:1px solid #ddd">เหลือ</th><th style="padding:4px 8px;border:1px solid #ddd">การต่ออายุ</th></tr>${list.map(row).join("")}</table>`;
+  const exp = x.fresh.filter((i: Any) => i.daysLeft < 0).length, soon = x.fresh.length - exp;
+  const subject = `[R&D · RA] เตือนเลขจดแจ้ง อย. ${soon ? `ใกล้หมดอายุ ${soon} รายการ` : ""}${soon && exp ? " · " : ""}${exp ? `หมดอายุแล้ว ${exp} รายการ` : ""}`;
+  const others = x.due.filter((i: Any) => !x.fresh.some((f: Any) => f.id === i.id));
+  const link = url.replace(/\/?$/, "/");
+  const html = `<div style="font-family:Tahoma,Arial,sans-serif;font-size:14px;color:#222"><p>เลขจดแจ้งเครื่องสำอางที่ถึงรอบเตือน (${x.days.join(" / ")} วันก่อนหมดอายุ) ณ วันที่ ${fdaThDate(x.today)}</p>${table(x.fresh)}
+    ${others.length ? `<p style="margin-top:18px">รายการอื่นที่ใกล้หมดอายุภายใน ${x.days[0]} วัน (เคยเตือนแล้ว)</p>${table(others)}` : ""}
+    <p style="margin-top:18px">ตัดสินใจต่ออายุ / บันทึกการต่ออายุได้ที่ <a href="${link}">${esc(link)}</a> → แท็บ "จดแจ้ง อย."</p><p style="color:#888;font-size:12px">อีเมลอัตโนมัติจากระบบแผนกวิจัยและพัฒนา Scent &amp; Sense · ใบรับจดแจ้งมีอายุ 3 ปี ยื่นต่ออายุได้ก่อนหมดอายุ</p></div>`;
+  const text = `เลขจดแจ้งที่ถึงรอบเตือน ณ ${fdaThDate(x.today)}\n` + x.fresh.map((i: Any) => `- ${i.regNo} ${i.productName} หมดอายุ ${fdaThDate(i.expiry)} (${left(i.daysLeft)})`).join("\n") + `\n\nดูรายละเอียด: ${link}`;
+  return { subject, html, text };
+}
+function fdaAlertScript(url: string, secret: string) {
+  const ep = url + "?fdaCron=" + secret;
+  return `/** เตือนวันหมดอายุเลขจดแจ้ง อย. ทางอีเมล (Scent & Sense R&D)
+ * วิธีติดตั้ง: วางโค้ดนี้ในโปรเจกต์ Apps Script ใหม่ (script.new) → บันทึก → เลือกฟังก์ชัน setup → กด Run → อนุญาตสิทธิ์
+ * setup จะตั้งให้ทำงานทุกวันเวลา 08:00 และส่งรอบแรกทันที (ถ้ามีรายการถึงรอบเตือน)
+ * ห้ามเผยแพร่โค้ดนี้ เพราะมีรหัสลับของระบบ */
+const ENDPOINT = ${JSON.stringify(ep)};
+function sendFdaReminders() {
+  const res = UrlFetchApp.fetch(ENDPOINT, { muteHttpExceptions: true });
+  const r = JSON.parse(res.getContentText());
+  if (!r.ok) throw new Error(r.error || 'ระบบตอบกลับผิดพลาด');
+  if (!r.count || !r.recipients.length) return;
+  MailApp.sendEmail({ to: r.recipients.join(','), subject: r.subject, htmlBody: r.html, body: r.text, name: 'Scent & Sense R&D' });
+  UrlFetchApp.fetch(ENDPOINT, { method: 'post', contentType: 'application/json', payload: JSON.stringify({ keys: r.keys, sentTo: r.recipients.length }), muteHttpExceptions: true });
+}
+function setup() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'sendFdaReminders') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('sendFdaReminders').timeBased().everyDays(1).atHour(8).inTimezone('Asia/Bangkok').create();
+  sendFdaReminders();
+}
+`;
+}
+async function getFdaAlert(ctx: Ctx) {
+  const m = await needAny(ctx, FDA_EDIT), db = ctx.db, admin = isAdmin(m);
+  let secret = await getSetting(db, "fdaAlertSecret");
+  if (!secret && admin) { secret = uuid(32) + uuid(16); await setSetting(db, "fdaAlertSecret", secret); }
+  const x = await fdaAlertItems(db), url = await appUrl(db), mail = fdaAlertMail(x, url);
+  return { days: x.days.join(","), extra: (await getSetting(db, "fdaAlertExtra")) || "", recipients: await fdaAlertRecipients(db), last: (await getSetting(db, "fdaAlertLast")) || "",
+    lastPoll: (await getSetting(db, "fdaAlertPoll")) || "", dueCount: x.due.length, freshCount: x.fresh.length, subject: mail.subject, html: mail.html,
+    script: admin && secret ? fdaAlertScript(Deno.env.get("SUPABASE_URL") + "/functions/v1/api", secret) : "", admin };
+}
+async function saveFdaAlert(ctx: Ctx, c: Any) {
+  return await locked(ctx, async (cx) => {
+    const m = await needAny(cx, FDA_EDIT), db = cx.db; c = c || {};
+    const extra = splitList(c.extra).map(normEmail); const bad = extra.filter((e) => !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)); if (bad.length) throw new Error("อีเมลไม่ถูกต้อง: " + bad.join(", "));
+    await setSetting(db, "fdaAlertDays", fdaAlertDaysList(c.days).join(",")); await setSetting(db, "fdaAlertExtra", extra.join(","));
+    await log(db, m.email, "saveFdaAlert", fdaAlertDaysList(c.days).join(",") + " · " + extra.join(","));
+    return await getFdaAlert(cx);
+  });
+}
+/** สร้างรหัสลับใหม่ (สคริปต์เดิมจะใช้ไม่ได้ ต้องวางโค้ดใหม่) */
+async function resetFdaAlertSecret(ctx: Ctx) {
+  const m = await needAdmin(ctx); await setSetting(ctx.db, "fdaAlertSecret", uuid(32) + uuid(16)); await log(ctx.db, m.email, "resetFdaAlertSecret", "");
+  return await getFdaAlert(ctx);
+}
+function sameSecret(a: string, b: string) { if (!a || !b || a.length !== b.length) return false; let d = 0; for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i); return d === 0; }
+async function fdaCron(secret: string, req: Request) {
+  const db = sql, saved = await getSetting(db, "fdaAlertSecret");
+  if (!sameSecret(String(secret || ""), String(saved || ""))) return { ok: false, error: "FORBIDDEN" };
+  if (req.method === "POST") {
+    const body = JSON.parse((await req.text()) || "{}"), keys = Array.isArray(body.keys) ? body.keys.slice(0, 2000) : []; let n = 0;
+    for (const k of keys) {
+      const r = (await db`select data from costing.fda_regs where id = ${String(k && k.id || "")}`)[0]; if (!r) continue;
+      await db`update costing.fda_regs set data = ${db.json({ ...(r.data || {}), alert: { expiry: String(k.expiry || ""), stage: Number(k.stage), at: new Date().toISOString() } })} where id = ${String(k.id)}`; n++;
+    }
+    await setSetting(db, "fdaAlertLast", `${bkk(new Date())} · ${n} รายการ · ส่งถึง ${Number(body.sentTo) || 0} คน`);
+    await log(db, "cron", "fdaAlertSent", String(n));
+    return { ok: true, marked: n };
+  }
+  await setSetting(db, "fdaAlertPoll", bkk(new Date()));
+  const x = await fdaAlertItems(db), recipients = await fdaAlertRecipients(db);
+  if (!x.fresh.length) return { ok: true, count: 0, recipients, keys: [] };
+  const mail = fdaAlertMail(x, await appUrl(db));
+  return { ok: true, count: x.fresh.length, recipients, keys: x.fresh.map((i: Any) => ({ id: i.id, stage: i.stage, expiry: i.expiry })), ...mail };
+}
+
 /* ===== ตารางฟังก์ชันที่หน้าเว็บเรียกได้ ===== */
 const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   bootstrap, requestAccess, savePrices, resetPrices, saveExport, adminData, setUser, removeUser, declineRequest, saveAccess, createRole, updateRole, deleteRole,
@@ -2106,7 +2217,7 @@ const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases,
   listPdTrials, savePdTrial, sendPdTrial, decidePdTrial, issuePdTrialStock,
   listRdStock, listRdStockTx, saveRdStockItem, deleteRdStockItem, addRdStockTx, importRdStock,
-  listFda, saveFdaReg, renewFdaReg, deleteFdaReg, saveFdaRequest, deleteFdaRequest,
+  listFda, saveFdaReg, renewFdaReg, deleteFdaReg, saveFdaRequest, deleteFdaRequest, getFdaAlert, saveFdaAlert, resetFdaAlertSecret,
   listBotanicals, getBotanicalPrices, saveBotanicalPrice, saveBotanical, deleteBotanical, uploadBotanicalImage, listBotanicalExtractions, saveBotanicalExtraction, deleteBotanicalExtraction, importBotanicals, importBotanicalImage,
   importAll, importRmFile, finishMigration,
 };
@@ -2118,6 +2229,11 @@ Deno.serve(async (req: Request) => {
   if (url.searchParams.get("tf")) return await tfWebhook(req, url);
   /* ลิงก์ประเมินตัวอย่างของลูกค้า: GET แสดงฟอร์ม, POST บันทึกผล (ไม่ต้อง log in ใช้ token ของชุดตัวอย่าง) */
   if (url.searchParams.get("eval")) return await evalPage(url.searchParams.get("eval") || "");
+  /* เตือนวันหมดอายุเลขจดแจ้ง: เรียกจาก Google Apps Script รายวัน (ยืนยันด้วยรหัสลับใน settings) */
+  if (url.searchParams.get("fdaCron")) {
+    let out: Any; try { out = await fdaCron(url.searchParams.get("fdaCron") || "", req); } catch (err) { out = { ok: false, error: String((err && (err as Error).message) || err) }; }
+    return new Response(JSON.stringify(out), { status: out.ok ? 200 : 403, headers: { "Content-Type": "application/json", ...CORS } });
+  }
   if (url.searchParams.get("evalSubmit")) {
     let out: Any;
     try { out = await evalSubmit(url.searchParams.get("evalSubmit") || "", JSON.parse((await req.text()) || "{}")); }

@@ -1716,8 +1716,10 @@ async function saveBotanicalExtraction(ctx: Ctx, regNo: string, e: Any) {
       inputG: inG, outputG: outG, yieldPct, solvent: str(e.solvent, 120), solventQty: str(e.solventQty, 60), durationMin: numOrNull(e.durationMin), result: BT_EXT_RESULTS[e.result] ? String(e.result) : "ok", operator: str(e.operator, 120) || m.email.split("@")[0], odor: str(e.odor, 600), notes: str(e.notes, 2000) };
     const id = "x" + uuid(12);
     await db`insert into costing.botanical_extractions (id, reg_no, data, created_at, created_by) values (${id}, ${regNo}, ${db.json(d)}, now(), ${m.email})`;
-    const cnt = Number((await db`select count(*)::int as n from costing.botanical_extractions where reg_no = ${regNo}`)[0].n);
-    const data = { ...(bt.data || {}), extCount: cnt, lastExtraction: d.date }; if (!data.rdType) data.rdType = "extract";
+    const runs = await db`select data from costing.botanical_extractions where reg_no = ${regNo}`;
+    const best = Math.max(0, ...runs.map((r: Any) => Number(r.data && r.data.yieldPct) || 0));
+    const data = { ...(bt.data || {}), extCount: runs.length, lastExtraction: runs.map((r: Any) => String(r.data.date || "")).sort().pop() || d.date, bestYield: best > 0 ? best : null };
+    { const rt = Array.isArray(data.rdType) ? data.rdType.slice() : data.rdType ? [data.rdType] : []; if (rt.indexOf("extract") < 0) rt.push("extract"); data.rdType = rt; }   /* งาน R&D เป็นรายการ (เช่น ["extract","buy"]) */
     await db`update costing.botanicals set data = ${db.json(data)}, updated_at = now(), updated_by = ${m.email} where reg_no = ${regNo}`;
     await log(db, m.email, "saveBotanicalExtraction", regNo + " · " + d.method + (yieldPct !== null ? " · " + yieldPct + "%" : ""));
     return extOut((await db`select * from costing.botanical_extractions where id = ${id}`)[0]);
@@ -1730,7 +1732,8 @@ async function deleteBotanicalExtraction(ctx: Ctx, id: string) {
     if (String(ex.created_by) !== m.email && !isAdmin(m)) throw new Error("ลบได้เฉพาะบันทึกของตัวเองหรือผู้ดูแล");
     await db`delete from costing.botanical_extractions where id = ${String(ex.id)}`;
     const bt = (await db`select * from costing.botanicals where reg_no = ${String(ex.reg_no)}`)[0];
-    if (bt) { const rest = await db`select data from costing.botanical_extractions where reg_no = ${String(ex.reg_no)} order by created_at desc`; const data = { ...(bt.data || {}), extCount: rest.length, lastExtraction: rest.length ? String(rest[0].data.date || "") : "" };
+    if (bt) { const rest = await db`select data from costing.botanical_extractions where reg_no = ${String(ex.reg_no)}`; const best = Math.max(0, ...rest.map((r: Any) => Number(r.data && r.data.yieldPct) || 0));
+      const data = { ...(bt.data || {}), extCount: rest.length, lastExtraction: rest.map((r: Any) => String(r.data.date || "")).sort().pop() || "", bestYield: best > 0 ? best : null };
       await db`update costing.botanicals set data = ${db.json(data)}, updated_at = now(), updated_by = ${m.email} where reg_no = ${String(ex.reg_no)}`; }
     await log(db, m.email, "deleteBotanicalExtraction", String(ex.reg_no));
     return { ok: true };

@@ -4230,21 +4230,48 @@ function pdSummary(f, c){
   const warn=[]; if(Math.abs(c.pctSum-100)>0.01) warn.push(`ผลรวม ${fmt(c.pctSum,2)}% ไม่เท่ากับ 100%`); if(c.missing) warn.push(`${c.missing} รายการไม่มีราคา`);
   return `<div class="settings" style="margin-top:10px">${items.map(([l,v])=>`<div class="field"><label>${l}</label><div style="font-weight:600;padding:6px 0">${v}</div></div>`).join('')}</div>${warn.length?`<div class="msg warn" style="margin-top:8px">${warn.map(esc).join(' · ')}</div>`:''}`;
 }
+/* ยอดคงเหลือคลัง R&D ต่อแถวสูตร: เทียบกับปริมาณที่ต้องใช้ต่อ batch (หน่วย g หรือ kg เท่านั้น) */
+let PD_STK_LOADING=false;
+function pdStkEnsure(){
+  if(STK.items||PD_STK_LOADING||!stkCanView()) return;
+  PD_STK_LOADING=true;
+  loadStk().then(()=>{ if(S.view==='pd'&&PD.open&&$('#pdForm')){ pdCollect(PD.open); pdRedraw(); } }).catch(()=>{ STK.items=STK.items||[]; }).finally(()=>{ PD_STK_LOADING=false; });
+}
+function pdStkMap(){ const m=new Map(); (STK.items||[]).forEach(it=>{ if(it.active!==false&&it.code) m.set(String(it.code).trim().toUpperCase(), it); }); return m; }
+function pdStkInfo(m, code, needG){
+  const it=code?m.get(String(code).trim().toUpperCase()):null; if(!it) return {it:null, ok:null};
+  const u=String(it.unit||'').trim().toLowerCase(), g=u==='g'||u==='กรัม'?it.balance:u==='kg'||u==='กก.'||u==='กก'?it.balance*1000:null;
+  return {it, g, ok:g==null?null:g>=needG-1e-9};
+}
+function pdStkCell(m, code, needG){
+  if(!STK.items) return '<span class="muted" style="font-size:12px">…</span>';
+  const s=pdStkInfo(m, code, needG); if(!code) return ''; if(!s.it) return '<span class="muted" style="font-size:12px" title="ไม่มีรหัสนี้ในคลัง R&D">ไม่มีในคลัง</span>';
+  const t=`${stkN(s.it.balance)} ${esc(s.it.unit||'')}`, tip=`${esc(s.it.name)}${s.it.location?' · '+esc(s.it.location):''}${s.it.note&&/^ไม่เคยเช็ค/.test(s.it.note)?' · ยังไม่เคยนับยอดจริง':''}`;
+  if(s.ok==null) return `<span title="${tip}">${t}</span>`;
+  return `<span class="chip ${s.ok?'ok':'bad'}" title="${tip}">${t}</span>${s.ok?'':`<div class="muted" style="font-size:11px">ขาด ${stkN(needG-s.g)} g</div>`}`;
+}
+function pdStkFoot(f, c, m, batch){
+  if(!STK.items) return '';
+  let ok=0, short=0, none=0; c.rows.forEach(r=>{ if(r.ln.frag||!r.ln.code||!(r.pct>0)) return; const s=pdStkInfo(m, r.ln.code, r.pct/100*batch); if(!s.it) none++; else if(s.ok===false) short++; else ok++; });
+  return `<span title="พอ ${ok} · ไม่พอ ${short} · ไม่มีในคลัง ${none}">พอ ${ok}${short?` · <span style="color:var(--bad)">ขาด ${short}</span>`:''}${none?` · ไม่มี ${none}`:''}</span>`;
+}
 function pdLinesTable(f, c, ed, opts){
-  const batch=toNum(f.batchG)||1000, inp=PD_INP, isBase=!!opts.base;
-  return `<div class="tablebox"><table><thead><tr><th>รหัส RM</th><th>สาร</th><th>หน้าที่</th><th class="num">%</th><th class="num">g / ${fmt(batch,0)} g</th><th class="num">${isBase?'ราคาที่บันทึก ฿/กก.':'ราคา ฿/กก.'}</th><th>ที่มาราคา</th><th class="num">ต้นทุน ฿/กก.</th>${isBase?'<th>น้ำหอม</th>':''}<th></th></tr></thead><tbody>
+  const batch=toNum(f.batchG)||1000, inp=PD_INP, isBase=!!opts.base, showStk=!isBase&&stkCanView(), sm=showStk?pdStkMap():null;
+  if(showStk) pdStkEnsure();
+  return `<div class="tablebox"><table><thead><tr><th>รหัส RM</th><th>สาร</th><th>หน้าที่</th><th class="num">%</th><th class="num">g / ${fmt(batch,0)} g</th>${showStk?'<th class="num" title="ยอดคงเหลือในคลัง R&D เทียบกับปริมาณที่ต้องใช้ต่อ batch">คลัง R&D</th>':''}<th class="num">${isBase?'ราคาที่บันทึก ฿/กก.':'ราคา ฿/กก.'}</th><th>ที่มาราคา</th><th class="num">ต้นทุน ฿/กก.</th>${isBase?'<th>น้ำหอม</th>':''}<th></th></tr></thead><tbody>
     ${c.rows.map((r,i)=>{ const ln=r.ln, fragRow=ln.frag&&!isBase;
       return `<tr data-i="${i}"><td>${fragRow?'<span class="chip">น้ำหอม</span>':`<input data-pl="code" value="${esc(ln.code||'')}" maxlength="40" style="${inp};min-width:140px">`}</td>
         <td>${fragRow?`<b>${esc(f.fragranceName||'Fragrance')}</b>`:`<input data-pl="name" value="${esc(ln.name||'')}" maxlength="200" style="${inp};min-width:200px">`}</td>
         <td>${fragRow?'':`<input data-pl="fn" value="${esc(ln.fn||'')}" maxlength="120" style="${inp};min-width:100px">`}</td>
         <td class="num">${fragRow?`<b>${ln.pct==null?'–':fmt(ln.pct,2)}</b>`:`<input data-pl="pct" type="number" step="any" min="0" max="100" value="${ln.pct==null?'':esc(ln.pct)}" style="${inp};width:90px;text-align:right">`}</td>
         <td class="num mono">${fmt(r.pct/100*batch,2)}</td>
+        ${showStk?`<td class="num" style="white-space:nowrap">${fragRow?'':pdStkCell(sm, ln.code, r.pct/100*batch)}</td>`:''}
         <td class="num">${fragRow?(r.pr?fmt(r.pr.price,2):'–'):isBase?`<input data-pl="price" type="number" step="any" min="0" value="${ln.price==null?'':esc(ln.price)}" style="${inp};width:100px;text-align:right">`:`<input data-pl="override" type="number" step="any" min="0" value="${ln.override==null?'':esc(ln.override)}" placeholder="${r.pr&&r.pr.src!=='manual'?fmt(r.pr.price,2):''}" title="เว้นว่าง = ใช้ราคาจากฐาน/เบส" style="${inp};width:100px;text-align:right">`}</td>
         <td style="font-size:12px;white-space:nowrap">${r.pr?pfChip(r.pr.src,PD_SRC)+(r.pr.status&&r.pr.status!=='ok'?` <span class="chip warn">${esc(r.pr.status)}</span>`:''):'<span class="chip bad">ไม่มีราคา</span>'}</td>
         <td class="num">${r.cost!=null?fmt(r.cost,2):'–'}</td>
         ${isBase?`<td style="text-align:center"><input data-pl="frag" type="checkbox" ${ln.frag?'checked':''} aria-label="ช่องน้ำหอม"></td>`:''}
         <td>${fragRow?'':`<button class="x" type="button" data-pl-del="${i}" aria-label="ลบแถว">×</button>`}</td></tr>`; }).join('')}
-    </tbody><tfoot><tr><th colspan="3">รวม</th><th class="num" ${Math.abs(c.pctSum-100)>0.01?'style="color:var(--bad)"':''}>${fmt(c.pctSum,2)}</th><th class="num">${fmt(c.pctSum/100*batch,2)}</th><th></th><th></th><th class="num">${fmt(c.total,2)}</th>${isBase?'<th></th>':''}<th></th></tr></tfoot></table></div>
+    </tbody><tfoot><tr><th colspan="3">รวม</th><th class="num" ${Math.abs(c.pctSum-100)>0.01?'style="color:var(--bad)"':''}>${fmt(c.pctSum,2)}</th><th class="num">${fmt(c.pctSum/100*batch,2)}</th>${showStk?`<th class="num" style="font-size:12px;white-space:nowrap">${pdStkFoot(f, c, sm, batch)}</th>`:''}<th></th><th></th><th class="num">${fmt(c.total,2)}</th>${isBase?'<th></th>':''}<th></th></tr></tfoot></table></div>
     <div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap;align-items:center">${ed?`<button class="btn small" type="button" id="pdRowAdd">เพิ่มแถว</button>${isBase?'':'<button class="btn small" type="button" id="pdReloadBase">ดึงส่วนประกอบจากเบสใหม่</button>'}<button class="btn small" type="button" id="pdNormalize">ปรับรายการสัดส่วนสูงสุดให้รวม 100%</button>`:''}<span class="muted" style="font-size:12px">ราคา: ฐานราคาปัจจุบันตามรหัส RM → ${isBase?'ราคาที่บันทึกในเบส':'ราคาที่บันทึกในเบส → ใส่เองในช่อง "ราคา"'}</span></div>`;
 }
 function pdFormulaPage(f){

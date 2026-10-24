@@ -1388,9 +1388,9 @@ function renderUserBar(){
   const tab=(id,view,label)=>`<button type="button" id="${id}" class="${v===view?'on':''}" ${v===view?'aria-current="page"':''}>${label}</button>`;
   /* หน้า "คำนวณ" รวมอยู่ในแท็บ Perfumer (แท็บย่อย "คำนวณต้นทุน") สำหรับผู้ที่เห็น Perfumer */
   const pfOn=v==='perf'||v==='calc';
-  $('#navtabs').innerHTML = (pfCanView() ? `<button type="button" id="btnPerf" class="${pfOn?'on':''}" ${pfOn?'aria-current="page"':''}>Perfumer</button>` : tab('btnCalc','calc','คำนวณ'))
+  $('#navtabs').innerHTML = (rdCanView() ? tab('btnRd','rd','โครงการ') : '')
+    + (pfCanView() ? `<button type="button" id="btnPerf" class="${pfOn?'on':''}" ${pfOn?'aria-current="page"':''}>Perfumer</button>` : tab('btnCalc','calc','คำนวณ'))
     + (can('calc') ? `<button type="button" id="btnDoc" class="${v==='doc'||v==='chk'?'on':''}" ${v==='doc'||v==='chk'?'aria-current="page"':''}>เอกสารวัตถุดิบ</button>` : '')
-    + (rdCanView() ? tab('btnRd','rd','โครงการ') : '')
     + (can('viewDb') ? tab('btnMsds','msds','MSDS วัตถุดิบ') : '')
     + (can('editPrices') ? tab('btnRm','rm','ฐานราคาวัตถุดิบ') : '')
     + (adm ? tab('btnAll','all','สูตรทั้งหมด') + tab('btnPrice','price','ทำราคาขาย') : '')

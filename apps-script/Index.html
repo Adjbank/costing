@@ -429,6 +429,7 @@ tfoot td{font-weight:700;border-top:1px solid var(--ink);background:var(--bg-sof
   <section id="rdView" hidden style="padding-block:24px 56px"></section>
   <section id="perfView" hidden style="padding-block:24px 56px"></section>
   <div id="calcView">
+  <div id="calcSubTabs" style="padding-top:20px"></div>
   <div class="pagehead"><h1>คำนวณต้นทุนหัวน้ำหอม</h1><p>Scent &amp; Sense ✦ ทีมวิจัยและพัฒนา · Fragrance Oil Costing · ราคาวัตถุดิบ บาท/กรัม จากไฟล์ Summary RM</p></div>
   <div class="dbcard" id="dbcard"></div>
   <div class="steps" id="stepsBar" aria-label="ขั้นตอน">
@@ -1310,10 +1311,11 @@ function toggleTheme(){ const n=effTheme()==='dark'?'light':'dark'; document.doc
 function renderUserBar(){
   const v=S.view||'calc', adm=isAdminRole();
   const tab=(id,view,label)=>`<button type="button" id="${id}" class="${v===view?'on':''}" ${v===view?'aria-current="page"':''}>${label}</button>`;
-  $('#navtabs').innerHTML = tab('btnCalc','calc','คำนวณ')
+  /* หน้า "คำนวณ" รวมอยู่ในแท็บ Perfumer (แท็บย่อย "คำนวณต้นทุน") สำหรับผู้ที่เห็น Perfumer */
+  const pfOn=v==='perf'||v==='calc';
+  $('#navtabs').innerHTML = (pfCanView() ? `<button type="button" id="btnPerf" class="${pfOn?'on':''}" ${pfOn?'aria-current="page"':''}>Perfumer</button>` : tab('btnCalc','calc','คำนวณ'))
     + (can('calc') ? tab('btnChk','chk','ตรวจ IFRA / อย.') + tab('btnDoc','doc','เอกสาร MSDS / IFRA') : '')
     + (rdCanView() ? tab('btnRd','rd','โครงการ') : '')
-    + (pfCanView() ? tab('btnPerf','perf','Perfumer') : '')
     + (can('viewDb') ? tab('btnMsds','msds','MSDS วัตถุดิบ') : '')
     + (can('editPrices') ? tab('btnRm','rm','ฐานราคาวัตถุดิบ') : '')
     + (adm ? tab('btnAll','all','สูตรทั้งหมด') + tab('btnPrice','price','ทำราคาขาย') : '')
@@ -1381,6 +1383,7 @@ async function showView(v){
   $('#msdsView').hidden=v!=='msds'; $('#perfView').hidden=v!=='perf'; $('#rdView').hidden=v!=='rd';
   $('#adminView').hidden=v!=='admin'; $('#allView').hidden=v!=='all'; $('#priceView').hidden=v!=='price'; $('#rmView').hidden=v!=='rm'; $('#cmpView').hidden=v!=='cmp'; $('#chkView').hidden=v!=='chk'; $('#docView').hidden=v!=='doc'; $('#calcView').hidden=v!=='calc';
   renderUserBar();
+  if(v==='calc') renderCalcSubTabs();
   if(v==='doc'){ window.scrollTo(0,0); renderDocView(); return; }
   if(v==='msds'){ window.scrollTo(0,0); renderMsdsView(); return; }
   if(v==='perf'){ window.scrollTo(0,0); renderPerfView(); return; }
@@ -1956,7 +1959,7 @@ function drawChk(){
 function drawChkResult(){
   const box=$('#chkResult'); if(!box || !CHK) return;
   const p=state.products.find(x=>x.id===chkPid);
-  if(!p){ box.innerHTML='<div class="empty">ยังไม่มีสูตรให้ตรวจ นำเข้าสูตรที่หน้าคำนวณก่อน</div>'; return; }
+  if(!p){ box.innerHTML='<div class="empty">ยังไม่มีสูตรให้ตรวจ นำเข้าสูตรที่ Perfumer › คำนวณต้นทุนก่อน</div>'; return; }
   if(!CHK.rules.length || !CHK.map.length){
     box.innerHTML=`<div class="msg warn">ยังตรวจไม่ได้: ${!CHK.rules.length?'ยังไม่มีข้อกำหนด IFRA/อย. ในระบบ (ให้ผู้ดูแลระบบอัปโหลด)':''}${!CHK.rules.length&&!CHK.map.length?' และ ':''}${!CHK.map.length?'ยังไม่มีตารางองค์ประกอบวัตถุดิบ (CAS) (ให้จัดซื้อหรือผู้ดูแลระบบอัปโหลด)':''}</div>`; return; }
   const r=chkEval(p), n=s=>r.findings.filter(f=>f.status===s).length;
@@ -2194,7 +2197,7 @@ function drawDocs(){
       ${rows.map(r=>`<tr data-fid="${esc(r.f.id)}"><td><b>${esc(r.m.sampleName||r.f.p.name)}</b>${r.m.sampleName&&r.m.sampleName!==r.f.p.name?`<div class="muted" style="font-size:12px">${esc(r.f.p.name)}</div>`:''}</td><td>${esc(r.m.customer)||dash}</td><td>${esc(r.m.brand)||dash}</td><td class="mono">${esc(r.m.sampleCode)||dash}</td>${isAdminRole()?`<td class="muted" style="font-size:12.5px">${esc(shortName(r.f.owner))}</td>`:''}
         <td>${docCell(r.sds)}</td><td>${docCell(r.ifra)}</td>
         <td><div class="adm-actions">${canIssue?`<button class="btn small primary" type="button" data-docnew="SDS">ออก SDS</button><button class="btn small primary" type="button" data-docnew="IFRA">ออก IFRA</button>`:''}${r.sds?`<button class="btn small" type="button" data-docopen="${esc(r.sds.id)}">พิมพ์ SDS</button>`:''}${r.ifra?`<button class="btn small" type="button" data-docopen="${esc(r.ifra.id)}">พิมพ์ IFRA</button>`:''}</div></td></tr>`).join('')
-      || `<tr><td colspan="9" class="empty">${fs.length?'ไม่พบสูตรที่ตรงกับคำค้น':'ยังไม่มีสูตรในทะเบียน นำเข้าสูตรที่หน้าคำนวณก่อน'}</td></tr>`}
+      || `<tr><td colspan="9" class="empty">${fs.length?'ไม่พบสูตรที่ตรงกับคำค้น':'ยังไม่มีสูตรในทะเบียน นำเข้าสูตรที่ Perfumer › คำนวณต้นทุนก่อน'}</td></tr>`}
     </tbody></table></div>
     <div id="docForm"></div>
     <details class="card" style="margin-top:16px"><summary style="cursor:pointer;font-weight:700">ประวัติเอกสารทั้งหมด (${DOCS.length})</summary>
@@ -2202,7 +2205,7 @@ function drawDocs(){
         ${DOCS.map(d=>`<tr><td class="mono">${esc(d.docNo)}</td><td>${esc(d.type)}</td><td>${esc(d.product)}</td><td>${esc(d.customer)||dash}</td><td class="muted" style="white-space:nowrap">${fmtSeen(d.issuedAt)}</td><td class="muted">${esc(shortName(d.issuedBy))}</td>
           <td>${d.status==='void'?'<span class="chip bad">ยกเลิก</span>':'<span class="chip ok">ใช้งาน</span>'}</td><td><div class="adm-actions"><button class="btn small" type="button" data-docopen="${esc(d.id)}">เปิด</button>${isAdminRole()&&d.status!=='void'?`<button class="btn small danger" type="button" data-docvoid="${esc(d.id)}">ยกเลิก</button>`:''}</div></td></tr>`).join('') || '<tr><td colspan="8" class="empty">ยังไม่มีเอกสาร</td></tr>'}
       </tbody></table></div></details>
-    <div class="note-box" style="margin-top:14px">ทะเบียนนี้รวมสูตรที่บันทึกในระบบ${isAdminRole()?'ของทุกคน':'ของคุณ'} · ชื่อผลิตภัณฑ์ ลูกค้า แบรนด์ มาจากข้อมูลหัวฟอร์มของสูตร แก้ได้ที่หน้าคำนวณ (ขั้นตอนที่ 2) · เอกสารที่ออกแล้วแก้ไม่ได้ ถ้าต้องแก้ให้ออกฉบับใหม่ (เลขที่ใหม่ Rev ถัดไป) และผู้ดูแลระบบยกเลิกฉบับเดิมได้</div>`;
+    <div class="note-box" style="margin-top:14px">ทะเบียนนี้รวมสูตรที่บันทึกในระบบ${isAdminRole()?'ของทุกคน':'ของคุณ'} · ชื่อผลิตภัณฑ์ ลูกค้า แบรนด์ มาจากข้อมูลหัวฟอร์มของสูตร แก้ได้ที่ Perfumer › คำนวณต้นทุน (ขั้นตอนที่ 2) · เอกสารที่ออกแล้วแก้ไม่ได้ ถ้าต้องแก้ให้ออกฉบับใหม่ (เลขที่ใหม่ Rev ถัดไป) และผู้ดูแลระบบยกเลิกฉบับเดิมได้</div>`;
 }
 /* --- ฟอร์มออกเอกสาร --- */
 function openDocForm(type, fid){
@@ -2949,14 +2952,21 @@ function drawPfTf(){
       <p class="muted" style="font-size:12px;margin:6px 0 0">token เก็บในฐานข้อมูลฝั่งเซิร์ฟเวอร์เท่านั้น ไม่ส่งกลับมาหน้าเว็บ</p>`}
     <div class="muted" id="tfMsg" aria-live="polite" style="font-size:12.5px;margin-top:6px"></div></div></details>`;
 }
+/* แท็บย่อยของ Perfumer: คำนวณต้นทุน (หน้า #calcView เดิม) · บรีฟลูกค้า · คลังกลิ่น */
+function pfSubTabs(active){
+  const nb=PF.briefs?PF.briefs.length:'', ns=PF.scents?PF.scents.length:'';
+  return `<div class="pf-tabs" role="tablist">${can('calc')?`<button type="button" data-tab="calc" class="${active==='calc'?'on':''}">คำนวณต้นทุน</button>`:''}<button type="button" data-tab="brief" class="${active==='brief'?'on':''}">บรีฟลูกค้า <span class="pf-n" id="pfNb">${nb}</span></button><button type="button" data-tab="scent" class="${active==='scent'?'on':''}">คลังกลิ่น <span class="pf-n" id="pfNs">${ns}</span></button></div>`;
+}
+function renderCalcSubTabs(){ const el=$('#calcSubTabs'); if(el) el.innerHTML=pfCanView()?pfSubTabs('calc'):''; }
+$('#calcSubTabs').addEventListener('click', e=>{ const b=e.target.closest('button[data-tab]'); if(!b||b.dataset.tab==='calc') return; pfTab=b.dataset.tab; pfStatus=''; pfEdit=null; showView('perf'); });
 function renderPerfView(){
   $('#perfView').innerHTML=`<div class="bh"><h2>Perfumer · ออกแบบกลิ่น</h2><span class="hint">รับบรีฟจากลูกค้า ออกแบบกลิ่น และบันทึกกลิ่นที่พร้อมนำไปผลิตเป็นสินค้าประเภทต่าง ๆ</span></div>
     ${helpBox('ขั้นตอนการทำงาน', `<ol style="margin:6px 0 0 18px;padding:0">
       <li><b>บรีฟ:</b> บันทึกข้อมูลลูกค้าตามแบบฟอร์ม ODM Brief (จ้างผลิต) หรือ SV Brief (กลิ่นประจำแบรนด์ธุรกิจบริการ) และทำ Brand Archetype Quiz 8 ข้อเพื่อหาตัวตนแบรนด์และทิศทางกลิ่น · บรีฟที่ลูกค้ากรอกใน Typeform ให้คัดลอกคำตอบมาใส่ที่นี่</li>
       <li><b>ออกแบบกลิ่น:</b> กด "สร้างกลิ่นจากบรีฟ" ระบบดึงความรู้สึก ทิศทางกลิ่น และสินค้าที่ต้องการมาให้ แล้วบันทึกพีระมิดกลิ่น เวอร์ชันทดลอง และผลตอบรับ</li>
-      <li><b>ส่งต่อการผลิต:</b> ระบุ % หัวน้ำหอมต่อสินค้าแต่ละประเภท เชื่อมกับสูตรต้นทุนในหน้า "คำนวณ" และเปลี่ยนสถานะเป็น "ใช้ผลิต" เมื่อลูกค้าอนุมัติ · ตรวจ IFRA และออก MSDS ได้จากแท็บที่เกี่ยวข้อง</li></ol>`)}
+      <li><b>ส่งต่อการผลิต:</b> ระบุ % หัวน้ำหอมต่อสินค้าแต่ละประเภท เชื่อมกับสูตรต้นทุนในแท็บย่อย "คำนวณต้นทุน" และเปลี่ยนสถานะเป็น "ใช้ผลิต" เมื่อลูกค้าอนุมัติ · ตรวจ IFRA และออก MSDS ได้จากแท็บที่เกี่ยวข้อง</li></ol>`)}
     <div id="pfTf"></div>
-    <div class="pf-tabs" role="tablist"><button type="button" data-tab="brief" class="${pfTab==='brief'?'on':''}">บรีฟลูกค้า <span class="pf-n" id="pfNb"></span></button><button type="button" data-tab="scent" class="${pfTab==='scent'?'on':''}">คลังกลิ่น <span class="pf-n" id="pfNs"></span></button></div>
+    ${pfSubTabs(pfTab)}
     <div class="search" id="pfBar"></div>
     <div id="pfEdit"></div>
     <div id="pfBody"><div class="empty">กำลังโหลด…</div></div>`;
@@ -3058,7 +3068,7 @@ function drawPfEdit(){
         <div class="field"><label for="pfStat">สถานะ</label><select id="pfStat">${Object.entries(PF_SSTAT).map(([k,[l]])=>`<option value="${k}" ${s.status===k?'selected':''}>${esc(l)}</option>`).join('')}</select></div>
         <div class="field"><label for="pfBrief">บรีฟ / ลูกค้า</label><select id="pfBrief"><option value="">– ไม่ผูกกับบรีฟ –</option>${briefOpts}</select></div>
         <div class="field"><label for="pfProject">โครงการ (PDR)</label><select id="pfProject"><option value="">– ไม่ผูกกับโครงการ –</option>${(RD.list||[]).map(p=>`<option value="${p.id}" ${s.projectId===p.id?'selected':''}>${esc(p.pdrNo)} · ${esc(p.brand||p.company)}</option>`).join('')}${s.projectId&&!(RD.list||[]).some(p=>p.id===s.projectId)?`<option value="${esc(s.projectId)}" selected>${esc(s.projectId)}</option>`:''}</select>${!RD.list&&rdCanView()?'<div class="muted" style="font-size:12px;margin-top:3px">กำลังโหลดรายชื่อโครงการ…</div>':''}</div>
-        <div class="field"><label for="pfFormula">สูตรต้นทุน (หน้า "คำนวณ")</label><select id="pfFormula"><option value="">– ยังไม่เชื่อม –</option>${fOpts}</select>${fc&&fc.total!=null?`<div class="muted" style="font-size:12px;margin-top:3px">ต้นทุนวัตถุดิบ ${fc.total.toLocaleString('th-TH',{maximumFractionDigits:0})} ฿/กก.${fc.complete?'':' · ราคาวัตถุดิบยังไม่ครบ'}</div>`:''}</div>
+        <div class="field"><label for="pfFormula">สูตรต้นทุน (แท็บ "คำนวณต้นทุน")</label><select id="pfFormula"><option value="">– ยังไม่เชื่อม –</option>${fOpts}</select>${fc&&fc.total!=null?`<div class="muted" style="font-size:12px;margin-top:3px">ต้นทุนวัตถุดิบ ${fc.total.toLocaleString('th-TH',{maximumFractionDigits:0})} ฿/กก.${fc.complete?'':' · ราคาวัตถุดิบยังไม่ครบ'}</div>`:''}</div>
       </div>
       ${scPanel(s)}
       <div id="pfFields">${pfGroups(PF_SCENT_FIELDS, d, 'INT')}</div>
@@ -3398,6 +3408,7 @@ pfv.addEventListener('change', e=>{
 pfv.addEventListener('click', async e=>{
   const t=e.target.closest('button'); if(!t) return;
   if(t.dataset.sc){ scClick(t); return; }
+  if(t.dataset.tab==='calc'){ pfEdit=null; showView('calc'); return; }
   if(t.dataset.tab){ if(pfEdit) pfSyncEdit(); pfTab=t.dataset.tab; pfStatus=''; pfEdit=null; drawPf(); return; }
   if(t.id==='pfNew'){ pfEdit={type:pfTab, obj:pfTab==='brief'?pfNewBrief():pfNewScent(null)}; drawPfEdit(); return; }
   if(t.dataset.pfOpen){ const o=(pfTab==='brief'?PF.briefs:PF.scents).find(x=>x.id===t.dataset.pfOpen); if(o){ pfEdit={type:pfTab, obj:JSON.parse(JSON.stringify(o))}; drawPfEdit(); } return; }

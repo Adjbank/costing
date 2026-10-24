@@ -5470,14 +5470,14 @@ const incSupp=code=>{ const m=String(code||'').match(/^RM-(\d{3})/); return m&&I
 /* รายการสารก่อภูมิแพ้ (allergen) ที่ต้องแสดงบนฉลาก: 26 สาร หรือ 83 สาร (รวม 26) — จับคู่ด้วยชื่อ INCI ชื่อเรียกอื่น หรือ CAS */
 function incAllergens(list){
   const byName=new Map(), byCas=new Map();
-  INC.refs.filter(r=>r.kind==='a26'||(list==='a83'&&r.kind==='a83')).forEach(r=>{ const o={inci:r.inci, cas:r.cas, kind:r.kind};
+  INC.refs.filter(r=>r.kind==='a26'||(list==='a83'&&r.kind==='a83')).forEach(r=>{ const o={inci:String(r.inci).split(';')[0].trim(), cas:r.cas, kind:r.kind};
     [r.inci,...String(r.alt||'').split('|')].map(incNz).filter(Boolean).forEach(n=>{ if(!byName.has(n)) byName.set(n,o); });
     String(r.cas||'').split(/[\/,]/).map(s=>s.trim()).filter(s=>/^\d+-\d+-\d$/.test(s)).forEach(c=>{ if(!byCas.has(c)) byCas.set(c,o); }); });
   return c=>byName.get(incNz(c.inci))||String(c.cas||'').split(/[\/,]/).map(s=>s.trim()).map(x=>byCas.get(x)).find(Boolean)||null;
 }
 /* คำนวณ: lines = [{code, name, pct (% ในผลิตภัณฑ์), via}] → ส่วนประกอบบนฉลากเรียงจากมากไปน้อย */
 function incCalc(lines, opt){
-  const isAl=incAllergens(opt.list), thr=opt.type==='rinse'?0.01:0.001, FR=opt.fragName||'FRAGRANCE';
+  const isAl=incAllergens(opt.list), isAlAll=incAllergens('a83'), thr=opt.type==='rinse'?0.01:0.001, FR=opt.fragName||'FRAGRANCE';
   const agg=new Map(), warn=[], missing=[], used=[]; let lineSum=0;
   const add=(key, o, share, src)=>{ let a=agg.get(key); if(!a){ a={key, inci:o.inci, cas:o.cas||'', pct:0, frag:0, cont:0, own:0, al:o.al||null, banned:!!o.banned, unknown:!!o.unknown, src:new Map()}; agg.set(key,a); }
     a.pct+=share; if(o.fromFrag) a.frag+=share; else a.own+=share; if(o.cont) a.cont+=share; if(!a.cas&&o.cas) a.cas=o.cas; if(o.banned) a.banned=true;
@@ -5488,9 +5488,12 @@ function incCalc(lines, opt){
     if(ln.fragUnknown){ add('FRAG', {inci:FR}, pct, label); warn.push(`น้ำหอม "${ln.name||'–'}" ${fmtP(pct)}% ไม่มีสูตรในระบบ → แสดงเป็น ${FR} รวม และยังไม่ได้ตรวจ allergen`); used.push({...ln, code, st:'frag'}); continue; }
     if(!code&&ln.name){ const nm=INC_ALIAS[incNz(ln.name)]||incNz(ln.name), al=isAl({inci:nm,cas:''}); add(al?incNz(al.inci):nm, {inci:al?al.inci:nm, al, banned:INC.banned.has(nm)}, pct, 'ระบุชื่อเอง'); used.push({...ln, pct, st:'name'}); continue; }
     if(!it||!(it.comps||[]).length){ missing.push({...ln, code, pct, st:it?'pending':'none'}); add('?'+label, {inci:`[${label}${ln.name&&code?' '+ln.name:''}]`, unknown:true}, pct, label); continue; }
-    const S=incSum(it), alOf=it.comps.map(c=>isAl(c)), fragRM=it.comps.some(c=>incIsFrag(c.inci));
-    const alSum=it.comps.reduce((s,c,i)=>s+(alOf[i]?toNum(c.pct)||0:0),0), contained=S>100.5&&Math.abs(S-alSum-100)<=0.5;
-    const base=contained?S-alSum:100;
+    /* alAny = allergen ตามรายการ 83 สาร (ใช้ดูว่าน้ำมันระบุ allergen แยกจาก 100% หรือไม่) · al = ตามรายการที่เลือก · ถ้าเลือก 26 สาร สารที่อยู่เฉพาะใน 83 นับเป็นส่วนหนึ่งของน้ำหอม/น้ำมัน */
+    const S=incSum(it), anyOf=it.comps.map(c=>isAlAll(c)), alOf=it.comps.map(c=>isAl(c)), fragRM=it.comps.some(c=>incIsFrag(c.inci));
+    /* น้ำมันหอมระเหย 100% + allergen ที่ระบุซ้อนอยู่ในน้ำมัน (รวมเกิน 100): หาชุด "ซ้อน" = allergen ทั้งหมด หรือ ทุกตัวยกเว้นตัวหลัก ≥ 99.5% (กรณีตัวน้ำมันเองอยู่ในรายการ 83 สาร เช่น bergamot oil) */
+    const pc=it.comps.map(c=>toNum(c.pct)||0), mi=pc.indexOf(Math.max(...pc)), alSum=pc.reduce((s,v,i)=>s+(anyOf[i]?v:0),0);
+    let cont=new Set(); if(S>100.5){ if(Math.abs(S-alSum-100)<=0.5) cont=new Set(pc.map((v,i)=>i).filter(i=>anyOf[i])); else if(pc[mi]>=99.5&&pc.every((v,i)=>i===mi||anyOf[i])) cont=new Set(pc.map((v,i)=>i).filter(i=>i!==mi)); }
+    const contained=cont.size>0, base=contained?S-[...cont].reduce((s,i)=>s+pc[i],0):100;
     if(!contained&&S>100.5) warn.push(`${code} ส่วนประกอบรวม ${fmtP(S)}% (เกิน 100) — ตรวจข้อมูลวัตถุดิบ`);
     if(S<99.5) warn.push(`${code} ส่วนประกอบรวม ${fmtP(S)}% (ไม่ครบ 100) — บนฉลากจะขาด ${fmtP(pct*(100-S)/100)}%`);
     if(/ห้ามใช้ในผลิตภัณฑ์สัมผัสผิว/.test(it.note||'')) warn.push(`${code} ${it.name}: ${it.note}`);
@@ -5498,8 +5501,10 @@ function incCalc(lines, opt){
     it.comps.forEach((c,i)=>{ const cp=toNum(c.pct)||0; if(!(cp>0)) return; const al=alOf[i], banned=incBannedName(c.inci)||INC.banned.has(incNz(c.inci));
       if(banned) warn.push(`${code} มีสารต้องห้าม: ${incNz(c.inci)} (${fmtP(pct*cp/100)}% ในผลิตภัณฑ์)`);
       if(incIsFrag(c.inci)){ add('FRAG', {inci:FR}, pct*cp/base, code); return; }
-      if(contained&&al){ add(incNz(al.inci), {inci:al.inci, cas:al.cas, al, fromFrag:true, cont:true, banned}, pct*cp/100, code); return; }
-      const nm=al?al.inci:incNz(c.inci); add(al?incNz(al.inci):nm, {inci:nm, cas:c.cas, al, fromFrag:!!al&&(fragRM||contained||it.comps.length>1), banned}, pct*cp/base, code); });
+      if(cont.has(i)&&!al) return;   /* สารในรายการ 83 ที่ซ้อนอยู่ในน้ำมัน ขณะเลือก 26 สาร: นับเป็นส่วนของน้ำมัน */
+      if(anyOf[i]&&!al&&!banned&&!/\b(OIL|EXTRACT|WATER|BUTTER|RESIN|RESINOID|BALSAM|ABSOLUTE|CONCRETE|GUM)\b/.test(incNz(c.inci))){ add('FRAG', {inci:FR}, pct*cp/base, code); return; }   /* สารหอมเดี่ยวที่อยู่เฉพาะใน 83 สาร → รวมใน FRAGRANCE */
+      if(cont.has(i)&&al){ add(incNz(al.inci), {inci:al.inci, cas:al.cas, al, fromFrag:true, cont:true, banned}, pct*cp/100, code); return; }
+      const nm=al?al.inci:incNz(c.inci); add(al?incNz(al.inci):nm, {inci:nm, cas:c.cas, al, fromFrag:!!al&&!contained&&(fragRM||it.comps.length>1), banned}, pct*cp/base, code); });
   }
   /* allergen ที่มาจากน้ำหอม/น้ำมันหอมระเหยและต่ำกว่าเกณฑ์ ไม่ต้องแยกแสดง → รวมใน FRAGRANCE (หรือเป็นส่วนหนึ่งของน้ำมัน) */
   const rows=[], below=[];

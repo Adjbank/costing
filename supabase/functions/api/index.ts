@@ -1598,6 +1598,138 @@ async function importPdBases(ctx: Ctx, d: Any) {
   });
 }
 
+/* ===== บันทึกขึ้นสินค้าทดลอง (Product Development) =====
+   สร้างจากสูตรผลิตภัณฑ์ → บันทึกการชั่งจริง/ผลสังเกต → ส่งลูกค้า (สร้างชุดตัวอย่าง FM-RD-04 ชนิด mockup + ลิงก์ประเมิน) → ผลลูกค้ากลับมาแสดงในบันทึก → รับรอง / ปรับแก้ (สร้างรอบใหม่) / ไม่ผ่าน */
+const PT_STATUS: Record<string, number> = { draft: 1, made: 1, sent: 1, accepted: 1, revised: 1, rejected: 1 }, PT_CONCL: Record<string, number> = { pass: 1, adjust: 1, fail: 1 };
+async function nextTrialNo(db: Db, at: Date) {
+  const p = bkkParts(at), period = p.yyyy + p.mm;
+  const r = await db`insert into costing.docseq (prefix, period, n) values ('PT', ${period}, 1) on conflict (prefix, period) do update set n = costing.docseq.n + 1 returning n`;
+  return "PT" + p.yyyy.slice(2) + p.mm + String(Number(r[0].n)).padStart(3, "0");
+}
+function ptLines(v: Any) {
+  if (!Array.isArray(v)) return [];
+  return v.slice(0, 80).map((x: Any) => ({ code: str(x && x.code, 40), name: str(x && x.name, 200), frag: !!(x && x.frag), pct: numOrNull(x && x.pct), plannedG: numOrNull(x && x.plannedG), actualG: numOrNull(x && x.actualG), lot: str(x && x.lot, 60) })).filter((x: Any) => x.name || x.code);
+}
+function ptData(d: Any, old: Any) {
+  const o = d || {}, obs = o.obs && typeof o.obs === "object" ? o.obs : {};
+  return { batchG: numOrNull(o.batchG), madeAt: str(o.madeAt, 10), operator: str(o.operator, 120), lines: ptLines(o.lines),
+    obs: { appearance: str(obs.appearance, 200), color: str(obs.color, 120), odor: str(obs.odor, 300), ph: str(obs.ph, 40), viscosity: str(obs.viscosity, 80), other: str(obs.other, 1000) },
+    conclusion: PT_CONCL[o.conclusion] ? String(o.conclusion) : "", note: str(o.note, 2000), nextNote: str(o.nextNote, 1000),
+    stockIssued: old && old.stockIssued ? old.stockIssued : null, sentAt: old && old.sentAt ? old.sentAt : "", evalLink: old && old.evalLink ? old.evalLink : "" };
+}
+const ptOut = (r: Any, smp: Any, base: string) => {
+  const ev = smp && smp.eval ? smp.eval : {}, items = Array.isArray(ev.items) ? ev.items : [], it = items[0] || null;
+  const total = it ? EVAL_FIELDS.reduce((a: number, f: string) => a + (Number(it.scores && it.scores[f]) || 0), 0) : 0;
+  const fb = smp ? { sampleId: String(smp.id), docNo: String(smp.doc_no), sampleStatus: String(smp.status), evalDocNo: String(smp.eval_doc_no || ""), evalLink: smp.eval_token ? base + "eval/" + String(smp.eval_token) : "", shippedAt: iso(smp.shipped_at),
+    submittedAt: String(ev.submittedAt || ""), email: String(ev.email || ""), note: String(ev.note || ""), scores: it ? it.scores || {} : {}, pct: total ? Math.round(total / 30 * 10000) / 100 : null, decision: it ? String(it.decision || "") : "", comment: it ? String(it.comment || "") : "" } : null;
+  let status = String(r.status); if (status === "sent" && fb && fb.sampleStatus === "evaluated") status = "feedback";
+  return { id: String(r.id), trialNo: String(r.trial_no), formulaId: String(r.formula_id), projectId: String(r.project_id || ""), status, sampleId: String(r.sample_id || ""), ...(r.data || {}), feedback: fb,
+    createdAt: iso(r.created_at), createdBy: String(r.created_by || ""), updatedAt: iso(r.updated_at), updatedBy: String(r.updated_by || "") };
+};
+async function ptLoad(db: Db, where: "formula" | "project" | "all" | "one", key: string, base: string) {
+  const rows = where === "formula" ? await db`select * from costing.pd_trials where formula_id = ${key} order by created_at desc`
+    : where === "project" ? await db`select * from costing.pd_trials where project_id = ${key} order by created_at desc`
+    : where === "one" ? await db`select * from costing.pd_trials where id = ${key}` : await db`select * from costing.pd_trials order by created_at desc limit 500`;
+  const ids = rows.map((r: Any) => String(r.sample_id)).filter(Boolean), smp: Record<string, Any> = {};
+  for (const sid of ids) { const s = (await db`select * from costing.samples where id = ${sid}`)[0]; if (s) smp[sid] = s; }
+  return rows.map((r: Any) => ptOut(r, smp[String(r.sample_id)] || null, base));
+}
+async function listPdTrials(ctx: Ctx, formulaId?: string, projectId?: string) {
+  await needAny(ctx, RD_VIEW); const db = ctx.db, base = await evalBase(db);
+  return await ptLoad(db, formulaId ? "formula" : projectId ? "project" : "all", String(formulaId || projectId || ""), base);
+}
+/** สร้างหรือแก้ไขบันทึกขึ้นสินค้าทดลอง (สร้างใหม่ = ระบุ formulaId · ระบบคัดลอกส่วนประกอบจากสูตรและคำนวณกรัมตามขนาด batch) */
+async function savePdTrial(ctx: Ctx, t: Any) {
+  return await locked(ctx, async (c) => {
+    const m = await need(c, "pd"), db = c.db, base = await evalBase(db); t = t || {};
+    const ex = t.id ? (await db`select * from costing.pd_trials where id = ${String(t.id)}`)[0] : null; if (t.id && !ex) throw new Error("ไม่พบบันทึกนี้");
+    const now = new Date();
+    if (!ex) {
+      const f = (await db`select * from costing.pd_formulas where id = ${str(t.formulaId, 60)}`)[0]; if (!f) throw new Error("ไม่พบสูตรผลิตภัณฑ์");
+      const fd = f.data || {}, batch = numOrNull(t.batchG) || numOrNull(fd.batchG) || 1000; if (!(batch > 0)) throw new Error("ขนาด batch ต้องมากกว่า 0");
+      const lines = Array.isArray(t.lines) && t.lines.length ? ptLines(t.lines) : (Array.isArray(fd.lines) ? fd.lines : []).map((l: Any) => { const g = Math.round(Number(l.pct || 0) * batch / 100 * 1000) / 1000; return { code: String(l.code || ""), name: l.frag ? String(fd.fragranceName || l.name || "Fragrance") : String(l.name || ""), frag: !!l.frag, pct: l.pct === undefined ? null : l.pct, plannedG: g, actualG: g, lot: "" }; });
+      if (!lines.length) throw new Error("สูตรนี้ยังไม่มีส่วนประกอบ");
+      const data = ptData({ ...t, batchG: batch, lines, madeAt: t.madeAt || "", operator: t.operator || m.email.split("@")[0] }, null), id = "pt-" + uuid(10), no = await nextTrialNo(db, now);
+      await db`insert into costing.pd_trials ${db({ id, trial_no: no, formula_id: String(f.id), project_id: String(f.project_id || ""), status: "draft", sample_id: "", data: db.json(data), created_at: now, created_by: m.email, updated_at: now, updated_by: m.email })}`;
+      await log(db, m.email, "newPdTrial", no + " · " + String(f.code) + " · " + String(f.name));
+      return (await ptLoad(db, "one", id, base))[0];
+    }
+    const locked_ = ["sent", "accepted", "revised", "rejected"].includes(String(ex.status)), od = ex.data || {};
+    let data = ptData({ ...od, ...t }, od);
+    if (locked_) data = { ...od, note: str(t.note, 2000) || od.note, nextNote: str(t.nextNote, 1000), obs: od.obs, lines: od.lines, batchG: od.batchG, madeAt: od.madeAt, operator: od.operator, conclusion: od.conclusion };   /* ส่งลูกค้าแล้ว: แก้ได้เฉพาะหมายเหตุ */
+    if (JSON.stringify(data).length > 30000) throw new Error("ข้อมูลใหญ่เกินไป");
+    let status = String(ex.status); if (!locked_) status = PT_STATUS[t.status] && ["draft", "made"].includes(String(t.status)) ? String(t.status) : status;
+    if (status === "made" && !data.madeAt) data.madeAt = new Date().toISOString().slice(0, 10);
+    await db`update costing.pd_trials set status = ${status}, data = ${db.json(data)}, updated_at = ${now}, updated_by = ${m.email} where id = ${String(ex.id)}`;
+    await log(db, m.email, "savePdTrial", String(ex.trial_no) + " · " + status);
+    return (await ptLoad(db, "one", String(ex.id), base))[0];
+  });
+}
+/** ส่งให้ลูกค้า: สร้างชุดตัวอย่าง (FM-RD-04 ชนิดต้นแบบ) ในโครงการของสูตร + ลิงก์ประเมิน ผลของลูกค้ากลับมาแสดงในบันทึกนี้ */
+async function sendPdTrial(ctx: Ctx, id: string) {
+  return await locked(ctx, async (c) => {
+    const m = await needAny(c, RD_EDIT), db = c.db, base = await evalBase(db);
+    const tr = (await db`select * from costing.pd_trials where id = ${String(id || "")}`)[0]; if (!tr) throw new Error("ไม่พบบันทึกนี้");
+    if (String(tr.status) !== "made" && String(tr.status) !== "draft") throw new Error("บันทึกนี้ส่งหรือปิดไปแล้ว");
+    const od = tr.data || {}; if (od.conclusion === "fail") throw new Error("ผลทดลองไม่ผ่าน ไม่ควรส่งลูกค้า ปรับสูตรแล้วทำรอบใหม่");
+    if (String(tr.status) === "draft") throw new Error("บันทึกสถานะ \"ผลิตแล้ว\" ก่อนส่งลูกค้า");
+    const f = (await db`select * from costing.pd_formulas where id = ${String(tr.formula_id)}`)[0]; if (!f) throw new Error("ไม่พบสูตรผลิตภัณฑ์");
+    const pr = (await db`select * from costing.projects where id = ${String(f.project_id || "")}`)[0]; if (!pr) throw new Error("ผูกสูตรกับโครงการก่อนจึงจะส่งลูกค้าได้");
+    const fd = f.data || {}, now = new Date(), sid = "x" + uuid(12), token = uuid(24), docNo = await nextDocNo(db, "FM-RD-04", now);
+    const items = [{ code: String(tr.trial_no), name: String(f.name), scentId: String(fd.fragranceScentId || ""), formulaCode: String(f.code), size: od.batchG ? `${od.batchG} g (ทดลอง)` : "", qty: null }];
+    await db`insert into costing.samples ${db({ id: sid, doc_no: docNo, project_id: String(pr.id), kind: "mockup", items: db.json(items), requested_at: now, shipped_at: now, arrival_at: null, rd_by: m.email, sa_by: String((pr.owners || {}).sa || ""), note: `บันทึกขึ้นสินค้าทดลอง ${tr.trial_no} · สูตร ${f.code}`,
+      status: "sent", eval_token: token, eval_doc_no: "", eval: db.json({}), created_at: now, created_by: m.email, updated_at: now, updated_by: m.email })}`;
+    const actual = { ...(pr.actual || {}) }; if (!actual.s5send) actual.s5send = now.toISOString(); await db`update costing.projects set actual = ${db.json(actual)}, updated_at = now() where id = ${String(pr.id)}`;
+    const data = { ...od, sentAt: now.toISOString(), evalLink: base + "eval/" + token };
+    await db`update costing.pd_trials set status = 'sent', sample_id = ${sid}, data = ${db.json(data)}, updated_at = now(), updated_by = ${m.email} where id = ${String(tr.id)}`;
+    await log(db, m.email, "sendPdTrial", String(tr.trial_no) + " → " + docNo);
+    return (await ptLoad(db, "one", String(tr.id), base))[0];
+  });
+}
+/** ตัดสินหลังได้ผลลูกค้า: accept (รับรองต้นแบบ → สูตรไปขั้นทดสอบ Stability) · reject · revise (สร้างบันทึกรอบใหม่จากรอบนี้) */
+async function decidePdTrial(ctx: Ctx, id: string, action: string, note?: string) {
+  return await locked(ctx, async (c) => {
+    const m = await need(c, "pd"), db = c.db, base = await evalBase(db);
+    const tr = (await db`select * from costing.pd_trials where id = ${String(id || "")}`)[0]; if (!tr) throw new Error("ไม่พบบันทึกนี้");
+    if (String(tr.status) !== "sent") throw new Error("ตัดสินได้เฉพาะบันทึกที่ส่งลูกค้าแล้ว");
+    const od = { ...(tr.data || {}), nextNote: str(note, 1000) || str((tr.data || {}).nextNote, 1000) }, now = new Date();
+    if (action === "accept" || action === "reject") {
+      await db`update costing.pd_trials set status = ${action === "accept" ? "accepted" : "rejected"}, data = ${db.json(od)}, updated_at = now(), updated_by = ${m.email} where id = ${String(tr.id)}`;
+      if (action === "accept") await db`update costing.pd_formulas set status = case when status = 'draft' then 'testing' else status end, updated_at = now(), updated_by = ${m.email} where id = ${String(tr.formula_id)}`;
+      await log(db, m.email, "decidePdTrial", String(tr.trial_no) + " · " + action);
+      return { trial: (await ptLoad(db, "one", String(tr.id), base))[0], next: null };
+    }
+    if (action !== "revise") throw new Error("การตัดสินไม่ถูกต้อง");
+    const id2 = "pt-" + uuid(10), no = await nextTrialNo(db, now), lines = (od.lines || []).map((l: Any) => ({ ...l, actualG: l.plannedG, lot: "" }));
+    const d2 = ptData({ batchG: od.batchG, lines, operator: m.email.split("@")[0], note: `ปรับแก้จาก ${tr.trial_no}` + (od.nextNote ? ": " + od.nextNote : "") }, null);
+    await db`update costing.pd_trials set status = 'revised', data = ${db.json(od)}, updated_at = now(), updated_by = ${m.email} where id = ${String(tr.id)}`;
+    await db`insert into costing.pd_trials ${db({ id: id2, trial_no: no, formula_id: String(tr.formula_id), project_id: String(tr.project_id || ""), status: "draft", sample_id: "", data: db.json(d2), created_at: now, created_by: m.email, updated_at: now, updated_by: m.email })}`;
+    await log(db, m.email, "decidePdTrial", String(tr.trial_no) + " · revise → " + no);
+    return { trial: (await ptLoad(db, "one", String(tr.id), base))[0], next: (await ptLoad(db, "one", id2, base))[0] };
+  });
+}
+/** ตัดสต็อกคลัง R&D ตามที่ชั่งจริง (เฉพาะรายการที่รหัสตรงกับคลังและหน่วย g/kg · ตัดซ้ำไม่ได้) */
+async function issuePdTrialStock(ctx: Ctx, id: string) {
+  return await locked(ctx, async (c) => {
+    const m = await needAny(c, STK_EDIT), db = c.db, base = await evalBase(db);
+    const tr = (await db`select * from costing.pd_trials where id = ${String(id || "")}`)[0]; if (!tr) throw new Error("ไม่พบบันทึกนี้");
+    const od = tr.data || {}; if (od.stockIssued) throw new Error("ตัดสต็อกของบันทึกนี้ไปแล้ว");
+    if (String(tr.status) === "draft") throw new Error("บันทึกสถานะ \"ผลิตแล้ว\" ก่อนตัดสต็อก");
+    const issued: Any[] = [], skipped: Any[] = [];
+    for (const l of (od.lines || [])) {
+      const g = Number(l.actualG) || 0; if (!(g > 0)) continue; const code = String(l.code || ""); if (!code) { skipped.push({ name: String(l.name), reason: "ไม่มีรหัส" }); continue; }
+      const it = (await db`select * from costing.rdstock_items where upper(code) = ${code.toUpperCase()} and active = true`)[0]; if (!it) { skipped.push({ code, name: String(l.name), reason: "ไม่มีในคลัง R&D" }); continue; }
+      const unit = String(it.unit || "").trim().toLowerCase(), qty = unit === "g" || unit === "กรัม" ? g : unit === "kg" || unit === "กก." ? g / 1000 : null; if (qty === null) { skipped.push({ code, name: String(l.name), reason: "หน่วยคลังเป็น " + (it.unit || "ไม่ระบุ") + " (ตัดอัตโนมัติเฉพาะ g/kg)" }); continue; }
+      const bal = await stkBalance(db, String(it.id)); if (qty > bal + 1e-9) { skipped.push({ code, name: String(l.name), reason: `คงเหลือไม่พอ (มี ${Math.round(bal * 10000) / 10000} ${it.unit})` }); continue; }
+      await stkTxRow(db, String(it.id), -qty, "out", { ref: String(tr.trial_no), note: "ตัดตามบันทึกขึ้นสินค้าทดลอง" }, m.email); issued.push({ code, name: String(l.name), qty: Math.round(qty * 10000) / 10000, unit: String(it.unit) });
+    }
+    const data = { ...od, stockIssued: { at: new Date().toISOString(), by: m.email, issued, skipped } };
+    await db`update costing.pd_trials set data = ${db.json(data)}, updated_at = now(), updated_by = ${m.email} where id = ${String(tr.id)}`;
+    await log(db, m.email, "issuePdTrialStock", String(tr.trial_no) + ` · ตัด ${issued.length} ข้าม ${skipped.length}`);
+    return (await ptLoad(db, "one", String(tr.id), base))[0];
+  });
+}
+
 /* ===== Research Ingredients: ทะเบียนวัตถุดิบพืชหอม (BT-nnnn) =====
    ข้อมูลเก็บเป็น data (jsonb) ตามฟิลด์เดิมของทะเบียน · ราคาอ้างอิง/ต้นทุนแยกตาราง เปิดเฉพาะผู้มีสิทธิ์ editPrices · รูปอยู่ใน Storage (private) ส่งเป็นลิงก์ชั่วคราว */
 const BT_VIEW = ["research", "perfumer", "pd", "ra", "projects", "calc", "viewDb"], BT_DATA_MAX = 60000, BT_IMG_MAX = 3 * 1024 * 1024;
@@ -1870,6 +2002,7 @@ const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   pwLogin, setMyPassword, pwLogout, resetUserPassword,
   listCustomers, saveCustomer, listProjects, getProject, saveProject, setStage, raCheck, issueProjectDoc, listSamples, saveSample, sendSample, deleteSample, evalSummary, importRd,
   listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases,
+  listPdTrials, savePdTrial, sendPdTrial, decidePdTrial, issuePdTrialStock,
   listRdStock, listRdStockTx, saveRdStockItem, deleteRdStockItem, addRdStockTx, importRdStock,
   listBotanicals, getBotanicalPrices, saveBotanicalPrice, saveBotanical, deleteBotanical, uploadBotanicalImage, listBotanicalExtractions, saveBotanicalExtraction, deleteBotanicalExtraction, importBotanicals, importBotanicalImage,
   importAll, importRmFile, finishMigration,

@@ -129,6 +129,29 @@ button,input,select,textarea{font:inherit;color:inherit}
 #pfForm .field .pf-chip input,.pf-chip input{margin:0;width:15px;height:15px;min-height:0;padding:0;border:0;flex:none;accent-color:var(--accent)}
 .pf-chip span{white-space:nowrap}
 .pf-chip:has(input:checked){background:var(--tint);border-color:var(--accent)}
+/* Scent Composer */
+.sc-box{border:1px solid var(--line-strong);border-radius:12px;padding:12px 16px;background:var(--tint)}
+.sc-box>summary{cursor:pointer;font-weight:700;font-size:14.5px}
+.sc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px 18px;margin-bottom:12px}
+.sc-wide{grid-column:1/-1}
+.sc-sl label{display:block;font-size:12.5px;font-weight:600;margin-bottom:4px}
+.sc-sl-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-muted)}
+.sc-sl-row input{flex:1;min-width:80px;accent-color:var(--accent)}
+.sc-box select{width:100%;border:1px solid var(--line-strong);border-radius:8px;padding:8px 10px;background:var(--input-bg);min-height:38px}
+.sc-chips{display:flex;flex-wrap:wrap;gap:6px}
+.sc-chip{border:1px solid var(--line-strong);background:var(--card);border-radius:999px;padding:5px 13px;cursor:pointer;font-size:13px;color:var(--ink)}
+.sc-chip small{color:var(--ink-muted);font-size:11px}
+.sc-chip[aria-pressed=true]{background:var(--primary);color:var(--primary-ink);border-color:var(--primary)}
+.sc-chip[aria-pressed=true] small{color:inherit;opacity:.8}
+#scOut{background:var(--card);border-radius:10px;padding:12px 14px}
+.sc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.sc-name{font-family:var(--f-display);font-size:20px}
+.sc-meta{display:flex;gap:6px;flex-wrap:wrap}
+.sc-bar{height:8px;background:var(--tint);border-radius:999px;overflow:hidden;min-width:60px}
+.sc-bar i{display:block;height:100%;background:var(--accent);border-radius:999px}
+.sc-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:10px}
+.sc-cols h5{margin:0 0 6px;font-size:12.5px;color:var(--ink-muted)}
+.sc-prow{display:grid;grid-template-columns:96px 1fr 38px;gap:8px;align-items:center;font-size:12.5px;margin-bottom:4px}
 #docForm .field input,#docForm .field select{height:40px;box-sizing:border-box;width:100%;font-size:14px}
 #docForm .field input[type=date]{padding-block:0}
 #docForm .field[style*="grid-column"]{grid-column:1/-1}
@@ -3002,6 +3025,7 @@ function drawPfEdit(){
         <div class="field"><label for="pfBrief">บรีฟ / ลูกค้า</label><select id="pfBrief"><option value="">– ไม่ผูกกับบรีฟ –</option>${briefOpts}</select></div>
         <div class="field"><label for="pfFormula">สูตรต้นทุน (หน้า "คำนวณ")</label><select id="pfFormula"><option value="">– ยังไม่เชื่อม –</option>${fOpts}</select>${fc&&fc.total!=null?`<div class="muted" style="font-size:12px;margin-top:3px">ต้นทุนวัตถุดิบ ${fc.total.toLocaleString('th-TH',{maximumFractionDigits:0})} ฿/กก.${fc.complete?'':' · ราคาวัตถุดิบยังไม่ครบ'}</div>`:''}</div>
       </div>
+      ${scPanel(s)}
       <div id="pfFields">${pfGroups(PF_SCENT_FIELDS, d, 'INT')}</div>
       <div class="pf-group"><div class="row" style="justify-content:space-between"><h4>ใช้ผลิตเป็นสินค้า · % หัวน้ำหอมต่อประเภท</h4>${ro?'':'<button class="btn small" type="button" id="pfAppAdd">+ เพิ่มสินค้า</button>'}</div>
         <div class="tablebox"><table><thead><tr><th>ประเภทสินค้า</th><th>% หัวน้ำหอม</th><th>เบส / ตัวทำละลาย</th><th>หมายเหตุ</th><th></th></tr></thead><tbody id="pfApps">${apps.map(appRow).join('')||'<tr class="pf-empty"><td colspan="5" class="empty" style="padding:12px">ยังไม่ระบุสินค้า</td></tr>'}</tbody></table></div>
@@ -3023,7 +3047,7 @@ function pfSyncEdit(){   /* เก็บค่าที่กรอกไว้�
   if(pfEdit.type==='brief'){ const b=pfEdit.obj; b.brand=$('#pfBrand').value; b.kind=$('#pfKindSel').value; b.status=$('#pfStat').value; b.summary=$('#pfSummary').value;
     b.data=Object.assign({}, b.data, pfCollect(root, PF_BRIEF_FIELDS), {arch:{answers:[...root.querySelectorAll('#pfQuiz select')].map(x=>x.value), result:(pfArchResult([...root.querySelectorAll('#pfQuiz select')].map(x=>x.value))||{}).key||''}}); }
   else { const s=pfEdit.obj; s.name=$('#pfName').value; s.family=$('#pfFamily').value; s.status=$('#pfStat').value; s.briefId=$('#pfBrief').value; s.formulaId=$('#pfFormula').value;
-    s.data=Object.assign({}, s.data, pfCollect(root, PF_SCENT_FIELDS), {applications:pfReadApps(), versions:pfReadVers()}); }
+    s.data=Object.assign({}, s.data, pfCollect(root, PF_SCENT_FIELDS), {applications:pfReadApps(), versions:pfReadVers()}); const sc=scRead(); if(sc) s.data.composer=sc; }
 }
 async function pfSave(){
   pfSyncEdit(); const err=$('#pfErr'), btn=$('#pfForm button[type=submit]');
@@ -3054,11 +3078,278 @@ function pfExportXlsx(){
   saveFile(`Perfumer_บรีฟ${PF.briefs.length}_กลิ่น${PF.scents.length}_${stamp}.xlsx`, XLSX.write(wb,{type:'array',bookType:'xlsx'}));
   toast('ดาวน์โหลดแล้ว');
 }
+const SC_AX=['citrus','green','aquatic','floral','spicy','gourmand','woody','amber'];
+const SC_AXL={citrus:['Citrus','ซิตรัส'],green:['Green','เขียว/สมุนไพร'],aquatic:['Fresh','สะอาด/น้ำ'],floral:['Floral','ดอกไม้'],spicy:['Spicy','เครื่องเทศ'],gourmand:['Gourmand','หวานละมุน'],woody:['Woody','ไม้'],amber:['Amber·Musk','อำพัน/มัสก์']};
+
+const SC_ARCH=[
+ {id:'innocent',en:'Innocent',th:'ผู้บริสุทธิ์',code:'INN',noun:'Bloom',drive:'ความสุขที่เรียบง่าย ความจริงใจ',dir:'สะอาด สดใส โปร่งเบา',trait:'ความจริงใจและบริสุทธิ์',mem:'ที่สะอาดและอ่อนโยน',v:{citrus:.6,green:.4,aquatic:.6,floral:.5,amber:.2}},
+ {id:'sage',en:'Sage',th:'ปราชญ์',code:'SAG',noun:'Library',drive:'ความรู้ ความจริง ความเข้าใจ',dir:'ไม้แห้ง ใบชา กำยาน ความนิ่ง',trait:'ความรอบรู้และสุขุม',mem:'ที่นิ่งและลึกซึ้ง',v:{green:.5,woody:.8,amber:.35,spicy:.2}},
+ {id:'explorer',en:'Explorer',th:'นักสำรวจ',code:'SC_EXP',noun:'Trail',drive:'อิสรภาพ การค้นพบ',dir:'สมุนไพร ลมทะเล ไม้สด',trait:'ความกล้าออกเดินทาง',mem:'ของการเดินทางไกล',v:{green:.7,aquatic:.5,spicy:.4,woody:.6,citrus:.4}},
+ {id:'outlaw',en:'Outlaw',th:'ขบถ',code:'OUT',noun:'Smoke',drive:'แหกกฎ เปลี่ยนแปลงสิ่งเดิม',dir:'หนัง ควัน เครื่องเทศเข้ม',trait:'ความกล้าท้าทาย',mem:'ที่ดิบและไม่ประนีประนอม',v:{spicy:.7,woody:.8,amber:.6}},
+ {id:'magician',en:'Magician',th:'นักมายากล',code:'MAG',noun:'Ritual',drive:'การเปลี่ยนแปลงที่น่าอัศจรรย์',dir:'กำยาน ไอริส อำพันลึกลับ',trait:'พลังแห่งการเปลี่ยนแปลง',mem:'ที่ลึกลับและน่าค้นหา',v:{amber:.8,spicy:.4,floral:.45,woody:.5}},
+ {id:'hero',en:'Hero',th:'วีรบุรุษ',code:'HER',noun:'Summit',drive:'ความสำเร็จ ความเข้มแข็ง',dir:'ซิตรัสคม ไม้แข็งแรง',trait:'ความมุ่งมั่นและแข็งแกร่ง',mem:'ของชัยชนะ',v:{citrus:.7,aquatic:.4,woody:.7,spicy:.35}},
+ {id:'lover',en:'Lover',th:'คนรัก',code:'LOV',noun:'Silk',drive:'ความใกล้ชิด ความงาม',dir:'ดอกไม้ขาว อำพัน ความหวานนุ่ม',trait:'ความหลงใหลและงดงาม',mem:'ที่อบอุ่นและใกล้ชิด',v:{floral:1,amber:.6,gourmand:.4}},
+ {id:'jester',en:'Jester',th:'ตัวตลก',code:'JES',noun:'Carnival',drive:'ความสนุก เสียงหัวเราะ',dir:'ผลไม้สดใส หวานซุกซน',trait:'ความสนุกสนานร่าเริง',mem:'ที่ทำให้ยิ้มได้',v:{citrus:.9,gourmand:.6,floral:.3,spicy:.25}},
+ {id:'everyman',en:'Everyman',th:'คนธรรมดา',code:'EVR',noun:'Home',drive:'ความเป็นกันเอง การเป็นส่วนหนึ่ง',dir:'ชา ผ้าฝ้าย ส้มอ่อน ๆ',trait:'ความเป็นกันเองและเข้าถึงง่าย',mem:'ที่คุ้นเคยเหมือนบ้าน',v:{citrus:.45,green:.45,aquatic:.35,gourmand:.35,floral:.3}},
+ {id:'caregiver',en:'Caregiver',th:'ผู้ดูแล',code:'CAR',noun:'Embrace',drive:'การดูแลและปกป้องผู้อื่น',dir:'ลาเวนเดอร์ มัสก์ วานิลลานุ่ม',trait:'ความใส่ใจและอ่อนโยน',mem:'ที่โอบกอดและปลอดภัย',v:{floral:.55,gourmand:.5,amber:.45,green:.25}},
+ {id:'ruler',en:'Ruler',th:'ผู้ปกครอง',code:'RUL',noun:'Crown',drive:'ความมั่นคง ความเป็นเลิศ',dir:'ไม้กฤษณา กุหลาบ อำพันเข้ม',trait:'ความสง่างามและมั่นคง',mem:'ที่หรูหราน่าเกรงขาม',v:{woody:.9,amber:.7,floral:.45,spicy:.3}},
+ {id:'creator',en:'Creator',th:'ผู้สร้างสรรค์',code:'CRE',noun:'Studio',drive:'สร้างสิ่งใหม่ที่มีคุณค่า',dir:'ใบไม้เขียว เครื่องเทศ ความแปลกใหม่',trait:'จินตนาการและความคิดริเริ่ม',mem:'ที่แปลกใหม่และมีชีวิต',v:{green:.6,spicy:.45,floral:.4,woody:.4,citrus:.3}}
+];
+const SC_MOOD=[
+ {id:'calm',th:'สงบ',en:'Still',v:{green:.35,woody:.35,floral:.25,aquatic:.15}},
+ {id:'fresh',th:'สดชื่น',en:'Dew',v:{citrus:.6,aquatic:.45,green:.35}},
+ {id:'warm',th:'อบอุ่น',en:'Ember',v:{amber:.55,gourmand:.4,spicy:.25}},
+ {id:'sensual',th:'เย้ายวน',en:'Velvet',v:{amber:.5,floral:.5,gourmand:.3}},
+ {id:'energetic',th:'มีพลัง',en:'Spark',v:{citrus:.55,spicy:.45,green:.2}},
+ {id:'mysterious',th:'ลึกลับ',en:'Shadow',v:{woody:.5,amber:.45,spicy:.3}},
+ {id:'nostalgic',th:'คิดถึง',en:'Memory',v:{gourmand:.45,floral:.35,green:.2}},
+ {id:'clean',th:'สะอาด',en:'Linen',v:{aquatic:.55,citrus:.3,floral:.2},tag:'clean'}
+];
+const SC_EXP=[
+ {id:'lobby',th:'โรงแรม / ล็อบบี้',en:'Hospitality',code:'HTL',r:[20,40,40],i:3,diff:'ระบบ HVAC หรือ cold-air diffuser ครอบคลุม 300–1,000 ลบ.ม.',tip:'ออกแบบให้เป็นโครงสร้างเส้นตรง (linear) เพราะแขกพบกลิ่นได้ทุกช่วงของวัน กลิ่นต้องเหมือนเดิมทั้งเช้าและค่ำ'},
+ {id:'retail',th:'ร้านค้า / แฟลกชิป',en:'Retail',code:'RTL',r:[30,40,30],i:3,diff:'Diffuser ที่ทางเข้า + ใต้ชั้นแสดงสินค้า ตั้งรอบทำงานตามเวลาเปิดร้าน',tip:'ลูกค้าควรจำกลิ่นได้ภายใน 3–5 วินาทีแรกที่ก้าวเข้าร้าน ให้โน้ตแรกชัดและจำง่าย'},
+ {id:'spa',th:'สปา / เวลเนส',en:'Spa & Wellness',code:'SPA',r:[20,50,30],i:2,diff:'Diffuser ขนาดเล็กประจำห้อง + สเปรย์ผ้าขนหนูและหมอน',tip:'ใช้โน้ตกลางที่ผ่อนคลายเป็นแกน ลดความหวานเพื่อไม่ให้เลี่ยนระหว่างทรีตเมนต์ 60–90 นาที'},
+ {id:'office',th:'ออฟฟิศ / Co-working',en:'Workplace',code:'OFC',r:[35,40,25],i:2,diff:'ตั้งรอบเปิด–ปิดทุก 15 นาที ลดความแรงช่วงบ่าย',tip:'คนอยู่ในพื้นที่ทั้งวัน กลิ่นต้องเบาจนแทบไม่รู้ตัวและไม่รบกวนสมาธิ'},
+ {id:'event',th:'อีเวนต์ / Pop-up',en:'Event',code:'EVT',r:[35,35,30],i:4,diff:'Nebulizing diffuser หลายจุด + scent moment ที่ทางเข้า',tip:'เวลาสร้างความจำมีน้อย ใช้โน้ตแรกที่โดดเด่นและสร้างคอนทราสต์กับบรรยากาศรอบข้าง'},
+ {id:'product',th:'ผลิตภัณฑ์ (น้ำหอม/เทียน/ก้านไม้)',en:'Product',code:'PRD',r:[25,35,40],i:3,diff:'EDP 15–20% · เทียน 8–10% · ก้านไม้หอม 20–25%',tip:'ผู้ใช้ได้กลิ่นใกล้ตัวและนาน ให้โน้ตฐานพาเรื่องราวต่อได้หลายชั่วโมง'},
+ {id:'car',th:'รถยนต์ / ห้องปิดขนาดเล็ก',en:'Compact space',code:'CAR',r:[35,40,25],i:1,diff:'Vent clip หรือไม้หอมแบบแขวน',tip:'พื้นที่ปิดสะสมกลิ่นเร็ว เลี่ยงโน้ตหวานหนักที่ทำให้เวียนศีรษะ'}
+];
+// [en, th, layer, vector, tags]
+const SC_NOTES=[
+ ['Bergamot','เบอร์กาม็อต','top',{citrus:1,green:.2},[]],
+ ['Kaffir lime leaf','ใบมะกรูด','top',{citrus:.7,green:.6},[]],
+ ['Lemongrass','ตะไคร้','top',{green:.7,citrus:.6},[]],
+ ['Yuzu','ยูซุ','top',{citrus:.9,aquatic:.25},['lux']],
+ ['Pink pepper','พริกไทยชมพู','top',{spicy:.8,citrus:.3},['modern']],
+ ['Spearmint','สะระแหน่','top',{green:.8,aquatic:.3},[]],
+ ['Sea salt accord','แอคคอร์ดเกลือทะเล','top',{aquatic:1},['modern','clean']],
+ ['Aldehydes','อัลดีไฮด์','top',{aquatic:.45,floral:.3,citrus:.2},['modern','lux','clean']],
+ ['Mandarin','ส้มแมนดาริน','top',{citrus:.9,gourmand:.35},[]],
+ ['Black tea leaf','ใบชาดำ','top',{green:.4,woody:.4,gourmand:.2},[]],
+ ['Cardamom','กระวาน','top',{spicy:.8,green:.3},['lux']],
+ ['Jasmine sambac','มะลิ','heart',{floral:1,amber:.2},['lux']],
+ ['Champaca','จำปา','heart',{floral:.9,gourmand:.3},['lux']],
+ ['Sacred lotus','บัวหลวง','heart',{floral:.7,aquatic:.5},[]],
+ ['Pandan leaf','ใบเตย','heart',{green:.6,gourmand:.6},[]],
+ ['Rose absolute','กุหลาบ','heart',{floral:1,spicy:.2},['lux']],
+ ['Orris','ไอริส','heart',{floral:.6,woody:.4,amber:.25},['lux']],
+ ['Lavender','ลาเวนเดอร์','heart',{floral:.5,green:.5},[]],
+ ['Neroli','เนโรลี','heart',{floral:.6,citrus:.5},[]],
+ ['Fig leaf','ใบมะเดื่อ','heart',{green:.8,gourmand:.3},['modern']],
+ ['Green tea','ชาเขียว','heart',{green:.7,aquatic:.3},[]],
+ ['Osmanthus','หอมหมื่นลี้','heart',{floral:.7,gourmand:.4},['lux']],
+ ['Clove','กานพลู','heart',{spicy:1,woody:.2},[]],
+ ['Cotton flower accord','แอคคอร์ดดอกฝ้าย','heart',{aquatic:.45,floral:.4},['modern','clean']],
+ ['Ylang-ylang','กระดังงา','heart',{floral:.8,amber:.3},[]],
+ ['Sandalwood','ไม้จันทน์หอม','base',{woody:.8,amber:.3,gourmand:.2},['lux']],
+ ['Vetiver','หญ้าแฝก','base',{woody:.6,green:.5},[]],
+ ['Cedarwood','ไม้ซีดาร์','base',{woody:.9},[]],
+ ['Vanilla','วานิลลา','base',{gourmand:1,amber:.4},[]],
+ ['Tonka bean','ถั่วทองกา','base',{gourmand:.8,amber:.4},[]],
+ ['White musk','มัสก์ขาว','base',{aquatic:.35,amber:.4,floral:.2},['clean','modern']],
+ ['Ambroxan','แอมบรอกซาน','base',{amber:.6,woody:.4,aquatic:.3},['modern']],
+ ['Leather','หนัง','base',{woody:.5,spicy:.4,amber:.4},['lux']],
+ ['Patchouli','พิมเสนต้น','base',{woody:.7,amber:.3,green:.2},[]],
+ ['Oakmoss','มอสโอ๊ค','base',{green:.6,woody:.5},[]],
+ ['Olibanum','กำยานโอลิบานัม','base',{amber:.5,spicy:.4,woody:.45},['lux']],
+ ['Smoked wood','ไม้รมควัน','base',{woody:.7,spicy:.45},[]]
+];
+// S&S Thai Essential Oil Palette (from "Thai Palette List" in the R&D research file).
+// form/method/sci/status come from the cost sheets; v (family vector) and desc are the olfactive interpretation.
+const SC_OILS=[
+ {th:'ดอกรัก',en:'Crown flower',layer:'heart',v:{floral:.8,green:.3,aquatic:.2},form:'Accord',method:'Perfumer ปรุง',sci:'Calotropis gigantea',desc:'ดอกไม้ขาวเย็น แป้งอ่อน กลิ่นพวงมาลัยไหว้พระ'},
+ {th:'ดอกประยงค์',en:'Chinese rice flower',layer:'heart',v:{floral:.7,gourmand:.3,spicy:.2},form:'Accord',method:'Perfumer ปรุง',sci:'Aglaia odorata',desc:'ดอกไม้เม็ดเล็ก หวานแห้งคล้ายใบชา อบอุ่น'},
+ {th:'ดอกบุนนาค',en:'Ceylon ironwood flower',layer:'heart',v:{floral:.8,amber:.3,gourmand:.2},form:'Accord',method:'Perfumer ปรุง',sci:'Mesua ferrea',desc:'ดอกไม้หวานลึก มีความแป้งและกลิ่นยาหอมไทย',tags:['lux']},
+ {th:'ดอกดาหลา',en:'Torch ginger flower',layer:'heart',v:{spicy:.5,floral:.5,citrus:.4},form:'Accord / EO ทดลอง',method:'Perfumer ปรุง · กลั่นทดลอง',sci:'Etlingera elatior',desc:'ดอกไม้ตระกูลขิง สดเปรี้ยว ซ่าเครื่องเทศ',tags:['modern']},
+ {th:'แก่นพญาเสือโคร่ง',en:'Wild Himalayan cherry heartwood',layer:'base',v:{woody:.8,gourmand:.3,amber:.3},form:'Accord',method:'Perfumer ปรุง',sci:'Prunus cerasoides',desc:'ไม้เนื้อหวานแห้ง อุ่น มีมิติผลไม้แห้งจาง ๆ'},
+ {th:'ไม้เทพทาโร',en:'Thepharo wood',layer:'base',v:{woody:.7,spicy:.5,green:.2},form:'EO',method:'กลั่นด้วยไอน้ำ',sci:'Cinnamomum porrectum',status:'Upcycle',desc:'ไม้หอมโทนการบูร-อบเชย ซาสซาฟราส',flag:'ตรวจปริมาณ safrole ตามเกณฑ์ IFRA ก่อนใช้'},
+ {th:'จำปีสด',en:'White champaca',layer:'heart',v:{floral:.9,citrus:.2,green:.2},form:'EO',method:'กลั่นด้วยไอน้ำ',sci:'Magnolia × alba',desc:'ดอกไม้ขาวสดใส มีความเปรี้ยวอ่อนและใบชาเขียว',tags:['lux']},
+ {th:'ซ่อนกลิ่นพิลาไทย',en:'Thai tuberose',layer:'heart',v:{floral:1,gourmand:.3,amber:.3},form:'EO · สั่งซื้อ',method:'สั่งซื้อ',sci:'Polianthes tuberosa',desc:'ดอกไม้ขาวครีมมี่ เย้ายวน ฟุ้งในที่ร่ม',tags:['lux']},
+ {th:'ไพลแห้ง',en:'Plai (dried)',layer:'top',v:{spicy:.6,green:.5,woody:.2},form:'EO',method:'กลั่นด้วยไอน้ำ',sci:'Zingiber montanum',desc:'ขิงสมุนไพรเย็นซ่า เอกลักษณ์ของสปาไทย'},
+ {th:'มะปี้ด (เปลือก)',en:'Calamansi peel',layer:'top',v:{citrus:1,green:.2},form:'EO · สั่งจากสวน',method:'สั่งซื้อ EO จากสวน',sci:'Citrus × microcarpa',status:'Upcycle',desc:'ส้มเปรี้ยวสด เปลือกเขียว สว่างแบบจันทบุรี'},
+ {th:'กฤษณา',en:'Agarwood',layer:'base',v:{woody:1,amber:.5,spicy:.2},form:'EO · สั่งซื้อ',method:'สั่งซื้อ',sci:'Aquilaria crassna',desc:'ไม้หอมลึก ควัน หนังอ่อน ความหรูแบบไทย',tags:['lux']},
+ {th:'กระวาน',en:'Siam cardamom',layer:'top',v:{spicy:.7,green:.4,citrus:.2},form:'EO',method:'กลั่นด้วยไอน้ำ',sci:'Amomum krervanh',desc:'เครื่องเทศเย็น สดแบบการบูรอ่อน',tags:['lux']},
+ {th:'ผักชีลาว',en:'Dill',layer:'top',v:{green:.8,aquatic:.2,spicy:.2},form:'EO',method:'กลั่นด้วยไอน้ำ',sci:'Anethum graveolens',desc:'สมุนไพรเขียวสด หวานเบา คล้ายยี่หร่า'},
+ {th:'กานพลู',en:'Clove',layer:'heart',v:{spicy:1,woody:.2},form:'EO',method:'กลั่นด้วยไอน้ำ',sci:'Syzygium aromaticum',desc:'เครื่องเทศอุ่น เผ็ดหวาน ให้ความลึก'},
+ {th:'พริกไทยดำ',en:'Black pepper (Trang)',layer:'top',v:{spicy:.9,woody:.3},form:'EO',method:'กลั่นด้วยไอน้ำ',sci:'Piper nigrum',desc:'เผ็ดสดแห้ง เปิดกลิ่นให้คม'},
+ {th:'พิมเสน',en:'Patchouli',layer:'base',v:{woody:.7,amber:.3,green:.2},form:'EO',method:'กลั่นด้วยไอน้ำ',sci:'Pogostemon cablin',desc:'ดินชื้น ไม้ ช็อกโกแลตอ่อน ติดทนนาน'},
+ {th:'ส้มโอ',en:'Pomelo',layer:'top',v:{citrus:1,green:.1},form:'EO',method:'กลั่นด้วยไอน้ำ',sci:'Citrus maxima',desc:'ซิตรัสหวานสะอาด ขมเปลือกนิด ๆ'},
+ {th:'ลีลาวดี',en:'Frangipani',layer:'heart',v:{floral:.8,gourmand:.3,citrus:.1},form:'ยังไม่ระบุ',method:'ยังไม่มีข้อมูลการสกัดในไฟล์',sci:'Plumeria spp.',desc:'ดอกไม้เขตร้อน หวานครีม ผลไม้อ่อน'},
+ {th:'นมแมว',en:'Nom maew',layer:'heart',v:{floral:.7,gourmand:.6},form:'Accord',method:'Perfumer ปรุง',sci:'Uvaria siamensis',desc:'หวานนวลคล้ายขนมไทย ดอกไม้กับใบเตย'},
+ {th:'กำยานสยาม',en:'Siam benzoin',layer:'base',v:{amber:.8,gourmand:.5},form:'Absolute · สั่งซื้อ',method:'ซื้อจากซัพพลายเออร์',sci:'Styrax tonkinensis',desc:'เรซินหวานวานิลลา บาลซามิก อบอุ่น'},
+ {th:'ไม้สัก',en:'Teak',layer:'base',v:{woody:.9,amber:.2,spicy:.1},form:'Accord',method:'Perfumer ปรุง',sci:'Tectona grandis',desc:'ไม้แห้งเรือนไทย หนังและควันจาง ๆ'},
+ {th:'ชะลูด',en:'Chaloot bark',layer:'base',v:{gourmand:.5,woody:.4,green:.4},form:'Accord',method:'Perfumer ปรุง',sci:'Alyxia reinwardtii',desc:'เปลือกไม้หอมหวานคล้ายหญ้าแห้งและวานิลลา ใช้ในเครื่องหอมไทย'},
+ {th:'ตะขบ',en:'Rukam fruit',layer:'top',v:{gourmand:.7,citrus:.3,floral:.2},form:'Accord',method:'Perfumer ปรุง',sci:'Flacourtia rukam',desc:'ผลไม้ป่าหวานแดง ฉ่ำ ขี้เล่น'},
+ {th:'ป่าน่าน',en:'Nan forest',layer:'base',v:{woody:.7,green:.6,aquatic:.2},form:'Accord',method:'Perfumer ปรุง',desc:'ป่าดิบเขา ใบไม้ เปลือกไม้ อากาศเย็นชื้น',tags:['modern']},
+ {th:'ข้าวหอมมะลิ',en:'Jasmine rice',layer:'heart',v:{gourmand:.7,green:.3,aquatic:.2},form:'Accord',method:'Perfumer ปรุง',sci:'Oryza sativa',desc:'ข้าวสวยร้อน หวานนวล คล้ายใบเตย'},
+ {th:'ไอดินกลิ่นฝน',en:'Petrichor',layer:'base',v:{aquatic:.6,green:.4,woody:.4},form:'Accord',method:'Perfumer ปรุง',desc:'ดินเปียกหลังฝนแรก สดและคิดถึง',tags:['modern']},
+ {th:'มะแขว่น',en:'Makhwaen',layer:'top',v:{citrus:.7,spicy:.6},form:'EO',method:'กลั่นด้วยไอน้ำ',sci:'Zanthoxylum limonella',desc:'ซ่าเผ็ดชาลิ้น ส้มเปรี้ยว เครื่องเทศล้านนา',tags:['modern']},
+ {th:'ขิง',en:'Ginger',layer:'top',v:{spicy:.7,citrus:.4},form:'EO',method:'กลั่นด้วยไอน้ำ',sci:'Zingiber officinale',desc:'เผ็ดอุ่น สด กระตุ้น'},
+ {th:'กาแฟ',en:'Coffee',layer:'base',v:{gourmand:.8,woody:.4,amber:.2},form:'Tincture',method:'แช่เอทานอล 1:3',desc:'คั่ว ขม หวาน กลิ่นคาเฟ่'},
+ {th:'เทียนเยาวพานี',en:'Ajowan',layer:'top',v:{spicy:.7,green:.4},form:'EO',method:'กลั่นด้วยไอน้ำ',sci:'Trachyspermum ammi',desc:'สมุนไพรเผ็ดคล้ายไทม์ สะอาดแบบยา'},
+ {th:'ชา',en:'Tea (Assam / Thai tea)',layer:'heart',v:{green:.5,woody:.4,gourmand:.3},form:'EO + Accord',method:'กลั่นชาอัสสัม · Thai tea accord',sci:'Camellia sinensis',desc:'ชาดำ ใบแห้ง คั่วอ่อน ไม้ และดอกไม้นิด ๆ'},
+ {th:'ว่านสาวหลง',en:'Wan sao long',layer:'heart',v:{spicy:.5,green:.4,floral:.3},form:'EO',method:'กลั่นด้วยไอน้ำ (ยังไม่มีค่า yield)',desc:'รากหอมตระกูลขิง หวานแป้ง สมุนไพรอ่อน'}
+];
+SC_OILS.forEach(o=>SC_NOTES.push([o.en,o.th,o.layer,o.v,['thai',...(o.tags||[])],o]));
+const scVec=o=>SC_AX.map(a=>o[a]||0);
+const scNorm=v=>{const n=Math.hypot(...v)||1;return v.map(x=>x/n)};
+const scDot=(a,b)=>a.reduce((s,x,i)=>s+x*b[i],0);
+const scDom=v=>SC_AX[v.indexOf(Math.max(...v))];
+/* ตัวช่วยออกแบบกลิ่น (Scent Composer): Brand Identity → Archetype → Mood → Experience → สูตรเริ่มต้นสำหรับนักปรุง
+   ตามระบบ SCENT&SENSE Scent System · ผลลัพธ์เป็นทิศทางเริ่มต้น สัดส่วนเป็นน้ำหนักเชิงสร้างสรรค์ ไม่ใช่สูตรเคมี */
+const SC_FAM={citrus:'ซิตรัส / สดชื่น',green:'กรีน / สมุนไพร',aquatic:'น้ำ / ทะเล',floral:'ดอกไม้',spicy:'เครื่องเทศ',gourmand:'หวาน / กูร์มองด์',woody:'ไม้หอม',amber:'อำพัน / โอเรียนทัล'};
+const SC_FEEL={calm:'ผ่อนคลาย สงบ',fresh:'สดชื่น สะอาด',warm:'อบอุ่น ได้รับการต้อนรับ',sensual:'โรแมนติก ใกล้ชิด',energetic:'มีพลัง กระฉับกระเฉง',mysterious:'ดื่มด่ำ ลึกลับ',clean:'สดชื่น สะอาด'};
+const SC_FEEL_REV={'ผ่อนคลาย สงบ':'calm','สดชื่น สะอาด':'fresh','อบอุ่น ได้รับการต้อนรับ':'warm','มีพลัง กระฉับกระเฉง':'energetic','สนุก ตื่นเต้น':'energetic','โรแมนติก ใกล้ชิด':'sensual','ดื่มด่ำ ลึกลับ':'mysterious','น่าเชื่อถือ ปลอดภัย':'calm'};
+const SC_SLIDERS=[['temp','อุณหภูมิ','อบอุ่น','เย็นสดชื่น'],['lux','ระดับ','เข้าถึงง่าย','หรูหรา'],['mod','วัสดุ','ธรรมชาติ','โมเดิร์น'],['energy','พลัง','นุ่มนวล','โดดเด่น']];
+const SC_INT=['','แผ่วเบามาก','เบา ใกล้ตัว','ปานกลาง','ชัดเจน','โดดเด่นมาก'];
+const scHash=s=>{ let h=0; for(const c of s) h=(h*31+c.charCodeAt(0))>>>0; return String(h%10000).padStart(4,'0'); };
+const scList=a=>a.length<2?a.join(''):a.slice(0,-1).join(' ')+' และ'+a[a.length-1];
+function scDefault(s){
+  const b=(PF.briefs||[]).find(x=>x.id===s.briefId), d=(b&&b.data)||{}, st={temp:0,lux:0,mod:0,energy:0,thai:false,arch:'innocent',moods:[],exp:'product'};
+  const ar=(d.arch&&d.arch.result)||(s.data&&s.data.archetype); if(SC_ARCH.some(a=>a.id===ar)) st.arch=ar;
+  const fe=pfList(d.feelings).concat(pfList(s.data&&s.data.character)); fe.forEach(f=>{ const m=SC_FEEL_REV[f]; if(m && !st.moods.includes(m) && st.moods.length<2) st.moods.push(m); });
+  const pos=d.positioning||''; st.lux=/Ultra/.test(pos)?80:/Luxury/.test(pos)?60:/Premium/.test(pos)?35:/Accessible/.test(pos)?-30:0;
+  if(b && b.kind==='SV') st.exp='lobby';
+  st.thai=pfList(d.sustainable).some(x=>/Thai/.test(x))||pfList(d.like).includes('พฤกษาไทย');
+  return st;
+}
+function scCompose(st){
+  const arch=SC_ARCH.find(a=>a.id===st.arch)||SC_ARCH[0], exp=SC_EXP.find(e=>e.id===st.exp)||SC_EXP[0];
+  const moods=st.moods.map(id=>SC_MOOD.find(m=>m.id===id)).filter(Boolean);
+  let t=scVec(arch.v);
+  moods.forEach((m,i)=>{ const mv=scVec(m.v), w=i===0?.8:.5; t=t.map((x,k)=>x+mv[k]*w); });
+  const T=st.temp/100, L=st.lux/100, M=st.mod/100, E=st.energy/100;
+  const add=(a,w)=>{ t[SC_AX.indexOf(a)]+=w; };
+  if(T>0){ add('citrus',.45*T); add('aquatic',.4*T); add('green',.3*T); } else { add('amber',-.45*T); add('gourmand',-.3*T); add('spicy',-.3*T); }
+  if(L>0){ add('woody',.25*L); add('amber',.2*L); }
+  if(E>0){ add('spicy',.2*E); }
+  const tn=scNorm(t), cleanMood=moods.some(m=>m.tag==='clean');
+  const scored=SC_NOTES.map(n=>{
+    const nv=scNorm(scVec(n[3])); let s=scDot(tn,nv); const tg=n[4];
+    if(st.thai && tg.includes('thai')) s+=.2;
+    if(tg.includes('lux')) s+=.14*L; else s-=.05*Math.max(L,0);
+    if(L<0 && !tg.includes('lux')) s+=.06*-L;
+    if(tg.includes('modern')) s+=.16*M; else if(M<0) s+=.05*-M;
+    if(M<0 && tg.includes('modern')) s-=.1*-M;
+    if(cleanMood && tg.includes('clean')) s+=.12;
+    return {en:n[0], th:n[1], layer:n[2], v:scVec(n[3]), tags:tg, s, d:scDom(scVec(n[3])), oil:n[5]};
+  });
+  const pick=layer=>{
+    const pool=scored.filter(n=>n.layer===layer).sort((a,b)=>b.s-a.s), out=[];
+    while(out.length<3 && pool.length){ pool.forEach(n=>{ n.adj=n.s-(out.some(o=>o.d===n.d)?.22:0); }); pool.sort((a,b)=>b.adj-a.adj); out.push(pool.shift()); }
+    return out;
+  };
+  const layers={top:pick('top'), heart:pick('heart'), base:pick('base')};
+  const r=[...exp.r], sh=Math.round((-T*.5+L*.3)*6); r[0]-=sh; r[2]+=sh;      /* โครงสร้าง T/H/B เลื่อนตามอุณหภูมิและความหรู */
+  const items=[];
+  ['top','heart','base'].forEach((l,li)=>{ const ns=layers[l], w=ns.map(n=>Math.pow(Math.max(n.s,.05),2)), sw=w.reduce((a,b)=>a+b,0); ns.forEach((n,i)=>{ n.raw=r[li]*w[i]/sw; items.push(n); }); });
+  items.forEach(n=>{ n.pct=Math.floor(n.raw); });
+  const rem=100-items.reduce((a,n)=>a+n.pct,0);
+  [...items].sort((a,b)=>(b.raw-b.pct)-(a.raw-a.pct)).slice(0,rem).forEach(n=>{ n.pct++; });
+  const prof=SC_AX.map((a,k)=>items.reduce((s,n)=>s+scNorm(n.v)[k]*n.pct,0));
+  const order=SC_AX.map((a,k)=>[a,prof[k]]).sort((a,b)=>b[1]-a[1]);
+  const intensity=Math.max(1,Math.min(5,Math.round(exp.i+E*1.2+L*.2)));
+  const ratio=['top','heart','base'].map(l=>layers[l].reduce((s,n)=>s+n.pct,0));
+  return {arch, exp, moods, layers, prof, order, intensity, ratio, scored, items};
+}
+function scAlts(o){ const all=o.items; return ['top','heart','base'].map(l=>o.scored.filter(n=>n.oil && n.layer===l && !all.includes(n)).sort((a,b)=>b.s-a.s)[0]).filter(Boolean); }
+function scSummary(st, brand){
+  const o=scCompose(st), {arch,exp,moods,layers,order}=o, inF=o.items.filter(n=>n.oil), alts=scAlts(o);
+  const name=`${moods[0]?moods[0].en:'Signature'} ${arch.noun}`, code=`S&S-${arch.code}-${exp.code}-${scHash(JSON.stringify([+st.temp,+st.lux,+st.mod,+st.energy,st.thai?1:0,st.arch,st.moods,st.exp]))}`;
+  const fam=`${SC_AXL[order[0][0]][0]} ${SC_AXL[order[1][0]][0]}`, feel=moods.length?moods.map(m=>m.th).join('และ'):'เป็นตัวเอง';
+  const th=a=>a.map(n=>n.th);
+  const story=`“${name}” เล่าเรื่อง${brand}ในบทบาท${arch.th} เปิดด้วย${scList(th(layers.top))} ให้ความรู้สึก${feel}ตั้งแต่วินาทีแรก จากนั้น${scList(th(layers.heart))}ถ่ายทอด${arch.trait} และปิดท้ายด้วย${scList(th(layers.base))} ที่ทิ้งความทรงจำ${arch.mem}ไว้กับทุกคนที่ได้สัมผัส`;
+  const tot=o.prof.reduce((a,b)=>a+b,0)||1, heavy=(o.prof[SC_AX.indexOf('amber')]+o.prof[SC_AX.indexOf('gourmand')])/tot;
+  const climate=(heavy>.3 && exp.id!=='product')?`ข้อควรระวังสำหรับอากาศร้อนชื้นแบบไทย: โปรไฟล์นี้มีโทนอำพัน/หวานราว ${Math.round(heavy*100)}% ซึ่งจะฟุ้งแรงขึ้นในความชื้นสูง แนะนำลดความแรงของ diffuser ลง 10–15% ในพื้นที่ที่เปิดสู่ภายนอก`:'';
+  const brief=`SCENT BRIEF · ${code}
+Brand: ${brand}
+Scent name: ${name}
+Archetype: ${arch.en} (${arch.th}) — ${arch.drive}
+Mood: ${moods.map(m=>`${m.en} / ${m.th}`).join(', ')||'-'}
+Experience: ${exp.en} (${exp.th})
+Identity: อุณหภูมิ ${st.temp>0?'เย็น':'อุ่น'} ${Math.abs(st.temp)} · ความหรู ${st.lux} · โมเดิร์น ${st.mod} · พลัง ${st.energy}${st.thai?' · ใช้วัตถุดิบหอมไทย':''}
+
+Olfactive family: ${fam}
+Structure (T/H/B): ${o.ratio.join(' / ')}
+TOP   ${layers.top.map(n=>`${n.en} ${n.pct}%`).join(' · ')}
+HEART ${layers.heart.map(n=>`${n.en} ${n.pct}%`).join(' · ')}
+BASE  ${layers.base.map(n=>`${n.en} ${n.pct}%`).join(' · ')}
+
+Thai Essential Oil Palette (S&S):
+${inF.length?inF.map(n=>`  ${n.layer.toUpperCase().padEnd(6)}${n.oil.th} / ${n.oil.en} — ${n.oil.form} — ${n.pct}%${n.oil.flag?' ⚠ '+n.oil.flag:''}`).join('\n'):'  (ไม่ได้ใช้)'}
+  ทางเลือก: ${alts.map(n=>n.oil.th).join(', ')||'-'}
+
+Intensity: ${o.intensity}/5
+Diffusion: ${exp.diff}
+Direction: ${exp.tip}`;
+  return {o, name, code, fam, story, climate, brief, inF, alts};
+}
+function scBrandOf(s){ return pfBrand(s.briefId)||(s.name||'').replace(/\s*Signature Scent$/i,'')||'แบรนด์'; }
+function scOutHtml(st, s){
+  const r=scSummary(st, scBrandOf(s)), o=r.o, max=Math.max(...o.prof)||1, tot=o.prof.reduce((a,b)=>a+b,0)||1;
+  const L={top:['Top','สัมผัสแรก'],heart:['Heart','หัวใจกลิ่น'],base:['Base','ความทรงจำ']};
+  const rows=['top','heart','base'].map(l=>o.layers[l].map((n,i)=>`<tr>${i===0?`<td rowspan="${o.layers[l].length}" style="white-space:nowrap;vertical-align:top"><b>${L[l][0]}</b><div class="muted" style="font-size:11.5px">${L[l][1]} · ${o.ratio[['top','heart','base'].indexOf(l)]}%</div></td>`:''}
+    <td><b>${esc(n.en)}</b> <span class="muted">${esc(n.th)}</span>${n.oil?` <span class="chip ok" style="font-size:11px">Thai palette · ${esc(n.oil.form)}</span>`:''}${n.oil&&n.oil.status?` <span class="chip info" style="font-size:11px">${esc(n.oil.status)}</span>`:''}${n.oil&&n.oil.flag?`<div style="font-size:12px;color:var(--bad)">⚠ ${esc(n.oil.flag)}</div>`:''}</td>
+    <td style="min-width:120px"><div class="sc-bar"><i style="width:${Math.round(n.pct/Math.max(...o.items.map(x=>x.pct))*100)}%"></i></div></td><td class="num"><b>${n.pct}%</b></td></tr>`).join('')).join('');
+  const prof=o.order.map(([a,v])=>`<div class="sc-prow"><span>${esc(SC_AXL[a][1])}</span><div class="sc-bar"><i style="width:${Math.round(v/max*100)}%"></i></div><span class="num">${Math.round(v/tot*100)}%</span></div>`).join('');
+  const oils=r.inF.length?`ใช้จาก Thai Essential Oil Palette <b>${r.inF.length}</b>/9 โน้ต · <b>${r.inF.reduce((a,n)=>a+n.pct,0)}%</b> ของสูตร${r.alts.length?` · ทางเลือก: ${r.alts.map(n=>esc(n.oil.th)).join(', ')}`:''}`:'ยังไม่ได้ใช้โน้ตจาก Thai Palette (เปิด "ให้ความสำคัญวัตถุดิบหอมไทย" เพื่อดึงเข้ามา)';
+  return `<div class="sc-head"><div><div class="sc-name">${esc(r.name)}</div><div class="muted mono" style="font-size:12px">${esc(r.code)}</div></div>
+      <div class="sc-meta"><span class="chip info">ตระกูล ${esc(r.fam)}</span><span class="chip warn">ความแรง ${o.intensity}/5 · ${SC_INT[o.intensity]}</span><span class="chip">โครงสร้าง T/H/B ${o.ratio.join(' / ')}</span></div></div>
+    <div class="tablebox"><table><tbody>${rows}</tbody></table></div>
+    <div class="sc-cols"><div><h5>โปรไฟล์ตระกูลกลิ่น</h5>${prof}</div>
+      <div><h5>เรื่องราวกลิ่น</h5><p style="margin:0 0 8px;line-height:1.6;font-size:13.5px">${esc(r.story)}</p>
+        <div class="muted" style="font-size:12.5px;line-height:1.55"><b>${esc(o.exp.th)}</b> · ${esc(o.exp.diff)}<br>${esc(o.exp.tip)}</div>
+        ${r.climate?`<div class="msg bad" style="margin-top:8px;font-size:12.5px">${esc(r.climate)}</div>`:''}</div></div>
+    <div class="muted" style="font-size:12.5px;margin-top:6px">${oils}</div>
+    <div class="muted" style="font-size:12px;margin-top:4px">สัดส่วนเป็นน้ำหนักเชิงสร้างสรรค์สำหรับเริ่มต้น ไม่ใช่สูตรเคมี · ต้องตรวจ IFRA / อย. / Allergen ก่อนผลิตจริง</div>
+    <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn primary" type="button" data-sc="apply">นำผลนี้ไปใส่ในกลิ่น (Top / Heart / Base · แนวคิด · กลุ่มกลิ่น)</button><button class="btn" type="button" data-sc="copy">คัดลอกบรีฟนักปรุง</button><button class="btn" type="button" data-sc="reset">ตั้งค่าใหม่จากบรีฟ</button></div>`;
+}
+function scPanel(s){
+  const st=Object.assign(scDefault(s), (s.data&&s.data.composer)||{});
+  const sl=SC_SLIDERS.map(([k,l,a,b])=>`<div class="sc-sl"><label for="sc-${k}">${l}</label><div class="sc-sl-row"><span>${a}</span><input type="range" id="sc-${k}" min="-100" max="100" step="5" value="${+st[k]||0}"><span>${b}</span></div></div>`).join('');
+  return `<details class="pf-group sc-box" id="scBox" data-moods="${esc(st.moods.join(','))}" open><summary>ตัวช่วยออกแบบกลิ่น · Scent Composer <span class="muted" style="font-weight:400">Identity → Archetype → Mood → Experience</span></summary>
+    <div class="muted" style="font-size:12.5px;margin:6px 0 10px">เลือกตัวตนแบรนด์และประสบการณ์ ระบบจะเสนอพีระมิดกลิ่นเริ่มต้นจากคลังโน้ต รวม Thai Essential Oil Palette 32 ตัว แล้วกด "นำผลนี้ไปใส่ในกลิ่น" เพื่อต่อยอดโดยนักปรุง (ค่าเริ่มต้นดึงจากบรีฟและผล Archetype Quiz ที่ผูกไว้)</div>
+    <div class="sc-grid">${sl}
+      <div class="sc-sl"><label for="sc-arch">Brand Archetype</label><select id="sc-arch">${SC_ARCH.map(a=>`<option value="${a.id}" ${st.arch===a.id?'selected':''}>${esc(a.en)} · ${esc(a.th)} — ${esc(a.dir)}</option>`).join('')}</select></div>
+      <div class="sc-sl"><label for="sc-exp">Experience · พื้นที่ / สินค้าที่ผู้คนได้กลิ่น</label><select id="sc-exp">${SC_EXP.map(e=>`<option value="${e.id}" ${st.exp===e.id?'selected':''}>${esc(e.th)}</option>`).join('')}</select></div>
+      <div class="sc-sl sc-wide"><label>Mood (เลือกได้ 2 · อันแรกมีน้ำหนักมากกว่า)</label><div class="sc-chips">${SC_MOOD.map(m=>`<button type="button" class="sc-chip" data-sc="mood" data-id="${m.id}" aria-pressed="${st.moods.includes(m.id)}">${esc(m.th)} <small>${esc(m.en)}</small></button>`).join('')}</div></div>
+      <div class="sc-sl sc-wide"><label class="pf-chip" style="width:max-content"><input type="checkbox" id="sc-thai" ${st.thai?'checked':''}><span>ให้ความสำคัญวัตถุดิบหอมไทย (Thai Essential Oil Palette)</span></label></div></div>
+    <div id="scOut">${scOutHtml(st, s)}</div></details>`;
+}
+function scRead(){
+  const box=$('#scBox'); if(!box) return null;
+  const st={thai:$('#sc-thai').checked, arch:$('#sc-arch').value, exp:$('#sc-exp').value, moods:(box.dataset.moods||'').split(',').filter(Boolean)};
+  SC_SLIDERS.forEach(([k])=>{ st[k]=+$('#sc-'+k).value||0; });
+  return st;
+}
+function scUpdate(){ const st=scRead(); if(!st||!pfEdit) return; const s=pfEdit.obj; s.name=$('#pfName').value; s.briefId=$('#pfBrief').value; $('#scOut').innerHTML=scOutHtml(st, s); }
+function scClick(t){
+  const kind=t.dataset.sc, box=$('#scBox'); if(!box || !pfEdit) return;
+  if(kind==='mood'){ let m=(box.dataset.moods||'').split(',').filter(Boolean), id=t.dataset.id; m=m.includes(id)?m.filter(x=>x!==id):m.concat(id).slice(-2); box.dataset.moods=m.join(',');
+    box.querySelectorAll('[data-sc=mood]').forEach(b=>b.setAttribute('aria-pressed', m.includes(b.dataset.id))); scUpdate(); return; }
+  if(kind==='copy'){ const r=scSummary(scRead(), scBrandOf(pfEdit.obj)); const done=()=>toast('คัดลอกบรีฟแล้ว');
+    if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(r.brief).then(done, ()=>toast('คัดลอกไม่ได้ ให้เลือกข้อความเอง')); else toast('คัดลอกไม่ได้ในเบราว์เซอร์นี้'); return; }
+  if(kind==='reset'){ const s=pfEdit.obj; pfSyncEdit(); delete s.data.composer; drawPfEdit(); return; }
+  if(kind==='apply'){
+    pfSyncEdit(); const s=pfEdit.obj, d=s.data, st=scRead(), r=scSummary(st, scBrandOf(s)), o=r.o;
+    if((d.top||d.heart||d.base) && !confirm('Top / Heart / Base ที่กรอกไว้จะถูกแทนที่ด้วยผลจากตัวช่วย ต้องการต่อหรือไม่?')) return;
+    const line=n=>`${n.en} / ${n.th} ${n.pct}%${n.oil?' · Thai palette ('+n.oil.form+')':''}`;
+    d.top=o.layers.top.map(line).join('\n'); d.heart=o.layers.heart.map(line).join('\n'); d.base=o.layers.base.map(line).join('\n');
+    d.concept=r.story; d.archetype=o.arch.id;
+    d.character=[...new Set(o.moods.map(m=>SC_FEEL[m.id]).filter(Boolean))];
+    s.family=SC_FAM[o.order[0][0]]; d.subfamilies=[SC_FAM[o.order[1][0]]].filter(f=>f!==s.family);
+    const flags=r.inF.filter(n=>n.oil.flag).map(n=>`${n.oil.th}: ${n.oil.flag}`); if(flags.length){ const cur=d.ifra||''; d.ifra=(cur?cur+'\n':'')+flags.join('\n'); }
+    d.composer=st; d.composerOut={code:r.code, name:r.name, ratio:o.ratio, intensity:o.intensity, notes:o.items.map(n=>({layer:n.layer, en:n.en, th:n.th, pct:n.pct, thai:!!n.oil})), at:new Date().toISOString()};
+    if(!s.name) s.name=r.name;
+    drawPfEdit(); toast('นำผลไปใส่ในกลิ่นแล้ว · อย่าลืมกด "บันทึกกลิ่น"');
+  }
+}
 /* ---------- events ---------- */
 const pfv=$('#perfView');
-pfv.addEventListener('input', e=>{ const t=e.target; if(t.id==='pfQ'){ pfQ=t.value; drawPfTable(); } });
+pfv.addEventListener('input', e=>{ const t=e.target; if(t.id==='pfQ'){ pfQ=t.value; drawPfTable(); } else if(t.closest('#scBox') && t.type==='range') scUpdate(); });
 pfv.addEventListener('change', e=>{
   const t=e.target;
+  if(t.closest('#scBox')){ scUpdate(); return; }
   if(t.id==='pfKind'){ pfKind=t.value; drawPfTable(); return; }
   if(t.id==='pfStatus'){ pfStatus=t.value; drawPfTable(); return; }
   if(t.id==='pfKindSel'){ pfSyncEdit(); drawPfEdit(); return; }
@@ -3070,6 +3361,7 @@ pfv.addEventListener('change', e=>{
 });
 pfv.addEventListener('click', async e=>{
   const t=e.target.closest('button'); if(!t) return;
+  if(t.dataset.sc){ scClick(t); return; }
   if(t.dataset.tab){ if(pfEdit) pfSyncEdit(); pfTab=t.dataset.tab; pfStatus=''; pfEdit=null; drawPf(); return; }
   if(t.id==='pfNew'){ pfEdit={type:pfTab, obj:pfTab==='brief'?pfNewBrief():pfNewScent(null)}; drawPfEdit(); return; }
   if(t.dataset.pfOpen){ const o=(pfTab==='brief'?PF.briefs:PF.scents).find(x=>x.id===t.dataset.pfOpen); if(o){ pfEdit={type:pfTab, obj:JSON.parse(JSON.stringify(o))}; drawPfEdit(); } return; }

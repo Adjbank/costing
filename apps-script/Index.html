@@ -4437,7 +4437,7 @@ const BT_STATUS={active:['ใช้งาน / ลงทะเบียนแล
 const BT_RD={extract:'สกัดเอง', upcycle:'Upcycle', accord:'Accord (Perfumer ปรุง)', buy:'ซื้อสำเร็จรูป', trial:'ทดลอง', planned:'วางแผน'};
 const BT_NOTE=['Top','Middle','Base'], BT_BASIS={native:'ถิ่นกำเนิด', cultivation:'แหล่งเพาะปลูก', production:'แหล่งผลิต'};
 const BT_ODOR=['citrus','floral','green','herbal','aromatic','spicy','woody','earthy','balsamic','fruity'];
-const BT_USES={herbal:'สมุนไพร', fine:'น้ำหอม', personal:'ผลิตภัณฑ์ดูแลตัว', aroma:'อโรมา', home:'ของใช้ในบ้าน', food:'อาหาร/เครื่องดื่ม', incense:'ธูป/เครื่องหอม', repellent:'ไล่แมลง'};
+const BT_USES={herbal:'สมุนไพรและแพทย์แผนไทย', fine:'น้ำหอม', personal:'ผลิตภัณฑ์ดูแลตัว', aroma:'อโรมา', home:'ของใช้ในบ้าน', food:'อาหาร/เครื่องดื่ม', incense:'ธูป/เครื่องหอม', repellent:'ไล่แมลง'};
 const BT_BEN={digestive:'ระบบย่อย', calming:'ผ่อนคลาย', pain:'บรรเทาปวด', antimicrobial:'ต้านจุลชีพ', respiratory:'ระบบหายใจ', uplifting:'กระปรี้กระเปร่า', skin:'ผิวพรรณ', antioxidant:'ต้านอนุมูลอิสระ', circulation:'การไหลเวียน', focus:'สมาธิ', immune:'ภูมิคุ้มกัน', hormonal:'สมดุลฮอร์โมน', heart:'หัวใจ'};
 const BT_METHOD={sd:'กลั่นด้วยไอน้ำ (Steam)', hd:'กลั่นด้วยน้ำ (Hydro / Clevenger)', hdc:'Hydro + Cohobation', sdc:'Steam + Cohobation', sol:'สกัดด้วยตัวทำละลาย', eth:'สกัดด้วยเอทานอล', enf:'Enfleurage', co2:'CO₂', cold:'บีบเย็น', other:'อื่น ๆ'};
 const BT_RES={ok:['ได้น้ำมัน','ok'], low:['ได้น้อย','warn'], none:['ไม่ได้','bad'], hydrosol:['ได้ไฮโดรซอล','info'], fail:['ล้มเหลว','bad']};
@@ -4453,17 +4453,17 @@ const BT_GROUPS=[
   ['การใช้งานและความปลอดภัย',[['uses','การใช้งาน','multi:uses',1],['benefits','สรรพคุณ','multi:ben',1],['applications','การประยุกต์ใช้','long',1],['dilution','การเจือจาง','text'],['shelfLife','อายุการเก็บ','text'],['safety','ข้อควรระวัง','long',1],['storyTh','เรื่องเล่า (ไทย)','long',1],['storyEn','Story','long',1]]],
   ['กฎระเบียบ (IFRA / อย.)',[['ifra','IFRA (สรุป)','long',1],['allergens','สารก่อภูมิแพ้','long',1],['fdaThai','อย. ไทย','text'],['regSource','แหล่งข้อมูลกฎระเบียบ','text'],['regFlags','ข้อสังเกตกฎระเบียบ','list',1]]],
   ['สต็อก',[['stock','มีสต็อก','select:stock'],['stockAsOf','ข้อมูล ณ วันที่','text'],['stockSource','แหล่งข้อมูลสต็อก','text']]],
-  ['บันทึก',[['reviewNote','หมายเหตุการตรวจสอบ','long',1],['source','แหล่งที่มา','text']]]];
-const btOpt=(kind)=>({form:BT_FORM.map(x=>[x,x]), status:Object.entries(BT_STATUS).map(([k,v])=>[k,v[0]]), rd:[['','–'],...Object.entries(BT_RD)], note:[['','–'],...BT_NOTE.map(x=>[x,x])], basis:[['','–'],...Object.entries(BT_BASIS)], stock:[['no','ไม่มี'],['yes','มี']]})[kind];
-const btMulti=(kind)=>({odor:BT_ODOR.map(x=>[x,x]), uses:Object.entries(BT_USES), ben:Object.entries(BT_BEN)})[kind];
-const btName=r=>r.nameTh||r.nameEn||r.regNo, btArr=v=>Array.isArray(v)?v:(v?[v]:[]);
+  ['บันทึกทั่วไป',[['reviewNote','หมายเหตุการตรวจสอบ','long',1],['source','แหล่งที่มา','text']]]];
+const btOpt=(kind)=>({form:BT_FORM.map(x=>[x,btFormLabel(x)]), status:Object.entries(BT_STATUS).map(([k,v])=>[k,v[0]]), rd:[['','–'],...Object.entries(BT_RD)], note:[['','–'],...BT_NOTE.map(x=>[x,x])], basis:[['','–'],...Object.entries(BT_BASIS)], stock:[['no','ไม่มี'],['yes','มี']]})[kind];
+const btMulti=(kind)=>({odor:BT_ODOR.map(x=>[x,BT_FAMN[x]||x]), uses:Object.entries(BT_USES), ben:Object.entries(BT_BEN)})[kind];
+const btName=r=>BT.lang==='en'?(r.nameEn||r.nameTh||r.regNo):(r.nameTh||r.nameEn||r.regNo), btArr=v=>Array.isArray(v)?v:(v?[v]:[]);
 async function loadBt(force){
   if(BT.items && !force) return;
   const r=await api('listBotanicals'); BT.items=r.items; BT.canEdit=r.canEdit; BT.canPrice=r.canPrice;
   BT.prices=null; if(BT.canPrice){ try{ BT.prices=await api('getBotanicalPrices'); }catch(e){ BT.prices={}; } }
 }
 function renderBtView(){
-  $('#btView').innerHTML=`<div class="bh"><h2>ทะเบียนพืชหอม</h2><span class="hint">วัตถุดิบพืชหอมของแผนก Research Ingredients: น้ำมันหอมระเหย สมุนไพรแห้ง พืชสด และ Accord พร้อมข้อมูลกลิ่น แหล่งที่มา กฎระเบียบ สต็อก และบันทึกการสกัด · เลขทะเบียน BT-nnnn</span></div><div id="btBody"><div class="empty">กำลังโหลด…</div></div>`;
+  $('#btView').innerHTML=`<div class="bh"><h2>ทะเบียนพืชหอม</h2><span class="hint">วัตถุดิบพืชหอมของแผนก Research Ingredients: น้ำมันหอมระเหย สมุนไพรแห้ง พืชสด และ Accord พร้อมข้อมูลกลิ่น แหล่งที่มา กฎระเบียบ สต็อก และบันทึกการสกัด · เลขทะเบียน BT-nnnn</span></div><div style="display:flex;justify-content:flex-end;margin:-4px 0 10px"><div class="bt-seg" role="group" aria-label="Language"><button type="button" data-btlang="th" aria-pressed="${BT.lang!=='en'}">ไทย</button><button type="button" data-btlang="en" aria-pressed="${BT.lang==='en'}">EN</button></div></div><div id="btBody"><div class="empty">กำลังโหลด…</div></div>`;
   loadBt().then(drawBt).catch(e=>{ $('#btBody').innerHTML=`<div class="msg bad">${esc(errText(e))}</div>`; });
 }
 function btFiltered(){
@@ -4481,8 +4481,8 @@ function drawBt(){
   $('#btBody').innerHTML=`<div class="pf-tabs" role="tablist" style="margin:0 0 10px"><button type="button" data-btsub="list" class="${BT.sub==='list'?'on':''}">รายการ</button><button type="button" data-btsub="map" class="${BT.sub==='map'?'on':''}">แผนที่แหล่งวัตถุดิบ</button><button type="button" data-btsub="dash" class="${BT.sub==='dash'?'on':''}">แดชบอร์ดงานวิจัย</button></div>
     <div class="search" style="flex-wrap:wrap;gap:8px">
       <input id="btQ" type="search" autocomplete="off" placeholder="ค้นหาชื่อ ชื่อวิทยาศาสตร์ วงศ์ รหัส สารสำคัญ การใช้…" value="${esc(BT.q)}" style="flex:1;min-width:220px">
-      ${sel('btForm',BT.form,BT_FORM.map(x=>[x,x]),'ทุกรูปแบบ')}${sel('btColl',BT.coll,[['Thai Palette','Thai Palette'],['-','อื่น ๆ']],'ทุกคอลเลกชัน')}${sel('btStatus',BT.status,Object.entries(BT_STATUS).map(([k,v])=>[k,v[0]]),'ทุกสถานะ')}
-      ${sel('btRd',BT.rdType,Object.entries(BT_RD),'ทุกงาน R&D')}${sel('btStock',BT.stock,[['yes','มีสต็อก'],['no','ไม่มีสต็อก']],'สต็อกทั้งหมด')}${sel('btNote',BT.note,BT_NOTE.map(x=>[x,x]),'ทุก Note')}${sel('btOdor',BT.odor,BT_ODOR.map(x=>[x,x]),'ทุกกลุ่มกลิ่น')}
+      ${sel('btForm',BT.form,BT_FORM.map(x=>[x,btFormLabel(x)]),'ทุกรูปแบบ')}${sel('btColl',BT.coll,[['Thai Palette','Thai Palette'],['-','อื่น ๆ']],'ทุกคอลเลกชัน')}${sel('btStatus',BT.status,Object.entries(BT_STATUS).map(([k,v])=>[k,v[0]]),'ทุกสถานะ')}
+      ${sel('btRd',BT.rdType,Object.entries(BT_RD),'ทุกงาน R&D')}${sel('btStock',BT.stock,[['yes','มีสต็อก'],['no','ไม่มีสต็อก']],'สต็อกทั้งหมด')}${sel('btNote',BT.note,BT_NOTE.map(x=>[x,x]),'ทุก Note')}${sel('btOdor',BT.odor,BT_ODOR.map(x=>[x,BT_FAMN[x]||x]),'ทุกกลุ่มกลิ่น')}
       ${sel('btUse',BT.use,Object.entries(BT_USES),'ทุกการใช้งาน')}${sel('btBen',BT.ben,Object.entries(BT_BEN),'ทุกสรรพคุณ')}${sel('btReg',BT.reg,Object.entries(BT_REGN),'กฎระเบียบทั้งหมด')}
       ${list_?`<div class="pf-tabs" role="tablist" style="margin:0"><button type="button" data-btview="cards" class="${BT.view==='cards'?'on':''}">การ์ด</button><button type="button" data-btview="table" class="${BT.view==='table'?'on':''}">ตาราง</button></div>`:''}
       ${BT.canEdit?'<button class="btn primary" type="button" id="btNew">+ เพิ่มพืช</button>':''}<button class="btn" type="button" id="btRefresh">รีเฟรช</button>
@@ -4498,15 +4498,15 @@ function btMainHtml(list){
 function btCards(list){
   if(!list.length) return '<div class="empty">ไม่พบรายการ</div>';
   const part=list.slice(0,BT.shown);
-  return `<div class="bt-grid">${part.map(r=>`<button type="button" class="bt-card" data-bt-open="${esc(r.regNo)}"><div class="bt-img">${btImg(r)}</div><div class="bt-b"><div class="bt-t">${esc(btName(r))}</div><div class="bt-s">${esc(r.nameTh?r.nameEn:'')}${r.latin?`<div><i>${esc(r.latin)}</i></div>`:''}</div>
-    <div class="bt-chips"><span class="chip">${esc(r.form||'')}</span>${r.note?`<span class="chip info">${esc(r.note)}</span>`:''}${r.stock==='yes'?'<span class="chip ok">มีสต็อก</span>':''}${r.status==='eval'?'<span class="chip warn">ประเมิน</span>':''}</div><div class="bt-s mono">${esc(r.regNo)}</div></div></button>`).join('')}</div>
+  return `<div class="bt-grid">${part.map(r=>`<button type="button" class="bt-card" data-bt-open="${esc(r.regNo)}"><div class="bt-img">${btImg(r)}</div><div class="bt-b"><div class="bt-t">${esc(btName(r))}</div><div class="bt-s">${esc(btNameOther(r))}${r.latin?`<div><i>${esc(r.latin)}</i></div>`:''}</div>
+    <div class="bt-chips"><span class="chip">${esc(btFormLabel(r.form))}</span>${r.note?`<span class="chip info">${esc(r.note)}</span>`:''}${r.stock==='yes'?'<span class="chip ok">มีสต็อก</span>':''}${r.status==='eval'?'<span class="chip warn">ประเมิน</span>':''}</div><div class="bt-s mono">${esc(r.regNo)}</div></div></button>`).join('')}</div>
     ${list.length>part.length?`<div style="text-align:center;margin-top:14px"><button class="btn" type="button" id="btMore">แสดงเพิ่ม (อีก ${list.length-part.length})</button></div>`:''}`;
 }
 function btTable(list){
   if(!list.length) return '<div class="empty">ไม่พบรายการ</div>';
   const part=list.slice(0,BT.shown*3);
   return `<div class="tablebox"><table><thead><tr><th>เลขทะเบียน</th><th>ชื่อ</th><th>ชื่อวิทยาศาสตร์</th><th>รูปแบบ</th><th>Note</th><th>กลุ่มกลิ่น</th><th>แหล่ง</th><th>RM</th><th>สต็อก</th><th>R&D</th><th></th></tr></thead><tbody>
-    ${part.map(r=>`<tr><td class="mono">${esc(r.regNo)}</td><td><b>${esc(btName(r))}</b>${r.nameTh&&r.nameEn?`<div class="muted" style="font-size:12px">${esc(r.nameEn)}</div>`:''}</td><td style="font-size:12.5px"><i>${esc(r.latin||'')}</i></td><td>${esc(r.form||'')}</td><td>${esc(r.note||'')}</td><td style="font-size:12.5px">${esc(btArr(r.odorFamilies).join(', '))}</td><td style="font-size:12.5px">${esc(r.origin||'')}</td><td class="mono" style="font-size:12px">${esc(r.rmCode||'')}</td><td>${r.stock==='yes'?'<span class="chip ok">มี</span>':''}</td><td style="font-size:12.5px">${esc(btArr(r.rdType).map(k=>BT_RD[k]||k).join(', '))}</td><td><button class="btn small" type="button" data-bt-open="${esc(r.regNo)}">เปิด</button></td></tr>`).join('')}</tbody></table></div>
+    ${part.map(r=>`<tr><td class="mono">${esc(r.regNo)}</td><td><b>${esc(btName(r))}</b>${btNameOther(r)?`<div class="muted" style="font-size:12px">${esc(btNameOther(r))}</div>`:''}</td><td style="font-size:12.5px"><i>${esc(r.latin||'')}</i></td><td>${esc(btFormLabel(r.form))}</td><td>${esc(r.note||'')}</td><td style="font-size:12.5px">${esc(btArr(r.odorFamilies).join(', '))}</td><td style="font-size:12.5px">${esc(r.origin||'')}</td><td class="mono" style="font-size:12px">${esc(r.rmCode||'')}</td><td>${r.stock==='yes'?'<span class="chip ok">มี</span>':''}</td><td style="font-size:12.5px">${esc(btArr(r.rdType).map(k=>BT_RD[k]||k).join(', '))}</td><td><button class="btn small" type="button" data-bt-open="${esc(r.regNo)}">เปิด</button></td></tr>`).join('')}</tbody></table></div>
     ${list.length>part.length?`<div style="text-align:center;margin-top:14px"><button class="btn" type="button" id="btMore">แสดงเพิ่ม</button></div>`:''}`;
 }
 const btRow=(l,v)=>v?`<tr><td style="white-space:nowrap;color:var(--muted,#777);vertical-align:top;padding-right:14px">${esc(l)}</td><td>${v}</td></tr>`:'';
@@ -4537,8 +4537,8 @@ function btDetail(r){
     body=BT_GROUPS.map(([g,fs])=>{ const rows=fs.map(f=>btRow(f[1].replace(' *',''), btView(r,f))).join(''); return rows?`<div class="card" style="margin:0 0 12px"><h4 style="margin:0 0 6px">${g}</h4><table style="font-size:13.5px"><tbody>${rows}</tbody></table></div>`:''; }).join('');
     body+=btExtras(r);
   }
-  return `${head}<div class="bt-head">${imgBox}<div style="flex:1;min-width:280px"><h2 style="margin:0">${esc(btName(r))}</h2><div class="muted"><i>${esc(r.latin||'')}</i>${r.nameTh&&r.nameEn?' · '+esc(r.nameEn):''}</div>
-      <div class="bt-chips">${r.form?`<span class="chip">${esc(r.form)}</span>`:''}${r.collection?`<span class="chip info">${esc(r.collection)}</span>`:''}${r.note?`<span class="chip info">Note ${esc(r.note)}</span>`:''}${r.stock==='yes'?'<span class="chip ok">มีสต็อก</span>':''}${btArr(r.rdType).map(k=>`<span class="chip warn">${esc(BT_RD[k]||k)}</span>`).join('')}</div>
+  return `${head}<div class="bt-head">${imgBox}<div style="flex:1;min-width:280px"><h2 style="margin:0">${esc(btName(r))}</h2><div class="muted"><i>${esc(r.latin||'')}</i>${btNameOther(r)?' · '+esc(btNameOther(r)):''}</div>
+      <div class="bt-chips">${r.form?`<span class="chip">${esc(btFormLabel(r.form))}</span>`:''}${r.collection?`<span class="chip info">${esc(r.collection)}</span>`:''}${r.note?`<span class="chip info">Note ${esc(r.note)}</span>`:''}${r.stock==='yes'?'<span class="chip ok">มีสต็อก</span>':''}${btArr(r.rdType).map(k=>`<span class="chip warn">${esc(BT_RD[k]||k)}</span>`).join('')}</div>
       ${!ed&&BT.canEdit?`<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn primary" type="button" id="btEdit">แก้ไขข้อมูล</button>${isAdminRole()?'<button class="btn small" type="button" id="btDelete" style="color:var(--bad)">ลบรายการ</button>':''}</div>`:''}</div></div>
     <div style="margin-top:14px">${body}</div>`;
 }
@@ -4547,8 +4547,8 @@ function btExtras(r){
   let h='';
   const ifra=btArr(r.ifraItems); if(ifra.length) h+=`<div class="card" style="margin:0 0 12px"><h4 style="margin:0 0 6px">สารที่มีข้อกำหนด IFRA ในพืชนี้ (${ifra.length})</h4>${btTbl(['สาร','มาตรฐาน','ประเภท','Cat 4','Cat 5A','Cat 9','Cat 12'],ifra.map(x=>`<tr><td>${esc(x.name||'')}</td><td class="mono">${esc(x.std||'')}</td><td>${esc(x.type||'')}</td><td>${esc(x.c4??'')}</td><td>${esc(x.c5A??'')}</td><td>${esc(x.c9??'')}</td><td>${esc(x.c12??'')}</td></tr>`))}<div class="muted" style="font-size:12px;margin-top:4px">ค่าจำกัดเป็นต่อสารเดี่ยวในผลิตภัณฑ์สำเร็จ ตาม IFRA 51st ไม่ใช่ต่อน้ำมัน · ตรวจกับเมนู "เอกสารวัตถุดิบ → ตรวจ IFRA / อย." ก่อนใช้จริง</div></div>`;
   const lots=btArr(r.stockLots); if(lots.length) h+=`<div class="card" style="margin:0 0 12px"><h4 style="margin:0 0 6px">สต็อกในคลัง${r.stockAsOf?` · ณ ${esc(r.stockAsOf)}`:''}</h4>${btTbl(['รหัส RM','รายการ','คงเหลือ','หน่วย','ค้างรับ'],lots.map(x=>`<tr><td class="mono">${esc(x.rmCode||'')}</td><td>${esc(x.name||'')}</td><td class="num">${x.qty!=null?fmt(x.qty,1):''}</td><td>${esc(x.unit||'')}</td><td class="num">${x.onOrder?fmt(x.onOrder,0):''}</td></tr>`))}${r.stockSource?`<div class="muted" style="font-size:12px;margin-top:4px">${esc(r.stockSource)}</div>`:''}</div>`;
-  const items=btArr(r.rdItems); if(items.length) h+=`<div class="card" style="margin:0 0 12px"><h4 style="margin:0 0 6px">ข้อมูลการสกัด R&D (ตารางผลผลิต)</h4>${btTbl(['รายการ','วิธี','เครื่อง','%Yield','mL/กก.','กก. วัตถุดิบ/กก. น้ำมัน','ผู้ขาย (กก.)','หมายเหตุ'],items.map(x=>`<tr><td>${esc(x.label||'')}</td><td>${esc(x.method||'')}</td><td>${esc(x.equipment||'')}</td><td class="num">${x.yieldPct!=null?fmt(x.yieldPct,2):''}</td><td class="num">${x.yieldMlKg!=null?fmt(x.yieldMlKg,1):''}</td><td class="num">${x.kgPerKgOil!=null?fmt(x.kgPerKgOil,1):''}</td><td>${esc(x.supplierKg||'')}</td><td>${esc(x.note||'')}</td></tr>`))}</div>`;
-  const lg=btArr(r.rdLog); if(lg.length) h+=`<div class="card" style="margin:0 0 12px"><h4 style="margin:0 0 6px">บันทึกการทดลองสกัดที่นำเข้าจากไฟล์เดิม (${lg.length})</h4>${btTbl(['วันที่','รายการ','วิธี','ปริมาณเข้า','ได้','%Yield','อ้างอิง','หมายเหตุ'],lg.map(x=>`<tr><td>${esc(x.date||'')}</td><td>${esc(x.label||'')}</td><td>${esc(x.method||'')}</td><td>${esc(x.input||'')}</td><td>${esc(x.output||'')}</td><td class="num">${x.yieldPct!=null?fmt(x.yieldPct,2):''}</td><td>${esc(x.ref||'')}</td><td>${esc(x.note||'')}</td></tr>`))}</div>`;
+  const items=btArr(r.rdItems); if(items.length) h+=`<div class="card" style="margin:0 0 12px"><h4 style="margin:0 0 6px">ข้อมูลการสกัด R&D (ตารางผลผลิต)</h4>${btTbl(['ชื่อรายการ','วิธี','เครื่อง','%Yield','mL/กก.','กก. วัตถุดิบ/กก. น้ำมัน','ผู้ขาย (กก.)','หมายเหตุ'],items.map(x=>`<tr><td>${esc(x.label||'')}</td><td>${esc(x.method||'')}</td><td>${esc(x.equipment||'')}</td><td class="num">${x.yieldPct!=null?fmt(x.yieldPct,2):''}</td><td class="num">${x.yieldMlKg!=null?fmt(x.yieldMlKg,1):''}</td><td class="num">${x.kgPerKgOil!=null?fmt(x.kgPerKgOil,1):''}</td><td>${esc(x.supplierKg||'')}</td><td>${esc(x.note||'')}</td></tr>`))}</div>`;
+  const lg=btArr(r.rdLog); if(lg.length) h+=`<div class="card" style="margin:0 0 12px"><h4 style="margin:0 0 6px">บันทึกการทดลองสกัดที่นำเข้าจากไฟล์เดิม (${lg.length})</h4>${btTbl(['วันที่','ชื่อรายการ','วิธี','ปริมาณเข้า','ได้','%Yield','อ้างอิง','หมายเหตุ'],lg.map(x=>`<tr><td>${esc(x.date||'')}</td><td>${esc(x.label||'')}</td><td>${esc(x.method||'')}</td><td>${esc(x.input||'')}</td><td>${esc(x.output||'')}</td><td class="num">${x.yieldPct!=null?fmt(x.yieldPct,2):''}</td><td>${esc(x.ref||'')}</td><td>${esc(x.note||'')}</td></tr>`))}</div>`;
   h+=btExtBlock(r);
   if(BT.canPrice) h+=btPriceBlock(r);
   return h;
@@ -4602,8 +4602,8 @@ $('#btView').addEventListener('change', async e=>{
   const t=e.target, map={btForm:'form', btColl:'coll', btStatus:'status', btRd:'rdType', btStock:'stock', btNote:'note', btOdor:'odor', btUse:'use', btBen:'ben', btReg:'reg'};
   if(map[t.id]){ BT[map[t.id]]=t.value; BT.shown=60; drawBt(); return; }
   if(t.id==='btImgFile' && t.files && t.files[0]){
-    const r=BT.open; t.disabled=true; toast('กำลังอัปโหลดรูป…');
-    try{ const b64=await btResize(t.files[0]); const o=await api('uploadBotanicalImage', r.regNo, b64); r.imageUrl=o.imageUrl; r.hasImage=true; const it=BT.items.find(x=>x.regNo===r.regNo); if(it){ it.imageUrl=o.imageUrl; it.hasImage=true; } toast('อัปโหลดรูปแล้ว'); drawBt(); }
+    const r=BT.open; t.disabled=true; btToast('กำลังอัปโหลดรูป…');
+    try{ const b64=await btResize(t.files[0]); const o=await api('uploadBotanicalImage', r.regNo, b64); r.imageUrl=o.imageUrl; r.hasImage=true; const it=BT.items.find(x=>x.regNo===r.regNo); if(it){ it.imageUrl=o.imageUrl; it.hasImage=true; } btToast('อัปโหลดรูปแล้ว'); drawBt(); }
     catch(err){ toast(errText(err)); t.disabled=false; }
   }
 });
@@ -4611,6 +4611,7 @@ $('#btView').addEventListener('click', async e=>{
   const pl=e.target.closest('[data-bt-place]');   /* หมุด/โพลารอยด์บนแผนที่ (ไม่ใช่ button) */
   if(pl){ BT.place=BT.place===pl.dataset.btPlace?'':pl.dataset.btPlace; drawBt(); return; }
   const t=e.target.closest('button'); if(!t) return;
+  if(t.dataset.btlang){ btSetLang(t.dataset.btlang); return; }
   if(t.dataset.btsub){ BT.sub=t.dataset.btsub; BT.shown=60; drawBt(); return; }
   if(t.dataset.btBoard){ BT.board=t.dataset.btBoard; BT.place=''; drawBt(); return; }
   if(t.dataset.btDk!==undefined){ btApplyDk(t.dataset.btDk); drawBt(); return; }
@@ -4624,33 +4625,33 @@ $('#btView').addEventListener('click', async e=>{
   if(t.id==='btBack'){ BT.open=null; BT.edit=false; BT.extForm=false; drawBt(); window.scrollTo(0,0); return; }
   if(t.id==='btEdit'){ BT.edit=true; drawBt(); return; }
   if(t.id==='btCancel'){ if(!BT.open.regNo){ BT.open=null; } else { const r=BT.items.find(x=>x.regNo===BT.open.regNo); BT.open=JSON.parse(JSON.stringify(r)); } BT.edit=false; drawBt(); return; }
-  if(t.id==='btDelete'){ const r=BT.open; if(!confirm(`ลบ ${r.regNo} · ${btName(r)} พร้อมราคาและบันทึกการสกัด? ย้อนกลับไม่ได้`)) return; t.disabled=true; try{ await api('deleteBotanical', r.regNo); BT.items=BT.items.filter(x=>x.regNo!==r.regNo); BT.open=null; toast('ลบแล้ว'); drawBt(); }catch(err){ toast(errText(err)); t.disabled=false; } return; }
+  if(t.id==='btDelete'){ const r=BT.open; if(!btConfirm(`ลบ ${r.regNo} · ${btName(r)} พร้อมราคาและบันทึกการสกัด? ย้อนกลับไม่ได้`)) return; t.disabled=true; try{ await api('deleteBotanical', r.regNo); BT.items=BT.items.filter(x=>x.regNo!==r.regNo); BT.open=null; btToast('ลบแล้ว'); drawBt(); }catch(err){ toast(errText(err)); t.disabled=false; } return; }
   if(t.id==='btExtNew'){ BT.extForm=true; drawBt(); return; }
   if(t.id==='btExtCancel'){ BT.extForm=false; drawBt(); return; }
-  if(t.dataset.btExtdel){ if(!confirm('ลบบันทึกการสกัดนี้?')) return; t.disabled=true; try{ await api('deleteBotanicalExtraction', t.dataset.btExtdel); BT.ext.list=BT.ext.list.filter(x=>x.id!==t.dataset.btExtdel); const it=BT.items.find(x=>x.regNo===BT.open.regNo); if(it){ it.extCount=BT.ext.list.length; it.lastExtraction=BT.ext.list.length?BT.ext.list[0].date:''; } drawBt(); toast('ลบแล้ว'); }catch(err){ toast(errText(err)); t.disabled=false; } return; }
+  if(t.dataset.btExtdel){ if(!btConfirm('ลบบันทึกการสกัดนี้?')) return; t.disabled=true; try{ await api('deleteBotanicalExtraction', t.dataset.btExtdel); BT.ext.list=BT.ext.list.filter(x=>x.id!==t.dataset.btExtdel); const it=BT.items.find(x=>x.regNo===BT.open.regNo); if(it){ it.extCount=BT.ext.list.length; it.lastExtraction=BT.ext.list.length?BT.ext.list[0].date:''; } drawBt(); btToast('ลบแล้ว'); }catch(err){ toast(errText(err)); t.disabled=false; } return; }
 });
 $('#btView').addEventListener('submit', async e=>{
   e.preventDefault(); const f=e.target, btn=f.querySelector('button[type=submit]');
   if(f.id==='btForm'){
     const r=btCollect(BT.open), err=$('#btErr');
-    if(!String(r.nameTh||'').trim() && !String(r.nameEn||'').trim()){ err.textContent='ใส่ชื่อพืช (ไทยหรืออังกฤษ)'; return; }
+    if(!String(r.nameTh||'').trim() && !String(r.nameEn||'').trim()){ err.textContent=btx('ใส่ชื่อพืช (ไทยหรืออังกฤษ)'); return; }
     btn.disabled=true; err.textContent='';
-    try{ const { imageUrl, hasImage, updatedAt, updatedBy, ...rec }=r; const o=await api('saveBotanical', rec); btUpsert(o); BT.open=JSON.parse(JSON.stringify(o)); BT.edit=false; BT.ext=null; toast(`บันทึก ${o.regNo} แล้ว`); btOpen(o.regNo,false); }
+    try{ const { imageUrl, hasImage, updatedAt, updatedBy, ...rec }=r; const o=await api('saveBotanical', rec); btUpsert(o); BT.open=JSON.parse(JSON.stringify(o)); BT.edit=false; BT.ext=null; btToast(`บันทึก ${o.regNo} แล้ว`); btOpen(o.regNo,false); }
     catch(e2){ err.textContent=errText(e2); btn.disabled=false; }
     return;
   }
   if(f.id==='btExtForm'){
     const d={}; f.querySelectorAll('[data-bx]').forEach(i=>{ d[i.dataset.bx]=i.value.trim(); }); const err=$('#btExtErr');
-    if(!d.date){ err.textContent='ใส่วันที่'; return; }
+    if(!d.date){ err.textContent=btx('ใส่วันที่'); return; }
     btn.disabled=true; err.textContent='';
-    try{ const x=await api('saveBotanicalExtraction', BT.open.regNo, d); BT.ext.list.unshift(x); const it=BT.items.find(y=>y.regNo===BT.open.regNo); if(it){ it.extCount=BT.ext.list.length; it.lastExtraction=x.date; { const rt=btArr(it.rdType).slice(); if(!rt.includes('extract')) rt.push('extract'); it.rdType=rt; } } BT.extForm=false; toast('บันทึกการสกัดแล้ว'+(x.yieldPct!=null?` · Yield ${fmt(x.yieldPct,2)}%`:'')); drawBt(); }
+    try{ const x=await api('saveBotanicalExtraction', BT.open.regNo, d); BT.ext.list.unshift(x); const it=BT.items.find(y=>y.regNo===BT.open.regNo); if(it){ it.extCount=BT.ext.list.length; it.lastExtraction=x.date; { const rt=btArr(it.rdType).slice(); if(!rt.includes('extract')) rt.push('extract'); it.rdType=rt; } } BT.extForm=false; btToast('บันทึกการสกัดแล้ว'+(x.yieldPct!=null?` · Yield ${fmt(x.yieldPct,2)}%`:'')); drawBt(); }
     catch(e2){ err.textContent=errText(e2); btn.disabled=false; }
     return;
   }
   if(f.id==='btPriceForm'){
     const regNo=BT.open.regNo, cur={...((BT.prices&&BT.prices[regNo])||{})}, err=$('#btPriceErr'); f.querySelectorAll('[data-bp]').forEach(i=>{ const v=i.value.trim(); if(v!==''||cur[i.dataset.bp]!=null) cur[i.dataset.bp]=v; });   /* แก้เฉพาะช่องข้อความ ตารางต้นทุนที่นำเข้าคงเดิม */
     btn.disabled=true; err.textContent='';
-    try{ const o=await api('saveBotanicalPrice', regNo, cur); BT.prices[regNo]=o; toast('บันทึกราคาแล้ว'); btn.disabled=false; }
+    try{ const o=await api('saveBotanicalPrice', regNo, cur); BT.prices[regNo]=o; btToast('บันทึกราคาแล้ว'); btn.disabled=false; }
     catch(e2){ err.textContent=errText(e2); btn.disabled=false; }
   }
 });
@@ -4735,7 +4736,7 @@ BT.sub='list'; BT.board='world'; BT.place=''; BT.use=''; BT.ben=''; BT.reg='';
 const BT_REGS={ifra:m=>btArr(m.ifraItems).some(s=>!/^Spec/.test(s.type||'')),fda:m=>!!m.fdaThai,alg:m=>!!m.allergens,flag:m=>btArr(m.regFlags).length>0};
 const BT_REGN={ifra:'มีสารจำกัดตาม IFRA 51st',fda:'มีเงื่อนไข อย./ACD',alg:'มีสารก่อภูมิแพ้ (EU)',flag:'ต้องตรวจเพิ่ม'};
 const btIsTh=k=>BT_GAZ[k]&&BT_GAZ[k][4]==='th';
-const btPlaceName=k=>{ const g=BT_GAZ[k]; return g?g[1]:k; };
+const btPlaceName=k=>{ const g=BT_GAZ[k]; return g?(BT.lang==='en'?g[0]:g[1]):k; };
 const btBestYield=m=>{ const v=[...btArr(m.rdItems).map(x=>+x.yieldPct),...btArr(m.rdLog).map(x=>+x.yieldPct)].filter(x=>x>0); if(+m.bestYield>0) v.push(+m.bestYield); return v.length?Math.max(...v):null; };
 /* ---------- โหลดไลบรารีแผนที่ครั้งแรก ---------- */
 let BT_GEO_P=null, BT_GEO_C=null;
@@ -4787,7 +4788,7 @@ function btProvLayer(G,list){
   if(!G.prov.length) return '';
   const cnt={}; for(const it of list){ const seen=new Set(); for(const k of btArr(it.places)){ const id=btProvOf(G,k); if(id&&!seen.has(id)){ seen.add(id); cnt[id]=(cnt[id]||0)+1; } } }
   const max=Math.max(1,...Object.values(cnt));
-  return `<g class="provs">${G.prov.map(p=>{ const n=cnt[p.id]||0, lv=n?Math.min(3,1+Math.floor(n/max*2.999)):0; return `<path class="prov${n?' has':''}" d="${p.d}" style="fill:${n?`var(--wood-${3+lv})`:'transparent'}"><title>${esc(p.th)}${n?` · ${n} ชนิด`:''}</title></path>`; }).join('')}</g><text class="attrib" x="${BT_MW-12}" y="${BT_MH-10}" text-anchor="end">เส้นแบ่งจังหวัด © OpenStreetMap contributors (ODbL) · geoBoundaries</text>`;
+  return `<g class="provs">${G.prov.map(p=>{ const n=cnt[p.id]||0, lv=n?Math.min(3,1+Math.floor(n/max*2.999)):0; return `<path class="prov${n?' has':''}" d="${p.d}" style="fill:${n?`var(--wood-${3+lv})`:'transparent'}"><title>${esc(BT.lang==='en'?p.en:p.th)}${n?` · ${n} ชนิด`:''}</title></path>`; }).join('')}</g><text class="attrib" x="${BT_MW-12}" y="${BT_MH-10}" text-anchor="end">เส้นแบ่งจังหวัด © OpenStreetMap contributors (ODbL) · geoBoundaries</text>`;
 }
 function btRenderMap(list){
   const G=btGeo(); if(!G) return '<div class="empty">กำลังโหลดแผนที่…</div>';
@@ -4852,6 +4853,95 @@ function btApplyDk(dk){
   if(!dk) return; const i=dk.indexOf(':'), k=dk.slice(0,i), v=dk.slice(i+1), map={form:'form',coll:'coll',status:'status',rd:'rdType',stock:'stock',note:'note',fam:'odor'};
   if(map[k]) BT[map[k]]=BT[map[k]]===v?'':v;
 }
+
+
+/* ===== ทะเบียนพืชหอม: สลับภาษา ไทย / English =====
+   ข้อความหน้าจอเขียนเป็นภาษาไทย ตอนเลือก EN ตัวแปลจะแปลข้อความที่ปรากฏในหน้านี้ตามพจนานุกรมด้านล่าง (เฉพาะ "คำเต็ม" ที่ตรงกับข้อความหน้าจอ ไม่แตะข้อมูลของพืช)
+   ชื่อพืช ชื่อแหล่ง และรูปแบบวัตถุดิบเลือกภาษาที่แหล่งข้อมูลโดยตรง */
+BT.lang='th'; try{ if(localStorage.getItem('bt-lang')==='en') BT.lang='en'; }catch(e){}
+const BT_EN={
+'ทะเบียนพืชหอม':'Aromatic Botanicals Register','ชื่อไทย':'Thai name','ชื่ออังกฤษ':'English name','งาน R&D':'R&D work',
+'← ทะเบียนพืชหอม':'← Botanicals register',
+'วัตถุดิบพืชหอมของแผนก Research Ingredients: น้ำมันหอมระเหย สมุนไพรแห้ง พืชสด และ Accord พร้อมข้อมูลกลิ่น แหล่งที่มา กฎระเบียบ สต็อก และบันทึกการสกัด · เลขทะเบียน BT-nnnn':'Aromatic raw materials of the Research Ingredients team: essential oils, dried herbs, fresh plants and accords, with scent data, sources, regulatory information, stock and extraction logs · register numbers BT-nnnn',
+'บันทึกการสกัด':'Log extraction','บันทึกการสกัดของทีม':'Team extraction log','บันทึกการสกัดแล้ว':'Extraction saved','บันทึกเพิ่มเติม':'Additional notes',
+'เพิ่มพืช':'Add plant','เพิ่มพืชใหม่':'Add a new plant',
+'฿/กก. หรือ ลิตร':'฿/kg or L','฿/หน่วย':'฿/unit','กก. วัตถุดิบ/กก. น้ำมัน':'kg material / kg oil',
+'กฎระเบียบทั้งหมด':'All regulatory','กฎระเบียบ (IFRA / อย.)':'Regulatory (IFRA / Thai FDA)',
+'กระปรี้กระเปร่า':'Uplifting & energising','กลั่นด้วยน้ำ (Hydro / Clevenger)':'Hydro distillation (Clevenger)','กลั่นด้วยไอน้ำ (Steam)':'Steam distillation',
+'กลิ่นที่ได้':'Odor of the extract','กลิ่นและลักษณะ':'Scent & appearance','กลุ่มกลิ่น':'Odor family',
+'ก่อนใช้จริง':'before real use',
+'ค่าจำกัดเป็นต่อสารเดี่ยวในผลิตภัณฑ์สำเร็จ ตาม IFRA 51st ไม่ใช่ต่อน้ำมัน · ตรวจกับเมนู':'Limits are per single substance in the finished product (IFRA 51st), not per oil · check with the menu',
+'เอกสารวัตถุดิบ → ตรวจ IFRA / อย.':'Raw-material documents → IFRA / Thai FDA check',
+'การเจือจาง':'Dilution','การใช้งาน':'Applications','การใช้งานและความปลอดภัย':'Use & safety','การ์ด':'Cards','การประยุกต์ใช้':'Uses','การสกัดและผลผลิตน้ำมัน':'Extraction & oil yield','การไหลเวียน':'Circulation & warming',
+'กำลังประเมิน':'Under evaluation','กำลังประเมินกลิ่น':'Under odor evaluation','กำลังโหลด…':'Loading…','กำลังโหลดแผนที่…':'Loading the map…','กำลังอัปโหลดรูป…':'Uploading photo…',
+'แก้ไขข้อมูล':'Edit details','แก้ล่าสุด':'Last edited','ข้อควรระวัง':'Precautions','ของใช้ในบ้าน':'Home fragrance',
+'ข้อมูลการสกัด R&D (ตารางผลผลิต)':'R&D extraction data (yield table)','ข้อมูล ณ วันที่':'Data as of','ข้อมูลราคา ณ':'Prices as of','ข้อสังเกตกฎระเบียบ':'Regulatory flags',
+'เข้ากับ':'Blends with','เข้า (g)':'In (g)','เขียว':'Green','คงเหลือ':'On hand',
+'ค้นหาชื่อ ชื่อวิทยาศาสตร์ วงศ์ รหัส สารสำคัญ การใช้…':'Search name, botanical name, family, code, constituent, use…',
+'ครั้ง)':'runs)','ครั้งที่สกัด (ทีม)':'Team extraction runs','ความเคลื่อนไหวล่าสุด':'Recent activity','ความติดทน (1-5)':'Tenacity (1-5)','ความแรง (1-5)':'Intensity (1-5)','ความหนาแน่นปลูก':'Plant density',
+'คอลเลกชัน':'Collection','ค้างรับ':'On order','คาร์บอนเครดิต':'Carbon credit','เครื่อง':'Equipment','เครื่อง / อุปกรณ์':'Equipment','เครื่องเทศ':'Spicy',
+'จังหวัด':'provinces','จังหวัด / ประเทศ':'Province / country','จุดแหล่งปลูก':'source locations',
+'จากการสกัดของแผนก RD และบันทึกของทีม ไม่ใช่ค่าจากเอกสาร':'From RD extractions and team runs, not literature values',
+'เฉพาะผู้มีสิทธิ์แก้ฐานราคา':'price editors only',
+'ชนิด':'plants','ชนิดพืชบนแผนที่':'plants on the map','ชื่อ':'Name','ชื่อไทย *':'Thai name *','ชื่อและการจัดหมวด':'Names & classification','ชื่อวิทยาศาสตร์':'Botanical name','ชื่ออังกฤษ *':'English name *','ชื่ออื่น (ไทย)':'Other names (Thai)',
+'เช่น ใบสด / ช่อดอกแห้ง':'e.g. fresh leaves / dried flowers','ใช้งานจริง':'Active use','ใช้งาน / ลงทะเบียนแล้ว':'Active / registered','ซิตรัส':'Citrus','ซื้อสำเร็จรูป':'Bought in',
+'ฐานการคำนวณ':'Yield basis','ฐานข้อมูลแหล่ง':'Type of place','· ณ':'· as of','ดอกไม้':'Floral','ดิน-มัสก์':'Earthy & musky','ดูทุกแหล่ง':'Show all places',
+'แดชบอร์ดการวิจัยวัตถุดิบ':'Raw material research dashboard','แดชบอร์ดงานวิจัย':'Research dashboard',
+'ได้':'Output','ได้น้อย':'Low yield','ได้น้ำมัน':'Oil obtained','ได้ไฮโดรซอล':'Hydrosol obtained','ได้ (g)':'Out (g)','ไม่ได้':'No oil','ล้มเหลว':'Failed',
+'ต้นทุนสกัดเอง (จากข้อมูล R&D)':'In-house extraction cost (R&D data)','ต้นทุนสต็อกในคลัง':'Inventory cost','ต้องตรวจเพิ่ม':'Needs checking','ต้องตรวจสอบ':'Needs review','ตัวทำละลาย':'Solvent',
+'ตัวเลขส่วนใหญ่เป็นค่าประมาณจากความรู้ทั่วไป (ตุลาคม 2026) ยังต้องตรวจกับผู้จำหน่าย':'Most figures are estimates from general knowledge (October 2026) and still need checking with suppliers',
+'ต้านจุลชีพ':'Antimicrobial','ต้านอนุมูลอิสระ':'Antioxidant','ตาราง':'Table','· ติดธงกฎระเบียบ':'· regulatory flags','เต็มจอ ↗':'Full screen ↗',
+'แตะหมุดหรือรูปเพื่อดูพืชในแหล่งนั้น':'Tap a pin or photo to see the plants from that place','ถิ่นกำเนิด':'Native range','ทดลอง':'Trial','ทดลองแล้ว ยังไม่ได้ผล':'Trialled, no result yet',
+'ที่มาของตำแหน่ง: พืชไทยตามการ์ด Thai Palette · น้ำมันหอมระเหยตามแหล่งผลิตหลักทางการค้า (ยังต้องตรวจทาน) · สมุนไพรตามถิ่นกำเนิดในฐานข้อมูลเดิม':'Location basis: Thai plants from the Thai Palette cards · essential oils by main commercial producing country (to be verified) · herbs by native range from the original database',
+'ทุกกลุ่มกลิ่น':'All odor families','ทุกการใช้งาน':'All applications','ทุกคอลเลกชัน':'All collections','ทุกงาน R&D':'All R&D work','ทุกรูปแบบ':'All forms','ทุกสถานะ':'All statuses','ทุกสรรพคุณ':'All benefits','ทุก Note':'All notes',
+'ธูป/เครื่องหอม':'Incense & Thai perfumery','% น้ำมัน':'Oil %','น้ำมัน ฿/กก.':'Oil ฿/kg','น้ำมันหอมระเหยและสารสกัด':'Essential oils & extracts','น้ำหอม':'Fine fragrance','น้ำหอมปรุง (Accord)':'Perfumer accords','บรรเทาปวด':'Anti-inflammatory & pain relief',
+'บันทึก':'Save','บันทึกทั่วไป':'General notes','บันทึกการทดลองสกัดที่นำเข้าจากไฟล์เดิม (':'Extraction runs imported from the original file (','บันทึกราคา':'Save prices','บันทึกราคาแล้ว':'Prices saved',
+'บาลซัม-เรซิน':'Balsamic & resin','บีบเย็น':'Cold pressing','ประเภท':'Type','ประเทศ':'countries','ประเทศที่ใช้อ้างอิงผลผลิต':'Country used for yield figures','ประเทศที่มีแหล่งวัตถุดิบในทะเบียน':'Countries with sources in the register','ประเทศไทย':'Thailand','ประเทศอื่น':'Other countries',
+'ประเมิน':'Eval','ปรุงกลิ่นทดแทน':'Accord built','ปริมาณเข้า':'Input','ปริมาณตัวทำละลาย':'Solvent amount','ปริมาณวัตถุดิบ (g)':'Plant weight (g)','เปลี่ยนรูป':'Change photo','เปิด':'Open','เปิดไฟล์รูปไม่ได้':'Cannot open the image file',
+'ผล':'Outcome','ผลผลิต กก.สด/ไร่/ปี':'Fresh yield kg/rai/year','ผลไม้':'Fruity','ผลิตภัณฑ์ดูแลตัว':'Personal care','ผลิตภัณฑ์ (doTERRA ไทย)':'Product (doTERRA Thailand)','ผ่อนคลาย':'Relaxing & stress relief','ผิวพรรณ':'Skin & wound care',
+'ผู้ขาย (กก.)':'Supplier has (kg)','ผู้จำหน่าย':'Supplier','ผู้ทดลอง':'Operator','แผนการสกัด':'Planned','แผน / กำลังทดลอง':'Planned / trialling',
+'แผนที่ประเทศไทย':'Map of Thailand','แผนที่โลก':'World map','แผนที่แหล่งวัตถุดิบ':'Sourcing map',
+'พร้อมราคาและบันทึกการสกัด? ย้อนกลับไม่ได้':'with its prices and extraction runs? This cannot be undone','พืช ฿/กก.':'Plant ฿/kg','พืชจาก':'Plants from',
+'ภูมิคุ้มกัน':'Immune support','ภูมิภาค (ถิ่นกำเนิดกว้าง)':'Region (broad native range)','มาตรฐาน':'Standard','มิ้นต์-การบูร':'Minty & camphor',
+'มี':'Yes','ไม่มี':'No','มีเงื่อนไข อย./ACD':'Thai FDA / ACD conditions','มีในคลัง':'In stock','มีสต็อก':'In stock','ไม่มีสต็อก':'No stock','สต็อกทั้งหมด':'All stock',
+'มีสารก่อภูมิแพ้ (EU)':'Contains EU allergens','มีสารจำกัดตาม IFRA 51st':'Contains IFRA 51st restricted substances','มูลค่าคงเหลือ ฿':'Stock value ฿','ไม้':'Woody',
+'ไม่พบรายการ':'No items found','ไม่มีรายการในกลุ่มนี้ตามตัวกรองที่เลือก':'Nothing in this group for the current filter','ไม่มีรูป':'No photo','ยกเลิก':'Cancel','ย่อรูปไม่สำเร็จ':'Could not resize the image',
+'ยังไม่มีบันทึกการสกัดในระบบ':'No extraction runs in the system yet','ยังไม่มีบันทึกการสกัดในระบบ ใช้ปุ่ม':'No extraction runs yet. Use the','ในหน้ารายละเอียดของพืช':'button on the plant page','ยังไม่มีผล yield':'No yield data yet','ยังไม่ระบุแหล่ง':'without a location',
+'รวม ฿/กก.':'Total ฿/kg','รหัส RM':'RM code','ระดับโน้ต':'Note level','ระบบย่อย':'Digestive','ระบบหายใจ':'Respiratory','ระยะเวลา (นาที)':'Duration (min)',
+'ราคาน้ำมัน ฿/กก.':'Oil price ฿/kg','ราคาปลีก':'Retail','ราคาสด ฿/กก.':'Fresh price ฿/kg','ราคาสมาชิก':'Member','ราคาแห้ง ฿/กก.':'Dried price ฿/kg','ราคาอ้างอิงและต้นทุน':'Reference prices & costs',
+'รายการ':'List','ชื่อรายการ':'Item','ดูในแท็บรายการ':'see the List tab','และอีก':'and','รายการล่าสุด':'Latest items','รีเฟรช':'Refresh','รูปแบบ':'Form','รูปแบบวัตถุดิบ':'Material form',
+'เรื่องเล่า (ไทย)':'Story (Thai)','ฤดูเก็บเกี่ยว':'Harvest season','ลบ':'Delete','ลบบันทึกการสกัดนี้?':'Delete this extraction run?','ลบรายการ':'Delete record','ลบแล้ว':'Deleted','ลักษณะ (ไทย)':'Appearance (Thai)','ล้างตัวกรอง':'Clear filters',
+'เลขทะเบียน':'Reg. no.','เลือกแผนที่':'Choose map','โลก':'World','ไล่แมลง':'Insect repellent','วงศ์ (ไทย)':'Family (Thai)','วงศ์ (Family)':'Family','วัดจริง':'measured','วัตถุดิบ':'Material','วัตถุดิบที่ใช้':'Plant part used',
+'วันที่':'Date','วางแผน':'Planned','วิธี':'Method','วิธีสกัด':'Extraction method','วิธีสกัดหลัก':'Main extraction method','วิธีสกัด (อ้างอิง)':'Extraction method (reference)',
+'สกัดจาก Upcycle':'Upcycled extraction','สกัดด้วยตัวทำละลาย':'Solvent extraction','สกัดด้วยเอทานอล':'Ethanol extraction / tincture','สกัดล่าสุด':'last run','สกัดเอง':'Extracted in-house','สกัดเองได้แล้ว':'Extracted in-house','สกัดเองแล้ว':'Extracted in-house',
+'สด / แห้ง / หมัก':'fresh / dried / macerated','สต็อก':'Stock','สต็อกในคลัง':'Warehouse stock','สถานะ':'Status','สถานะงานวิจัย (pipeline)':'Research pipeline','สภาพ':'Material state',
+'สมดุลฮอร์โมน':"Hormonal & women's health",'สมาธิ':'Focus & mental clarity','สมุนไพร':'Herbal','สมุนไพรและแพทย์แผนไทย':'Herbal & Thai traditional medicine','สรรพคุณ':'Benefits',
+'สรุปงานวิจัยน้ำมันหอมระเหยและน้ำหอมปรุง ตามตัวกรองที่เลือก · อัปเดตอัตโนมัติ ·':'Essential oil and perfumer-accord research in the current filter · live ·',
+'ส่วนที่ใช้':'Part used','สั่งซื้อ':'Bought in','สาร':'Substance','สารก่อภูมิแพ้':'Allergens','สารที่มีข้อกำหนด IFRA ในพืชนี้ (':'Substances with IFRA limits in this plant (','สารสำคัญ':'Key constituents',
+'เส้นแบ่งจังหวัด © OpenStreetMap contributors (ODbL) · geoBoundaries':'Province boundaries © OpenStreetMap contributors (ODbL) · geoBoundaries','แสดงเพิ่ม':'Show more','แสดงเพิ่ม (อีก':'Show more (',
+'ใส่ชื่อพืช (ไทยหรืออังกฤษ)':'Enter the plant name (Thai or English)','ใส่วันที่':'Enter the date','หน่วย':'Unit','หนึ่งบรรทัดต่อหนึ่งรายการ)':'one per line)',
+'หมายเหตุ':'Notes','หมายเหตุการตรวจสอบ':'Review note','หมายเหตุผลผลิต':'Yield note','หมายเหตุราคา':'Price note','หัวใจ':'Heart tonic & revival',
+'แหล่ง':'Origin','แหล่งกำเนิด':'Origin','แหล่งข้อมูลกฎระเบียบ':'Regulatory data source','แหล่งข้อมูลสต็อก':'Stock data source','แหล่งที่มา':'Data source','แหล่งที่มาและการปลูก':'Origin & cultivation',
+'แหล่งที่มีพืชมากที่สุด':'Places with the most plants','แหล่งผลิต':'Main production area','แหล่งเพาะปลูก':'Cultivation area',
+'โหลดข้อมูลแผนที่ไม่สำเร็จ ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่':'Could not load the map data. Check your connection and try again',
+'อย. ไทย':'Thai FDA','อโรมา':'Aromatherapy & spa','อัตราสด:แห้ง':'Fresh : dry ratio','อัปโหลดรูปแล้ว':'Photo uploaded','อ้างอิง':'reference','อ่านรูปไม่สำเร็จ':'Could not read the image','อายุการเก็บ':'Shelf life','อาหาร/เครื่องดื่ม':'Food & flavour','อื่น ๆ':'Other',
+'Accord (Perfumer ปรุง)':'Accord (built by the Perfumer)','IFRA (สรุป)':'IFRA (summary)','mL/กก.':'mL/kg','Thai Palette · เป้าหมาย 100 ชนิด':'Thai Palette · target 100 plants','%yield ที่วัดได้ (สูงสุด 12 อันดับ)':'Measured %yield (top 12)'};
+const BT_EN_RULES=[[/(\d[\d,]*) รายการ/g,'$1 items'],[/บันทึก (BT-\d+) แล้ว/g,'Saved $1']];
+const BT_EN_RE=new RegExp('(?<![\\u0E00-\\u0E7F])(?:'+Object.keys(BT_EN).sort((a,b)=>b.length-a.length).map(k=>k.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|')+')(?![\\u0E00-\\u0E7F])','g');
+const btx=s=>{ if(BT.lang!=='en'||typeof s!=='string'||!/[฀-๿]/.test(s)) return s; for(const [re,to] of BT_EN_RULES) s=s.replace(re,to); return s.replace(BT_EN_RE,m=>BT_EN[m]); };
+const btNameOther=r=>{ const a=BT.lang==='en'?r.nameTh:r.nameEn, b=BT.lang==='en'?r.nameEn:r.nameTh; return a&&b&&a!==b?a:''; };
+const BT_FORM_TH={'Accord':'กลิ่นปรุง (Accord)','Essential oil':'น้ำมันหอมระเหย','Absolute':'แอ็บโซลูท','CO2 extract':'สารสกัด CO2','Concrete':'คอนกรีต','Resinoid':'เรซินอยด์','Hydrosol':'ไฮโดรซอล','Macerated oil':'น้ำมันแช่สกัด','Tincture':'ทิงเจอร์','Dried herb':'พืชแห้ง','Fresh plant':'พืชสด','Powder':'ผง','Other':'อื่น ๆ'};
+const btFormLabel=f=>BT.lang==='en'?(f||''):(BT_FORM_TH[f]||f||'');
+function btTrDom(root){
+  if(BT.lang!=='en'||!root) return;
+  const tw=document.createTreeWalker(root,NodeFilter.SHOW_TEXT|NodeFilter.SHOW_ELEMENT); let n=tw.currentNode;
+  const doEl=el=>{ if(el.nodeType!==1) return; for(const a of ['placeholder','title','aria-label','alt']){ const v=el.getAttribute&&el.getAttribute(a); if(v&&/[฀-๿]/.test(v)) el.setAttribute(a,btx(v)); } };
+  doEl(root); while((n=tw.nextNode())){ if(n.nodeType===3){ if(/[฀-๿]/.test(n.nodeValue)) n.nodeValue=btx(n.nodeValue); } else doEl(n); }
+}
+/* แปลทุกครั้งที่หน้านี้มีเนื้อหาใหม่ (ก่อนวาดหน้าจอ) */
+new MutationObserver(ms=>{ if(BT.lang!=='en') return; for(const m of ms) for(const a of m.addedNodes){ if(a.nodeType===3){ if(/[฀-๿]/.test(a.nodeValue)) a.nodeValue=btx(a.nodeValue); } else btTrDom(a); } }).observe($('#btView'),{childList:true,subtree:true});
+function btSetLang(l){ BT.lang=l==='en'?'en':'th'; try{ localStorage.setItem('bt-lang',BT.lang); }catch(e){} renderBtView(); }
+const btToast=m=>toast(btx(m)), btConfirm=m=>confirm(btx(m));
 
 async function boot(){
   showGate('loading');

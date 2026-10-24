@@ -12,7 +12,7 @@ import { TF_FORMS } from "./tf_forms.ts";
 
 const GOOGLE_CLIENT_ID = "715998679704-s1u0frj5cj2vhf4el67mj54sarbu5iq7.apps.googleusercontent.com";
 const DOMAINS = ["scentandsense.co.th", "scentandsense.co"];
-const PERM_KEYS = ["calc", "export", "viewDb", "editPrices", "manageUsers", "perfumer", "projects", "pd", "ra"];
+const PERM_KEYS = ["calc", "export", "viewDb", "editPrices", "manageUsers", "perfumer", "projects", "pd", "ra", "research"];
 const BUILTIN_SOURCE = { file: "PRODUCT RM - Summary RM.pdf", updated: "12/10/2026 11:41:18" };
 const DEFAULT_PUBLIC_URL = "https://rd.scentandsense.co.th/";
 
@@ -1598,6 +1598,173 @@ async function importPdBases(ctx: Ctx, d: Any) {
   });
 }
 
+/* ===== Research Ingredients: ทะเบียนวัตถุดิบพืชหอม (BT-nnnn) =====
+   ข้อมูลเก็บเป็น data (jsonb) ตามฟิลด์เดิมของทะเบียน · ราคาอ้างอิง/ต้นทุนแยกตาราง เปิดเฉพาะผู้มีสิทธิ์ editPrices · รูปอยู่ใน Storage (private) ส่งเป็นลิงก์ชั่วคราว */
+const BT_VIEW = ["research", "perfumer", "pd", "ra", "projects", "calc", "viewDb"], BT_DATA_MAX = 60000, BT_IMG_MAX = 3 * 1024 * 1024;
+const BT_IMG_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+const BT_EXT_METHODS: Record<string, number> = { sd: 1, hd: 1, hdc: 1, sdc: 1, sol: 1, eth: 1, enf: 1, co2: 1, cold: 1, other: 1 };
+const BT_EXT_RESULTS: Record<string, number> = { ok: 1, low: 1, none: 1, hydrosol: 1, fail: 1 };
+/** รับเฉพาะ JSON ธรรมดา (string/number/boolean/array/object) ตัดคีย์ที่ระบบคุมเอง */
+function btClean(v: unknown, depth = 0): unknown {
+  if (depth > 6) return null;
+  if (v === null || typeof v === "boolean") return v;
+  if (typeof v === "number") return isFinite(v) ? v : null;
+  if (typeof v === "string") return v.slice(0, 4000);
+  if (Array.isArray(v)) return v.slice(0, 200).map((x) => btClean(x, depth + 1));
+  if (typeof v === "object") { const o: Record<string, unknown> = {}; for (const k of Object.keys(v as Any).slice(0, 80)) { if (/^[A-Za-z][A-Za-z0-9_]{0,40}$/.test(k)) o[k] = btClean((v as Any)[k], depth + 1); } return o; }
+  return null;
+}
+const BT_SYSTEM_KEYS = ["regNo", "image", "imageId", "imagePath", "imageUrl"];
+function btData(d: Any) { const o = btClean(d) as Any; BT_SYSTEM_KEYS.forEach((k) => delete o[k]); if (JSON.stringify(o).length > BT_DATA_MAX) throw new Error("ข้อมูลใหญ่เกินไป (ลดความยาวข้อความ)"); return o; }
+async function btSignedUrls(paths: string[]) {
+  const out: Record<string, string> = {}; const uniq = [...new Set(paths.filter(Boolean))];
+  if (!uniq.length) return out;
+  const r = await sb.storage.from("plant-images").createSignedUrls(uniq, 3600);
+  (r.data || []).forEach((x: Any) => { if (x && x.signedUrl && x.path) out[String(x.path)] = String(x.signedUrl); });
+  return out;
+}
+const btOut = (r: Any, urls: Record<string, string>) => ({ ...(r.data || {}), regNo: String(r.reg_no), imageUrl: urls[String(r.image_path)] || "", hasImage: !!r.image_path, updatedAt: iso(r.updated_at), updatedBy: String(r.updated_by || "") });
+async function listBotanicals(ctx: Ctx) {
+  const m = await needAny(ctx, BT_VIEW), db = ctx.db;
+  const rows = await db`select * from costing.botanicals order by reg_no`;
+  const urls = await btSignedUrls(rows.map((r: Any) => String(r.image_path)));
+  return { items: rows.map((r: Any) => btOut(r, urls)), canEdit: hasPerm(m, "research"), canPrice: hasPerm(m, "editPrices") };
+}
+async function getBotanicalPrices(ctx: Ctx) {
+  await need(ctx, "editPrices");
+  const out: Record<string, Any> = {}; (await ctx.db`select * from costing.botanical_prices`).forEach((r: Any) => { out[String(r.reg_no)] = r.data || {}; });
+  return out;
+}
+async function saveBotanicalPrice(ctx: Ctx, regNo: string, price: Any) {
+  return await locked(ctx, async (c) => {
+    const m = await need(c, "editPrices"), db = c.db; regNo = str(regNo, 20);
+    if (!(await db`select 1 from costing.botanicals where reg_no = ${regNo}`).length) throw new Error("ไม่พบรายการนี้");
+    const d = btClean(price) as Any; if (JSON.stringify(d).length > 8000) throw new Error("ข้อมูลใหญ่เกินไป");
+    await db`insert into costing.botanical_prices (reg_no, data, updated_at, updated_by) values (${regNo}, ${db.json(d)}, now(), ${m.email})
+      on conflict (reg_no) do update set data = excluded.data, updated_at = now(), updated_by = excluded.updated_by`;
+    await log(db, m.email, "saveBotanicalPrice", regNo);
+    return d;
+  });
+}
+/** บันทึกทะเบียนพืช: regNo ว่าง = สร้างใหม่ (ออก BT-nnnn ต่อจากเลขสูงสุด) · แก้ไข = merge ทับฟิลด์ที่ส่งมา ฟิลด์อื่น (เช่น ข้อมูลอ้างอิงจากไฟล์นำเข้า) คงไว้ */
+async function saveBotanical(ctx: Ctx, rec: Any) {
+  return await locked(ctx, async (c) => {
+    const m = await need(c, "research"), db = c.db; rec = rec || {};
+    const patch = btData(rec), regIn = str(rec.regNo, 20);
+    if (!str(patch.nameTh, 200) && !str(patch.nameEn, 200)) throw new Error("ใส่ชื่อพืช (ไทยหรืออังกฤษ)");
+    let ex = regIn ? (await db`select * from costing.botanicals where reg_no = ${regIn}`)[0] : null;
+    if (regIn && !ex) throw new Error("ไม่พบรายการนี้ (อาจถูกลบไปแล้ว)");
+    let regNo = regIn;
+    if (!ex) {
+      const mx = await db`select coalesce(max((substring(reg_no from 4))::int), 0)::int as n from costing.botanicals where reg_no ~ '^BT-[0-9]+$'`;
+      regNo = "BT-" + String(Number(mx[0].n) + 1).padStart(4, "0");
+    }
+    const data = { ...(ex ? ex.data : {}), ...patch }; if (JSON.stringify(data).length > BT_DATA_MAX) throw new Error("ข้อมูลใหญ่เกินไป");
+    if (ex) await db`update costing.botanicals set data = ${db.json(data)}, updated_at = now(), updated_by = ${m.email} where reg_no = ${regNo}`;
+    else await db`insert into costing.botanicals (reg_no, data, created_at, created_by, updated_at, updated_by) values (${regNo}, ${db.json({ source: "ลงทะเบียนในระบบ", ...data })}, now(), ${m.email}, now(), ${m.email})`;
+    await log(db, m.email, ex ? "saveBotanical" : "newBotanical", regNo + " · " + str(data.nameTh || data.nameEn, 80));
+    const r = (await db`select * from costing.botanicals where reg_no = ${regNo}`)[0];
+    return btOut(r, await btSignedUrls([String(r.image_path)]));
+  });
+}
+async function deleteBotanical(ctx: Ctx, regNo: string) {
+  return await locked(ctx, async (c) => {
+    const m = await need(c, "manageUsers"), db = c.db; regNo = str(regNo, 20);
+    const ex = (await db`select * from costing.botanicals where reg_no = ${regNo}`)[0]; if (!ex) throw new Error("ไม่พบรายการนี้");
+    await db`delete from costing.botanical_prices where reg_no = ${regNo}`; await db`delete from costing.botanical_extractions where reg_no = ${regNo}`; await db`delete from costing.botanicals where reg_no = ${regNo}`;
+    if (ex.image_path && !(await db`select 1 from costing.botanicals where image_path = ${String(ex.image_path)} limit 1`).length) { try { await sb.storage.from("plant-images").remove([String(ex.image_path)]); } catch (_e) { /* ignore */ } }
+    await log(db, m.email, "deleteBotanical", regNo);
+    return { ok: true };
+  });
+}
+function btImgKind(bytes: Uint8Array) {
+  if (bytes[0] === 0xff && bytes[1] === 0xd8) return "image/jpeg";
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return "image/png";
+  if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 && bytes[8] === 0x57) return "image/webp";
+  return "";
+}
+async function uploadBotanicalImage(ctx: Ctx, regNo: string, b64: string) {
+  return await locked(ctx, async (c) => {
+    const m = await need(c, "research"), db = c.db; regNo = str(regNo, 20);
+    const ex = (await db`select * from costing.botanicals where reg_no = ${regNo}`)[0]; if (!ex) throw new Error("ไม่พบรายการนี้");
+    if (typeof b64 !== "string" || !b64) throw new Error("ไม่มีข้อมูลรูป");
+    const bytes = decodeBase64(b64); if (!bytes.length || bytes.length > BT_IMG_MAX) throw new Error("รูปต้องมีขนาดไม่เกิน 3 MB");
+    const kind = btImgKind(bytes); if (!kind) throw new Error("รองรับเฉพาะรูป JPG / PNG / WebP");
+    const path = `${regNo}-${Date.now().toString(36)}.${BT_IMG_TYPES[kind]}`;
+    const up = await sb.storage.from("plant-images").upload(path, bytes, { contentType: kind }); if (up.error) throw new Error("บันทึกรูปไม่สำเร็จ: " + up.error.message);
+    await db`update costing.botanicals set image_path = ${path}, updated_at = now(), updated_by = ${m.email} where reg_no = ${regNo}`;
+    if (ex.image_path && !(await db`select 1 from costing.botanicals where image_path = ${String(ex.image_path)} limit 1`).length) { try { await sb.storage.from("plant-images").remove([String(ex.image_path)]); } catch (_e) { /* ignore */ } }
+    await log(db, m.email, "uploadBotanicalImage", regNo);
+    return { imageUrl: (await btSignedUrls([path]))[path] || "" };
+  });
+}
+/* ---- บันทึกการสกัด ---- */
+const extOut = (r: Any) => ({ id: String(r.id), regNo: String(r.reg_no), ...(r.data || {}), createdAt: iso(r.created_at), createdBy: String(r.created_by || "") });
+async function listBotanicalExtractions(ctx: Ctx, regNo?: string) {
+  await needAny(ctx, BT_VIEW);
+  const rows = regNo ? await ctx.db`select * from costing.botanical_extractions where reg_no = ${str(regNo, 20)} order by created_at desc` : await ctx.db`select * from costing.botanical_extractions order by created_at desc limit 500`;
+  return rows.map(extOut);
+}
+async function saveBotanicalExtraction(ctx: Ctx, regNo: string, e: Any) {
+  return await locked(ctx, async (c) => {
+    const m = await need(c, "research"), db = c.db; regNo = str(regNo, 20); e = e || {};
+    const bt = (await db`select * from costing.botanicals where reg_no = ${regNo}`)[0]; if (!bt) throw new Error("ไม่พบรายการนี้");
+    const inG = numOrNull(e.inputG), outG = numOrNull(e.outputG);
+    if (inG !== null && inG < 0 || outG !== null && outG < 0) throw new Error("ปริมาณต้องไม่ติดลบ");
+    const yieldPct = inG && inG > 0 && outG !== null ? Math.round(outG / inG * 10000) / 100 : numOrNull(e.yieldPct);
+    const d = { date: str(e.date, 10) || new Date().toISOString().slice(0, 10), method: BT_EXT_METHODS[e.method] ? String(e.method) : "other", equip: str(e.equip, 120), material: str(e.material, 200), state: str(e.state, 60), lot: str(e.lot, 80),
+      inputG: inG, outputG: outG, yieldPct, solvent: str(e.solvent, 120), solventQty: str(e.solventQty, 60), durationMin: numOrNull(e.durationMin), result: BT_EXT_RESULTS[e.result] ? String(e.result) : "ok", operator: str(e.operator, 120) || m.email.split("@")[0], odor: str(e.odor, 600), notes: str(e.notes, 2000) };
+    const id = "x" + uuid(12);
+    await db`insert into costing.botanical_extractions (id, reg_no, data, created_at, created_by) values (${id}, ${regNo}, ${db.json(d)}, now(), ${m.email})`;
+    const cnt = Number((await db`select count(*)::int as n from costing.botanical_extractions where reg_no = ${regNo}`)[0].n);
+    const data = { ...(bt.data || {}), extCount: cnt, lastExtraction: d.date }; if (!data.rdType) data.rdType = "extract";
+    await db`update costing.botanicals set data = ${db.json(data)}, updated_at = now(), updated_by = ${m.email} where reg_no = ${regNo}`;
+    await log(db, m.email, "saveBotanicalExtraction", regNo + " · " + d.method + (yieldPct !== null ? " · " + yieldPct + "%" : ""));
+    return extOut((await db`select * from costing.botanical_extractions where id = ${id}`)[0]);
+  });
+}
+async function deleteBotanicalExtraction(ctx: Ctx, id: string) {
+  return await locked(ctx, async (c) => {
+    const m = await need(c, "research"), db = c.db;
+    const ex = (await db`select * from costing.botanical_extractions where id = ${String(id || "")}`)[0]; if (!ex) throw new Error("ไม่พบบันทึกนี้");
+    if (String(ex.created_by) !== m.email && !isAdmin(m)) throw new Error("ลบได้เฉพาะบันทึกของตัวเองหรือผู้ดูแล");
+    await db`delete from costing.botanical_extractions where id = ${String(ex.id)}`;
+    const bt = (await db`select * from costing.botanicals where reg_no = ${String(ex.reg_no)}`)[0];
+    if (bt) { const rest = await db`select data from costing.botanical_extractions where reg_no = ${String(ex.reg_no)} order by created_at desc`; const data = { ...(bt.data || {}), extCount: rest.length, lastExtraction: rest.length ? String(rest[0].data.date || "") : "" };
+      await db`update costing.botanicals set data = ${db.json(data)}, updated_at = now(), updated_by = ${m.email} where reg_no = ${String(ex.reg_no)}`; }
+    await log(db, m.email, "deleteBotanicalExtraction", String(ex.reg_no));
+    return { ok: true };
+  });
+}
+/** นำเข้าจาก Artifact เดิม (เจ้าของระบบเท่านั้น ทำซ้ำได้): records[{regNo, imagePath, data, price}] · รูปส่งแยกด้วย importBotanicalImage */
+async function importBotanicals(ctx: Ctx, d: Any) {
+  return await locked(ctx, async (c) => {
+    const m = await me(c), db = c.db;
+    if (m.email !== MIGRATION_OWNER || !m.isOwner) throw new Error("FORBIDDEN");
+    const list = Array.isArray(d && d.records) ? d.records : []; let n = 0, np = 0;
+    for (const r of list) {
+      const regNo = str(r && r.regNo, 20); if (!/^BT-\d{4,6}$/.test(regNo)) continue;
+      const data = btData(r.data || {}), img = str(r.imagePath, 120).replace(/[^A-Za-z0-9._-]/g, "");
+      await db`insert into costing.botanicals (reg_no, image_path, data, created_at, created_by, updated_at, updated_by) values (${regNo}, ${img}, ${db.json(data)}, ${ts(r.createdAt) || new Date()}, 'import', ${ts(r.updatedAt) || new Date()}, ${m.email})
+        on conflict (reg_no) do update set image_path = excluded.image_path, data = excluded.data, updated_at = now(), updated_by = excluded.updated_by`;
+      n++;
+      if (r.price && typeof r.price === "object") { await db`insert into costing.botanical_prices (reg_no, data, updated_at, updated_by) values (${regNo}, ${db.json(btClean(r.price) as Any)}, now(), ${m.email})
+        on conflict (reg_no) do update set data = excluded.data, updated_at = now(), updated_by = excluded.updated_by`; np++; }
+    }
+    await log(db, m.email, "importBotanicals", `records ${n} prices ${np}`);
+    return { records: n, prices: np };
+  });
+}
+async function importBotanicalImage(ctx: Ctx, name: string, b64: string) {
+  const m = await me(ctx);
+  if (m.email !== MIGRATION_OWNER || !m.isOwner) throw new Error("FORBIDDEN");
+  name = str(name, 120).replace(/[^A-Za-z0-9._-]/g, ""); if (!name) throw new Error("ชื่อไฟล์ไม่ถูกต้อง");
+  const bytes = decodeBase64(String(b64 || "")); const kind = btImgKind(bytes);
+  if (!kind || bytes.length > BT_IMG_MAX) throw new Error("รูปไม่ถูกต้อง");
+  const up = await sb.storage.from("plant-images").upload(name, bytes, { contentType: kind, upsert: true }); if (up.error) throw new Error("บันทึกรูปไม่สำเร็จ: " + up.error.message);
+  return { name, bytes: bytes.length };
+}
+
 /* ===== ตารางฟังก์ชันที่หน้าเว็บเรียกได้ ===== */
 const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   bootstrap, requestAccess, savePrices, resetPrices, saveExport, adminData, setUser, removeUser, declineRequest, saveAccess, createRole, updateRole, deleteRole,
@@ -1607,6 +1774,7 @@ const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   pwLogin, setMyPassword, pwLogout, resetUserPassword,
   listCustomers, saveCustomer, listProjects, getProject, saveProject, setStage, raCheck, issueProjectDoc, listSamples, saveSample, sendSample, deleteSample, evalSummary, importRd,
   listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases,
+  listBotanicals, getBotanicalPrices, saveBotanicalPrice, saveBotanical, deleteBotanical, uploadBotanicalImage, listBotanicalExtractions, saveBotanicalExtraction, deleteBotanicalExtraction, importBotanicals, importBotanicalImage,
   importAll, importRmFile, finishMigration,
 };
 

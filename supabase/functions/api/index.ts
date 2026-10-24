@@ -1993,6 +1993,108 @@ async function importRdStock(ctx: Ctx, rows: Any) {
   });
 }
 
+/* ===== งาน RA: จดแจ้งเครื่องสำอาง (อย.) =====
+   ทะเบียนเลขจดแจ้ง (อายุ 3 ปี, ต่ออายุได้) + คำขอจดแจ้งจากฝ่ายขาย/โครงการ · ดูได้ทุกคนใน R&D แก้ไขได้เฉพาะสิทธิ์ ra */
+const FDA_VIEW = RD_VIEW, FDA_EDIT = ["ra"], FDA_NO = /^\d{2}-\d-\d{10}$/;
+const FDA_DECISION: Record<string, number> = { "": 1, renew: 1, no: 1 };
+const FDA_REQ_STATUS = ["", "เตรียมข้อมูลเพิ่มเติมสำหรับจดแจ้ง", "รออ.ย. ตรวจสอบ", "ได้เลขแล้ว รอ Post Audit", "Post Audit ไม่ผ่าน", "เรียบร้อย", "รอเบิก", "ยกเลิกใบจดแจ้ง"];
+const FDA_REQ_FIELDS = ["sa", "group", "tradeEn", "tradeTh", "nameEn", "nameTh", "formulaRef", "brand", "employerReg", "employerName", "form", "purpose", "area", "packaging", "usage", "infoDate", "dueDate", "note", "projectId"];
+/** วันที่ YYYY-MM-DD (ค.ศ.) หรือ "" · รับ dd/mm/yyyy (พ.ศ. > 2400 แปลงเป็น ค.ศ.) ด้วย */
+function fdaDate(v: unknown): string {
+  const s = String(v ?? "").trim(); if (!s) return "";
+  let y: number, m: number, d: number, mm: RegExpMatchArray | null;
+  if ((mm = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) { y = +mm[1]; m = +mm[2]; d = +mm[3]; }
+  else if ((mm = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/))) { d = +mm[1]; m = +mm[2]; y = +mm[3]; }
+  else throw new Error("รูปแบบวันที่ไม่ถูกต้อง: " + s);
+  if (y > 2400) y -= 543;
+  const dt = new Date(Date.UTC(y, m - 1, d)); if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) throw new Error("วันที่ไม่ถูกต้อง: " + s);
+  return dt.toISOString().slice(0, 10);
+}
+/** อายุใบรับจดแจ้ง 3 ปี: วันหมดอายุ = วันเริ่ม + 3 ปี − 1 วัน */
+function fdaPlus3y(d: string) { if (!d) return ""; const t = new Date(d + "T00:00:00Z"); t.setUTCFullYear(t.getUTCFullYear() + 3); t.setUTCDate(t.getUTCDate() - 1); return t.toISOString().slice(0, 10); }
+function fdaFiles(v: unknown) {
+  return (Array.isArray(v) ? v : []).slice(0, 20).map((f: Any) => ({ label: str(f && f.label, 40), name: str(f && f.name, 200), url: str(f && f.url, 500) }))
+    .filter((f) => (f.name || f.url) && (!f.url || /^https:\/\//.test(f.url)));
+}
+const fdaRegOut = (r: Any) => { const d = r.data || {}; return { id: String(r.id), regNo: String(r.reg_no), notifyDate: String(r.notify_date || ""), expiry: String(r.expiry || ""), tradeName: String(r.trade_name || ""), productName: String(r.product_name || ""),
+  decision: String(r.decision || ""), cancelled: !!r.cancelled, requestId: String(r.request_id || ""), brand: String(d.brand || ""), saNotifiedAt: String(d.saNotifiedAt || ""), note: String(d.note || ""), files: d.files || [], history: d.history || [],
+  updatedAt: iso(r.updated_at), updatedBy: String(r.updated_by || ""), createdAt: iso(r.created_at) }; };
+const fdaReqOut = (r: Any) => ({ id: String(r.id), seq: Number(r.seq || 0), status: String(r.status || ""), regId: String(r.reg_id || ""), ...(r.data || {}), files: (r.data && r.data.files) || [], updatedAt: iso(r.updated_at), updatedBy: String(r.updated_by || ""), createdAt: iso(r.created_at) });
+async function listFda(ctx: Ctx) {
+  const m = await needAny(ctx, FDA_VIEW), db = ctx.db;
+  const regs = await db`select * from costing.fda_regs order by expiry, reg_no`, reqs = await db`select * from costing.fda_requests order by seq desc`;
+  return { regs: regs.map(fdaRegOut), requests: reqs.map(fdaReqOut), canEdit: FDA_EDIT.some((p) => hasPerm(m, p)), reqStatus: FDA_REQ_STATUS };
+}
+async function saveFdaReg(ctx: Ctx, r: Any) {
+  return await locked(ctx, async (c) => {
+    const m = await needAny(c, FDA_EDIT), db = c.db; r = r || {};
+    const regNo = str(r.regNo, 20).replace(/\s+/g, ""); if (!FDA_NO.test(regNo)) throw new Error("เลขจดแจ้งต้องเป็นรูปแบบ 10-1-6600012345");
+    const notify = fdaDate(r.notifyDate), expiry = fdaDate(r.expiry) || fdaPlus3y(notify), decision = FDA_DECISION[String(r.decision || "")] ? String(r.decision || "") : "";
+    if (!notify) throw new Error("ใส่วันที่จดแจ้ง (วันพิจารณา)"); if (expiry <= notify) throw new Error("วันหมดอายุต้องหลังวันที่จดแจ้ง");
+    const productName = str(r.productName, 300); if (!productName) throw new Error("ใส่ชื่อผลิตภัณฑ์");
+    const ex = r.id ? (await db`select * from costing.fda_regs where id = ${String(r.id)}`)[0] : null; if (r.id && !ex) throw new Error("ไม่พบเลขจดแจ้งนี้");
+    const dup = (await db`select id from costing.fda_regs where reg_no = ${regNo}`)[0]; if (dup && (!ex || String(dup.id) !== String(ex.id))) throw new Error("เลขจดแจ้ง " + regNo + " มีอยู่แล้ว");
+    const reqId = str(r.requestId, 40); if (reqId && !(await db`select 1 from costing.fda_requests where id = ${reqId}`).length) throw new Error("ไม่พบคำขอจดแจ้งที่อ้างถึง");
+    const old = ex ? (ex.data || {}) : {}, now = new Date(), id = ex ? String(ex.id) : "fda-" + uuid(10);
+    const data = { ...old, brand: str(r.brand, 120), saNotifiedAt: fdaDate(r.saNotifiedAt), note: str(r.note, 2000), files: fdaFiles(r.files), history: old.history || [] };
+    const row: Any = { reg_no: regNo, notify_date: notify, expiry, trade_name: str(r.tradeName, 200), product_name: productName, decision, cancelled: !!r.cancelled, request_id: reqId, data: db.json(data), updated_at: now, updated_by: m.email };
+    if (ex) await db`update costing.fda_regs set ${db(row, ...Object.keys(row))} where id = ${id}`;
+    else await db`insert into costing.fda_regs ${db({ id, ...row, created_at: now, created_by: m.email })}`;
+    if (reqId) await db`update costing.fda_requests set reg_id = ${id}, updated_at = ${now}, updated_by = ${m.email} where id = ${reqId}`;
+    await log(db, m.email, ex ? "saveFdaReg" : "newFdaReg", regNo + " · " + productName.slice(0, 60));
+    return fdaRegOut((await db`select * from costing.fda_regs where id = ${id}`)[0]);
+  });
+}
+/** ต่ออายุ: เก็บประวัติ (วันหมดอายุเดิม → ใหม่) แล้วเลื่อนวันหมดอายุ · ค่าเริ่มต้น = หมดอายุเดิม + 3 ปี */
+async function renewFdaReg(ctx: Ctx, id: string, t: Any) {
+  return await locked(ctx, async (c) => {
+    const m = await needAny(c, FDA_EDIT), db = c.db; t = t || {};
+    const ex = (await db`select * from costing.fda_regs where id = ${String(id || "")}`)[0]; if (!ex) throw new Error("ไม่พบเลขจดแจ้งนี้");
+    if (ex.cancelled) throw new Error("เลขจดแจ้งนี้ถูกยกเลิกแล้ว");
+    const renewedAt = fdaDate(t.renewedAt); if (!renewedAt) throw new Error("ใส่วันที่ต่ออายุ");
+    const oldExp = String(ex.expiry || ""), next = fdaDate(t.newExpiry) || fdaPlus3y(oldExp ? new Date(Date.parse(oldExp + "T00:00:00Z") + 86400000).toISOString().slice(0, 10) : renewedAt);
+    if (oldExp && next <= oldExp) throw new Error("วันหมดอายุใหม่ต้องหลังวันหมดอายุเดิม");
+    const d = ex.data || {}, hist = (d.history || []).concat([{ renewedAt, oldExpiry: oldExp, newExpiry: next, note: str(t.note, 500), files: fdaFiles(t.files), by: m.email, at: new Date().toISOString() }]);
+    await db`update costing.fda_regs set expiry = ${next}, decision = 'renew', data = ${db.json({ ...d, history: hist })}, updated_at = now(), updated_by = ${m.email} where id = ${String(ex.id)}`;
+    await log(db, m.email, "renewFdaReg", String(ex.reg_no) + " → " + next);
+    return fdaRegOut((await db`select * from costing.fda_regs where id = ${String(ex.id)}`)[0]);
+  });
+}
+async function deleteFdaReg(ctx: Ctx, id: string) {
+  return await locked(ctx, async (c) => {
+    const m = await need(c, "manageUsers"), db = c.db;
+    const ex = (await db`select * from costing.fda_regs where id = ${String(id || "")}`)[0]; if (!ex) throw new Error("ไม่พบเลขจดแจ้งนี้");
+    await db`update costing.fda_requests set reg_id = '' where reg_id = ${String(ex.id)}`;
+    await db`delete from costing.fda_regs where id = ${String(ex.id)}`; await log(db, m.email, "deleteFdaReg", String(ex.reg_no));
+    return { ok: true };
+  });
+}
+async function saveFdaRequest(ctx: Ctx, q: Any) {
+  return await locked(ctx, async (c) => {
+    const m = await needAny(c, FDA_EDIT), db = c.db; q = q || {};
+    const ex = q.id ? (await db`select * from costing.fda_requests where id = ${String(q.id)}`)[0] : null; if (q.id && !ex) throw new Error("ไม่พบคำขอนี้");
+    const status = FDA_REQ_STATUS.indexOf(String(q.status || "")) >= 0 ? String(q.status || "") : ""; const data: Any = {};
+    FDA_REQ_FIELDS.forEach((k) => { data[k] = str(q[k], k === "note" || k === "usage" ? 2000 : 300); });
+    data.infoDate = fdaDate(data.infoDate); data.dueDate = fdaDate(data.dueDate); data.files = fdaFiles(q.files);
+    if (!data.nameEn && !data.nameTh) throw new Error("ใส่ชื่อเครื่องสำอาง (EN หรือ TH)");
+    const now = new Date(); let id: string;
+    if (ex) { id = String(ex.id); await db`update costing.fda_requests set status = ${status}, data = ${db.json(data)}, updated_at = ${now}, updated_by = ${m.email} where id = ${id}`; }
+    else { id = "fdq-" + uuid(10); const seq = Number((await db`select coalesce(max(seq), 0) + 1 as n from costing.fda_requests`)[0].n);
+      await db`insert into costing.fda_requests ${db({ id, seq, status, reg_id: "", data: db.json(data), created_at: now, created_by: m.email, updated_at: now, updated_by: m.email })}`; }
+    await log(db, m.email, ex ? "saveFdaRequest" : "newFdaRequest", (data.nameEn || data.nameTh).slice(0, 80));
+    return fdaReqOut((await db`select * from costing.fda_requests where id = ${id}`)[0]);
+  });
+}
+async function deleteFdaRequest(ctx: Ctx, id: string) {
+  return await locked(ctx, async (c) => {
+    const m = await need(c, "manageUsers"), db = c.db;
+    const ex = (await db`select * from costing.fda_requests where id = ${String(id || "")}`)[0]; if (!ex) throw new Error("ไม่พบคำขอนี้");
+    await db`update costing.fda_regs set request_id = '' where request_id = ${String(ex.id)}`;
+    await db`delete from costing.fda_requests where id = ${String(ex.id)}`; await log(db, m.email, "deleteFdaRequest", String(ex.seq));
+    return { ok: true };
+  });
+}
+
 /* ===== ตารางฟังก์ชันที่หน้าเว็บเรียกได้ ===== */
 const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   bootstrap, requestAccess, savePrices, resetPrices, saveExport, adminData, setUser, removeUser, declineRequest, saveAccess, createRole, updateRole, deleteRole,
@@ -2004,6 +2106,7 @@ const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases,
   listPdTrials, savePdTrial, sendPdTrial, decidePdTrial, issuePdTrialStock,
   listRdStock, listRdStockTx, saveRdStockItem, deleteRdStockItem, addRdStockTx, importRdStock,
+  listFda, saveFdaReg, renewFdaReg, deleteFdaReg, saveFdaRequest, deleteFdaRequest,
   listBotanicals, getBotanicalPrices, saveBotanicalPrice, saveBotanical, deleteBotanical, uploadBotanicalImage, listBotanicalExtractions, saveBotanicalExtraction, deleteBotanicalExtraction, importBotanicals, importBotanicalImage,
   importAll, importRmFile, finishMigration,
 };

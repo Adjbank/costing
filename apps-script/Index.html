@@ -444,6 +444,7 @@ tfoot td{font-weight:700;border-top:1px solid var(--ink);background:var(--bg-sof
   <section id="rdView" hidden style="padding-block:24px 56px"></section>
   <section id="pdView" hidden style="padding-block:24px 56px"></section>
   <section id="btView" hidden style="padding-block:24px 56px"></section>
+  <section id="stkView" hidden style="padding-block:24px 56px"></section>
   <section id="perfView" hidden style="padding-block:24px 56px"></section>
   <div id="calcView">
   <div id="calcSubTabs" style="padding-top:20px"></div>
@@ -1395,6 +1396,7 @@ function renderUserBar(){
     + (pfCanView() ? `<button type="button" id="btnPerf" class="${pfOn?'on':''}" ${pfOn?'aria-current="page"':''}>Perfumer</button>` : tab('btnCalc','calc','คำนวณ'))
     + (pdCanView() ? tab('btnPd','pd','Product Development') : '')
     + (btCanView() ? tab('btnBt','bt','ทะเบียนพืชหอม') : '')
+    + (btCanView() ? tab('btnStk','stk','คลัง R&D') : '')
     + (can('calc') ? `<button type="button" id="btnDoc" class="${v==='doc'||v==='chk'?'on':''}" ${v==='doc'||v==='chk'?'aria-current="page"':''}>เอกสารวัตถุดิบ</button>` : '')
     + (can('viewDb') ? tab('btnMsds','msds','MSDS วัตถุดิบ') : '')
     + (can('editPrices') ? tab('btnRm','rm','ฐานราคาวัตถุดิบ') : '')
@@ -1446,7 +1448,7 @@ $('#userbar').addEventListener('click', e=>{
 });
 $('#navtabs').addEventListener('click', e=>{
   const b=e.target.closest('button'); if(!b) return;
-  const view={btnCalc:'calc', btnChk:'chk', btnDoc:'doc', btnRd:'rd', btnPd:'pd', btnBt:'bt', btnPerf:'perf', btnMsds:'msds', btnRm:'rm', btnAll:'all', btnPrice:'price', btnCmp:'cmp', btnAdmin:'admin'}[b.id];
+  const view={btnCalc:'calc', btnChk:'chk', btnDoc:'doc', btnRd:'rd', btnPd:'pd', btnBt:'bt', btnStk:'stk', btnPerf:'perf', btnMsds:'msds', btnRm:'rm', btnAll:'all', btnPrice:'price', btnCmp:'cmp', btnAdmin:'admin'}[b.id];
   if(view) showView(view);
 });
 async function showView(v){
@@ -1462,8 +1464,9 @@ async function showView(v){
   if(v==='rd' && !rdCanView()) v='calc';
   if(v==='pd' && !pdCanView()) v='calc';
   if(v==='bt' && !btCanView()) v='calc';
+  if(v==='stk' && !btCanView()) v='calc';
   S.view=v; S.admin = v!=='calc';                 /* S.admin = ไม่ได้อยู่หน้าคำนวณ */
-  $('#msdsView').hidden=v!=='msds'; $('#perfView').hidden=v!=='perf'; $('#rdView').hidden=v!=='rd'; $('#pdView').hidden=v!=='pd'; $('#btView').hidden=v!=='bt';
+  $('#msdsView').hidden=v!=='msds'; $('#perfView').hidden=v!=='perf'; $('#rdView').hidden=v!=='rd'; $('#pdView').hidden=v!=='pd'; $('#btView').hidden=v!=='bt'; $('#stkView').hidden=v!=='stk';
   $('#adminView').hidden=v!=='admin'; $('#allView').hidden=v!=='all'; $('#priceView').hidden=v!=='price'; $('#rmView').hidden=v!=='rm'; $('#cmpView').hidden=v!=='cmp'; $('#chkView').hidden=v!=='chk'; $('#docView').hidden=v!=='doc'; $('#calcView').hidden=v!=='calc';
   renderUserBar();
   if(v==='calc') renderCalcSubTabs();
@@ -1473,6 +1476,7 @@ async function showView(v){
   if(v==='rd'){ window.scrollTo(0,0); renderRdView(); return; }
   if(v==='pd'){ window.scrollTo(0,0); renderPdView(); return; }
   if(v==='bt'){ window.scrollTo(0,0); renderBtView(); return; }
+  if(v==='stk'){ window.scrollTo(0,0); renderStkView(); return; }
   if(v==='chk'){ window.scrollTo(0,0); renderChkView(); return; }
   if(v==='cmp'){ window.scrollTo(0,0); renderCmpView(); return; }
   if(v==='rm'){ window.scrollTo(0,0); renderRmView(); return; }
@@ -4942,6 +4946,165 @@ function btTrDom(root){
 new MutationObserver(ms=>{ if(BT.lang!=='en') return; for(const m of ms) for(const a of m.addedNodes){ if(a.nodeType===3){ if(/[฀-๿]/.test(a.nodeValue)) a.nodeValue=btx(a.nodeValue); } else btTrDom(a); } }).observe($('#btView'),{childList:true,subtree:true});
 function btSetLang(l){ BT.lang=l==='en'?'en':'th'; try{ localStorage.setItem('bt-lang',BT.lang); }catch(e){} renderBtView(); }
 const btToast=m=>toast(btx(m)), btConfirm=m=>confirm(btx(m));
+
+/* ===== คลังวัตถุดิบและบรรจุภัณฑ์ของแผนก R&D =====
+   รายการ (RM วัตถุดิบ / PM บรรจุภัณฑ์) + รายการเคลื่อนไหว: รับเข้า · เบิกใช้ (ต้องระบุโครงการ/สูตร) · ปรับยอดตามนับจริง · คงเหลือคำนวณจากรายการเคลื่อนไหว */
+let STK={items:null, tx:null, canEdit:false, canPrice:false, q:'', kind:'', low:false, sub:'items', hist:null, histTx:null, act:null, form:null, busy:false, shown:200};
+const stkCanView=()=>btCanView();
+const STK_KIND={rm:['วัตถุดิบ (RM)','info'], pm:['บรรจุภัณฑ์ (PM)','warn']};
+const STK_TXK={in:['รับเข้า','ok'], out:['เบิกใช้','bad'], adjust:['ปรับยอด','warn']};
+const stkN=(v,d)=>v==null?'–':Number(v).toLocaleString('th-TH',{maximumFractionDigits:d==null?2:d});
+const stkLow=r=>r.active&&r.minQty!=null&&r.balance<=r.minQty;
+async function loadStk(force){
+  if(STK.items && !force) return;
+  const r=await api('listRdStock'); STK.items=r.items; STK.canEdit=r.canEdit; STK.canPrice=r.canPrice;
+}
+function renderStkView(){
+  $('#stkView').innerHTML=`<div class="bh"><h2>คลังวัตถุดิบและบรรจุภัณฑ์ R&D</h2><span class="hint">คลังเล็กของแผนกวิจัยและพัฒนา: วัตถุดิบ (RM) และบรรจุภัณฑ์ (PM) ที่เก็บไว้ใช้ทดลองและทำตัวอย่าง · รับเข้า เบิกใช้ (ระบุโครงการหรือสูตร) และปรับยอดตามนับจริง · คงเหลือคำนวณจากรายการเคลื่อนไหวทุกครั้ง</span></div><div id="stkBody"><div class="empty">กำลังโหลด…</div></div>`;
+  loadStk().then(drawStk).catch(e=>{ $('#stkBody').innerHTML=`<div class="msg bad">${esc(errText(e))}</div>`; });
+}
+function stkFiltered(){
+  const q=STK.q.trim().toLowerCase();
+  return STK.items.filter(r=>(!STK.kind||r.kind===STK.kind)&&(!STK.low||stkLow(r))&&(!q||[r.code,r.name,r.supplier,r.location,r.note].join(' ').toLowerCase().includes(q)));
+}
+function drawStk(){
+  if(!STK.items) return;
+  if(STK.hist){ $('#stkBody').innerHTML=stkHistory(STK.hist); return; }
+  const all=STK.items, act=all.filter(r=>r.active), low=act.filter(stkLow).length, zero=act.filter(r=>r.balance<=0).length;
+  const value=STK.canPrice?act.reduce((s,r)=>s+(r.unitCost!=null?r.balance*r.unitCost:0),0):null;
+  const k=(v,l,cls)=>`<div class="field" style="min-width:120px"><label>${l}</label><div style="font-size:22px;font-weight:600;${cls||''}">${v}</div></div>`;
+  $('#stkBody').innerHTML=`<div class="settings" style="margin-bottom:10px">${k(stkN(act.length,0),'รายการที่ใช้งาน')}${k(stkN(act.filter(r=>r.kind==='rm').length,0),'วัตถุดิบ (RM)')}${k(stkN(act.filter(r=>r.kind==='pm').length,0),'บรรจุภัณฑ์ (PM)')}${k(stkN(low,0),'ใกล้หมด / ต่ำกว่าขั้นต่ำ',low?'color:var(--warn,#8a5200)':'')}${k(stkN(zero,0),'หมดสต็อก',zero?'color:var(--bad)':'')}${value!=null?k(stkN(value,0)+' ฿','มูลค่าคงเหลือโดยประมาณ'):''}</div>
+    <div class="pf-tabs" role="tablist" style="margin:0 0 10px"><button type="button" data-stksub="items" class="${STK.sub==='items'?'on':''}">รายการและคงเหลือ <span class="pf-n">${all.length}</span></button><button type="button" data-stksub="tx" class="${STK.sub==='tx'?'on':''}">ความเคลื่อนไหวล่าสุด</button></div>
+    ${STK.sub==='tx'?'<div id="stkMain"><div class="empty">กำลังโหลด…</div></div>':`<div class="search" style="flex-wrap:wrap;gap:8px"><input id="stkQ" type="search" autocomplete="off" placeholder="ค้นหารหัส ชื่อ ผู้จำหน่าย ที่เก็บ…" value="${esc(STK.q)}" style="flex:1;min-width:220px">
+      <div class="pf-tabs" style="margin:0"><button type="button" data-stkkind="" class="${STK.kind===''?'on':''}">ทั้งหมด</button><button type="button" data-stkkind="rm" class="${STK.kind==='rm'?'on':''}">วัตถุดิบ</button><button type="button" data-stkkind="pm" class="${STK.kind==='pm'?'on':''}">บรรจุภัณฑ์</button></div>
+      <label style="display:flex;gap:5px;align-items:center;font-size:13px"><input type="checkbox" id="stkLow" ${STK.low?'checked':''}>เฉพาะใกล้หมด</label>
+      ${STK.canEdit?'<button class="btn primary" type="button" id="stkNew">+ เพิ่มรายการ</button><label class="btn" style="cursor:pointer">นำเข้า Excel<input id="stkFile" type="file" accept=".xlsx,.xls,.csv" hidden></label><button class="btn small" type="button" id="stkTpl">แบบฟอร์ม Excel</button>':''}<button class="btn small" type="button" id="stkExport">ส่งออก Excel</button><button class="btn" type="button" id="stkRefresh">รีเฟรช</button></div>
+    ${STK.form?stkItemForm(STK.form):''}${STK.act?stkActForm(STK.act):''}<div id="stkMain">${stkTable(stkFiltered())}</div>`}`;
+  if(STK.sub==='tx') stkLoadTx();
+}
+function stkTable(list){
+  if(!list.length) return `<div class="empty">${STK.items.length?'ไม่พบรายการ':'ยังไม่มีรายการในคลัง'+(STK.canEdit?' · กด "+ เพิ่มรายการ" หรือ "นำเข้า Excel" (มี "แบบฟอร์ม Excel" ให้ดาวน์โหลด)':'')}</div>`;
+  const part=list.slice(0,STK.shown);
+  return `<div class="tablebox"><table><thead><tr><th>รหัส</th><th>ชื่อ</th><th>ประเภท</th><th class="num">คงเหลือ</th><th>หน่วย</th><th class="num">ขั้นต่ำ</th><th>ที่เก็บ</th><th>ผู้จำหน่าย</th>${STK.canPrice?'<th class="num">฿/หน่วย</th>':''}<th>เคลื่อนไหวล่าสุด</th><th></th></tr></thead><tbody>
+    ${part.map(r=>{ const low=stkLow(r), out=r.balance<=0; return `<tr${r.active?'':' style="opacity:.55"'}><td class="mono" style="font-size:12px">${esc(r.code)}</td><td><b>${esc(r.name)}</b>${r.active?'':' <span class="chip bad">ปิดใช้</span>'}${r.note?`<div class="muted" style="font-size:12px">${esc(r.note)}</div>`:''}</td><td>${pfChip(r.kind,STK_KIND)}</td>
+      <td class="num" style="font-weight:700;${out?'color:var(--bad)':low?'color:var(--warn,#8a5200)':''}">${stkN(r.balance,4)}${out?' <span class="chip bad">หมด</span>':low?' <span class="chip warn">ใกล้หมด</span>':''}</td><td>${esc(r.unit)}</td><td class="num">${stkN(r.minQty)}</td><td style="font-size:12.5px">${esc(r.location)}</td><td style="font-size:12.5px">${esc(r.supplier)}</td>${STK.canPrice?`<td class="num">${stkN(r.unitCost)}</td>`:''}<td class="muted" style="font-size:12px">${r.lastAt?rdDate(r.lastAt):'–'}</td>
+      <td style="white-space:nowrap">${STK.canEdit&&r.active?`<button class="btn small" type="button" data-stkact="in" data-id="${esc(r.id)}">รับเข้า</button> <button class="btn small" type="button" data-stkact="out" data-id="${esc(r.id)}">เบิก</button> <button class="btn small" type="button" data-stkact="adjust" data-id="${esc(r.id)}">ปรับยอด</button> `:''}<button class="btn small" type="button" data-stkhist="${esc(r.id)}">ประวัติ</button>${STK.canEdit?` <button class="btn small" type="button" data-stkedit="${esc(r.id)}">แก้ไข</button>`:''}</td></tr>`; }).join('')}</tbody></table></div>
+    ${list.length>part.length?`<div style="text-align:center;margin-top:12px"><button class="btn" type="button" id="stkMore">แสดงเพิ่ม (อีก ${list.length-part.length})</button></div>`:''}`;
+}
+function stkActForm(a){
+  const r=STK.items.find(x=>x.id===a.id); if(!r) return '';
+  const T={in:'รับเข้า',out:'เบิกใช้',adjust:'ปรับยอดตามนับจริง'}[a.kind], today=new Date().toISOString().slice(0,10);
+  return `<form id="stkActForm" class="card" style="margin:10px 0" novalidate><h4 style="margin:0 0 8px">${T}: <span class="mono">${esc(r.code)}</span> · ${esc(r.name)} <span class="muted" style="font-weight:400">· คงเหลือ ${stkN(r.balance,4)} ${esc(r.unit)}</span></h4><div class="settings">
+    ${a.kind==='adjust'?`<div class="field"><label>จำนวนที่นับได้จริง (${esc(r.unit)}) *</label><input data-sx="countTo" type="number" step="any" min="0" required></div>`:`<div class="field"><label>จำนวน (${esc(r.unit)}) *</label><input data-sx="qty" type="number" step="any" min="0" required></div>`}
+    <div class="field"><label>วันที่</label><input data-sx="date" type="date" value="${today}"></div>
+    <div class="field"><label>${a.kind==='out'?'โครงการ / สูตรที่ใช้ *':a.kind==='in'?'เลขที่ใบสั่งซื้อ / แหล่งที่มา':'เหตุผล'}</label><input data-sx="ref" maxlength="80" placeholder="${a.kind==='out'?'เช่น PDR2610001 หรือ PD2610003':a.kind==='in'?'เช่น PO-2610-001':''}" list="stkRefs"><datalist id="stkRefs">${(typeof RD!=='undefined'&&RD.list?RD.list:[]).map(p=>`<option value="${esc(p.pdrNo)}">${esc(p.brand||p.company||'')}</option>`).join('')}${(typeof PD!=='undefined'&&PD.list?PD.list:[]).map(f=>`<option value="${esc(f.code)}">${esc(f.name)}</option>`).join('')}</datalist></div>
+    ${a.kind==='in'?`<div class="field"><label>Lot</label><input data-sx="lot" maxlength="40"></div><div class="field"><label>วันหมดอายุ</label><input data-sx="expiry" type="date"></div>`:''}
+    <div class="field" style="grid-column:1/-1"><label>หมายเหตุ</label><input data-sx="note" maxlength="300"></div></div>
+    <div class="row" style="gap:8px;margin-top:8px;align-items:center"><button class="btn primary" type="submit">บันทึก${T}</button><button class="btn" type="button" id="stkActCancel">ยกเลิก</button><span class="muted" id="stkErr" role="alert" style="color:var(--bad)"></span></div></form>`;
+}
+function stkItemForm(f){
+  const F=(k,l,t,extra)=>`<div class="field"><label>${l}</label><input data-sf="${k}" ${t==='number'?'type="number" step="any" min="0"':''} value="${f[k]==null?'':esc(f[k])}" maxlength="200" ${extra||''}></div>`;
+  return `<form id="stkItemForm" class="card" style="margin:10px 0" novalidate><h4 style="margin:0 0 8px">${f.id?'แก้ไขรายการ':'เพิ่มรายการใหม่'}</h4><div class="settings">
+    ${F('code','รหัส * (รหัส RM ของระบบคลังบริษัท หรือรหัสที่แผนกตั้งเอง)','text','list="stkCodes"')}<datalist id="stkCodes"></datalist>${F('name','ชื่อ *','text')}
+    <div class="field"><label>ประเภท *</label><select data-sf="kind"><option value="rm" ${f.kind==='rm'?'selected':''}>วัตถุดิบ (RM)</option><option value="pm" ${f.kind==='pm'?'selected':''}>บรรจุภัณฑ์ (PM)</option></select></div>
+    ${F('unit','หน่วย','text','placeholder="g / kg / ml / ชิ้น"')}${F('minQty','จำนวนขั้นต่ำ (แจ้งเตือนใกล้หมด)','number')}${F('location','ที่เก็บ','text','placeholder="เช่น ตู้ A1 ชั้น 2"')}${F('supplier','ผู้จำหน่าย','text')}
+    ${STK.canPrice?F('unitCost','ต้นทุนต่อหน่วย (฿)','number'):''}${f.id?'':F('openingQty','ยอดยกมา','number')}
+    <div class="field"><label>สถานะ</label><select data-sf="active"><option value="1" ${f.active!==false?'selected':''}>ใช้งาน</option><option value="0" ${f.active===false?'selected':''}>ปิดใช้งาน</option></select></div>
+    <div class="field" style="grid-column:1/-1"><label>หมายเหตุ</label><input data-sf="note" value="${esc(f.note||'')}" maxlength="500"></div></div>
+    <div class="row" style="gap:8px;margin-top:8px;align-items:center"><button class="btn primary" type="submit">บันทึกรายการ</button><button class="btn" type="button" id="stkFormCancel">ยกเลิก</button>${f.id&&isAdminRole()&&f.balance===0?'<button class="btn small" type="button" id="stkDelete" style="color:var(--bad);margin-left:auto">ลบรายการ</button>':''}<span class="muted" id="stkErr" role="alert" style="color:var(--bad)"></span></div></form>`;
+}
+function stkTxTable(rows, showItem){
+  if(!rows.length) return '<div class="empty">ยังไม่มีความเคลื่อนไหว</div>';
+  return `<div class="tablebox"><table><thead><tr><th>วันที่</th>${showItem?'<th>รายการ</th>':''}<th>ประเภท</th><th class="num">จำนวน</th><th>โครงการ / อ้างอิง</th><th>Lot</th><th>หมดอายุ</th><th>หมายเหตุ</th><th>โดย</th></tr></thead><tbody>
+    ${rows.map(x=>`<tr><td style="white-space:nowrap">${rdDate(x.at)}</td>${showItem?`<td><span class="mono" style="font-size:12px">${esc(x.code)}</span> ${esc(x.name)}</td>`:''}<td>${pfChip(x.kind,STK_TXK)}</td><td class="num" style="font-weight:600;color:${x.qty<0?'var(--bad)':'var(--ok,#25704f)'}">${x.qty>0?'+':''}${stkN(x.qty,4)} ${esc(x.unit)}</td><td style="font-size:12.5px">${esc(x.ref)}</td><td style="font-size:12.5px">${esc(x.lot)}</td><td style="font-size:12.5px">${esc(x.expiry)}</td><td style="font-size:12.5px">${esc(x.note)}</td><td style="font-size:12px">${rdPerson(x.by)}</td></tr>`).join('')}</tbody></table></div>`;
+}
+function stkHistory(id){
+  const r=STK.items.find(x=>x.id===id); if(!r){ STK.hist=null; return ''; }
+  return `<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px"><button class="btn small" type="button" id="stkBack">← คลัง R&D</button><h3 style="margin:0"><span class="mono">${esc(r.code)}</span> · ${esc(r.name)}</h3>${pfChip(r.kind,STK_KIND)}<span style="font-weight:700">คงเหลือ ${stkN(r.balance,4)} ${esc(r.unit)}</span>${stkLow(r)?'<span class="chip warn">ใกล้หมด</span>':''}</div>
+    ${STK.histTx&&STK.histTx.id===id?stkTxTable(STK.histTx.rows,false):'<div class="empty">กำลังโหลด…</div>'}`;
+}
+async function stkLoadTx(){
+  try{ const rows=await api('listRdStockTx', '', 300); STK.tx=rows; const m=$('#stkMain'); if(m&&STK.sub==='tx') m.innerHTML=stkTxTable(rows,true); }catch(e){ const m=$('#stkMain'); if(m) m.innerHTML=`<div class="msg bad">${esc(errText(e))}</div>`; }
+}
+async function stkOpenHist(id){
+  STK.hist=id; STK.histTx=null; drawStk(); window.scrollTo(0,0);
+  try{ const rows=await api('listRdStockTx', id, 500); if(STK.hist===id){ STK.histTx={id,rows}; drawStk(); } }catch(e){ toast(errText(e)); }
+}
+function stkUpsert(it){ const i=STK.items.findIndex(x=>x.id===it.id); if(i>=0) STK.items[i]=it; else STK.items.push(it); STK.items.sort((a,b)=>a.kind.localeCompare(b.kind)||a.code.localeCompare(b.code)); }
+/* ---------- Excel ---------- */
+const STK_COLS=[['code',/รหัส|code|sku/i],['name',/ชื่อ|name|รายการ|description/i],['kind',/ประเภท|type|kind|หมวด/i],['qty',/คงเหลือ|จำนวน|qty|quantity|balance|stock/i],['unit',/หน่วย|unit|uom/i],['supplier',/ผู้จำหน่าย|supplier|vendor/i],['location',/ที่เก็บ|ตำแหน่ง|location/i],['minQty',/ขั้นต่ำ|min/i],['unitCost',/ต้นทุน|ราคา|cost|price/i],['note',/หมายเหตุ|note|remark/i]];
+function stkKindOf(v,code){ const s=String(v||'').trim().toLowerCase(); if(/^(rm|วัตถุดิบ|raw)/.test(s)) return 'rm'; if(/^(pm|บรรจุภัณฑ์|packaging|pack)/.test(s)) return 'pm'; if(/^pm-/i.test(code)) return 'pm'; if(/^rm-/i.test(code)) return 'rm'; return ''; }
+function stkParse(rows){
+  rows=rows.filter(r=>Array.isArray(r)&&r.some(c=>String(c??'').trim()!=='')); if(rows.length<2) return [];
+  const hi=rows.findIndex(r=>r.filter(c=>STK_COLS.some(([,re])=>re.test(String(c||'')))).length>=2); if(hi<0) throw new Error('ไม่พบแถวหัวตาราง (ต้องมีอย่างน้อย รหัส และ ชื่อ)');
+  const map={}; rows[hi].forEach((c,j)=>{ const s=String(c||'').trim(); const m=STK_COLS.find(([k,re])=>!(k in map)&&re.test(s)); if(m) map[m[0]]=j; });
+  if(!('code' in map)||!('name' in map)) throw new Error('ต้องมีคอลัมน์ "รหัส" และ "ชื่อ"');
+  return rows.slice(hi+1).map(r=>{ const g=k=>k in map?r[map[k]]:''; const code=String(g('code')??'').trim(); return {code, name:String(g('name')??'').trim(), kind:stkKindOf(g('kind'),code), unit:String(g('unit')??'').trim(), qty:g('qty')===''||g('qty')==null?null:toNum(g('qty')), supplier:String(g('supplier')??'').trim(), location:String(g('location')??'').trim(),
+    minQty:g('minQty')===''||g('minQty')==null?null:toNum(g('minQty')), unitCost:g('unitCost')===''||g('unitCost')==null?null:toNum(g('unitCost')), note:String(g('note')??'').trim()}; }).filter(r=>r.code||r.name);
+}
+function stkTemplate(){
+  if(typeof XLSX==='undefined'){ toast('โหลดตัวเขียน Excel ไม่สำเร็จ'); return; }
+  const wb=XLSX.utils.book_new(), ws=XLSX.utils.aoa_to_sheet([['รหัส','ชื่อ','ประเภท (RM/PM)','คงเหลือ','หน่วย','ผู้จำหน่าย','ที่เก็บ','จำนวนขั้นต่ำ','ต้นทุนต่อหน่วย','หมายเหตุ'],['RM-008-012-0536','Lavender oil UK','RM',500,'g','ผู้จำหน่าย A','ตู้ A1',100,4.2,'ตัวอย่าง: ลบแถวนี้ก่อนนำเข้า'],['PM-BOT-30','ขวดสเปรย์ 30 ml','PM',40,'ชิ้น','','ชั้น B2',20,12.5,'']]);
+  ws['!cols']=[{wch:20},{wch:34},{wch:14},{wch:10},{wch:8},{wch:18},{wch:14},{wch:12},{wch:14},{wch:30}]; XLSX.utils.book_append_sheet(wb,ws,'Stock'); saveFile('แบบฟอร์มนำเข้าคลัง R&D.xlsx', XLSX.write(wb,{type:'array',bookType:'xlsx'}));
+}
+function stkExport(){
+  if(typeof XLSX==='undefined'){ toast('โหลดตัวเขียน Excel ไม่สำเร็จ'); return; }
+  const rows=stkFiltered(), head=['รหัส','ชื่อ','ประเภท','คงเหลือ','หน่วย','ขั้นต่ำ','ที่เก็บ','ผู้จำหน่าย',...(STK.canPrice?['ต้นทุนต่อหน่วย','มูลค่า']:[]),'สถานะ','เคลื่อนไหวล่าสุด','หมายเหตุ'];
+  const aoa=[head,...rows.map(r=>[r.code,r.name,r.kind==='rm'?'RM':'PM',r.balance,r.unit,r.minQty,r.location,r.supplier,...(STK.canPrice?[r.unitCost,r.unitCost!=null?Math.round(r.balance*r.unitCost*100)/100:'']:[]),r.active?'ใช้งาน':'ปิดใช้',r.lastAt?r.lastAt.slice(0,10):'',r.note])];
+  const wb=XLSX.utils.book_new(), ws=XLSX.utils.aoa_to_sheet(aoa); XLSX.utils.book_append_sheet(wb,ws,'Stock R&D'); saveFile(`คลัง R&D_${rows.length}รายการ_${new Date().toISOString().slice(0,10)}.xlsx`, XLSX.write(wb,{type:'array',bookType:'xlsx'}));
+}
+/* ---------- events ---------- */
+$('#stkView').addEventListener('input', e=>{ if(e.target.id==='stkQ'){ STK.q=e.target.value; STK.shown=200; const m=$('#stkMain'); if(m) m.innerHTML=stkTable(stkFiltered()); } if(e.target.dataset.sf==='code'&&STK.form&&!STK.form.id){ const dl=$('#stkCodes'); const v=e.target.value.trim().toUpperCase(); if(dl&&v.length>=4&&typeof DB!=='undefined'&&DB&&DB.entries){ dl.innerHTML=DB.entries.filter(x=>x.code.toUpperCase().includes(v)).slice(0,12).map(x=>`<option value="${esc(x.code)}">${esc(x.name)}</option>`).join(''); } } });
+$('#stkView').addEventListener('change', async e=>{
+  const t=e.target;
+  if(t.id==='stkLow'){ STK.low=t.checked; STK.shown=200; drawStk(); return; }
+  if(t.dataset.sf==='code'&&STK.form&&!STK.form.id&&typeof lookup==='function'){ const nm=$('#stkItemForm [data-sf=name]'), un=$('#stkItemForm [data-sf=unit]'), en=lookup({code:t.value}); if(en&&nm&&!nm.value.trim()){ nm.value=en.name; if(un&&!un.value.trim()) un.value='g'; const kd=$('#stkItemForm [data-sf=kind]'); if(kd) kd.value=/^pm-/i.test(t.value)?'pm':'rm'; toast('ดึงชื่อจากฐานราคาวัตถุดิบให้แล้ว'); } return; }
+  if(t.id==='stkFile' && t.files && t.files[0]){
+    const file=t.files[0]; t.value='';
+    if(typeof XLSX==='undefined'){ toast('โหลดตัวอ่าน Excel ไม่สำเร็จ'); return; }
+    try{ const wb=XLSX.read(await file.arrayBuffer(),{type:'array'}); const ws=wb.Sheets[wb.SheetNames[0]]; const rows=stkParse(XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''}));
+      if(!rows.length){ toast('ไม่พบแถวข้อมูลในไฟล์'); return; }
+      const bad=rows.filter(r=>!r.code||!r.name||!r.kind).length;
+      if(!confirm(`นำเข้า ${rows.length} แถวจากไฟล์ "${file.name}"?\n\n• รหัสใหม่ → สร้างรายการ + ยอดยกมา\n• รหัสเดิม → แก้ข้อมูล และปรับยอดให้ตรงกับไฟล์ (บันทึกเป็นรายการปรับยอด)\n${bad?`• ${bad} แถวขาดรหัส ชื่อ หรือประเภท จะถูกข้าม\n`:''}`)) return;
+      let tot={created:0,updated:0,adjusted:0,skipped:0,errors:[]};
+      for(let i=0;i<rows.length;i+=300){ const r=await api('importRdStock', rows.slice(i,i+300)); ['created','updated','adjusted','skipped'].forEach(k=>tot[k]+=r[k]); tot.errors.push(...r.errors); }
+      await loadStk(true); drawStk(); toast(`นำเข้าแล้ว: สร้าง ${tot.created} · แก้ไข ${tot.updated} · ปรับยอด ${tot.adjusted}${tot.skipped?` · ข้าม ${tot.skipped}`:''}`);
+      if(tot.errors.length) alert('แถวที่ข้าม:\n'+tot.errors.join('\n'));
+    }catch(err){ toast(errText(err)); }
+  }
+});
+$('#stkView').addEventListener('click', async e=>{
+  const t=e.target.closest('button'); if(!t) return;
+  if(t.dataset.stksub){ STK.sub=t.dataset.stksub; STK.act=null; STK.form=null; drawStk(); return; }
+  if(t.dataset.stkkind!==undefined){ STK.kind=t.dataset.stkkind; STK.shown=200; drawStk(); return; }
+  if(t.id==='stkRefresh'){ t.disabled=true; try{ await loadStk(true); }catch(err){ toast(errText(err)); } drawStk(); return; }
+  if(t.id==='stkMore'){ STK.shown+=200; drawStk(); return; }
+  if(t.id==='stkTpl'){ stkTemplate(); return; }
+  if(t.id==='stkExport'){ stkExport(); return; }
+  if(t.id==='stkNew'){ STK.form={id:'',code:'',name:'',kind:STK.kind||'rm',unit:'',supplier:'',location:'',minQty:null,unitCost:null,openingQty:null,note:'',active:true}; STK.act=null; drawStk(); $('#stkItemForm [data-sf=code]').focus(); return; }
+  if(t.dataset.stkedit){ const r=STK.items.find(x=>x.id===t.dataset.stkedit); if(r){ STK.form={...r}; STK.act=null; drawStk(); $('#stkItemForm').scrollIntoView({block:'center'}); } return; }
+  if(t.id==='stkFormCancel'){ STK.form=null; drawStk(); return; }
+  if(t.id==='stkActCancel'){ STK.act=null; drawStk(); return; }
+  if(t.dataset.stkact){ STK.act={id:t.dataset.id, kind:t.dataset.stkact}; STK.form=null; drawStk(); const f=$('#stkActForm'); if(f){ f.scrollIntoView({block:'center'}); f.querySelector('[data-sx=qty],[data-sx=countTo]').focus(); } return; }
+  if(t.dataset.stkhist){ stkOpenHist(t.dataset.stkhist); return; }
+  if(t.id==='stkBack'){ STK.hist=null; drawStk(); return; }
+  if(t.id==='stkDelete'){ const f=STK.form; if(!confirm(`ลบ ${f.code} · ${f.name}?`)) return; t.disabled=true; try{ await api('deleteRdStockItem', f.id); STK.items=STK.items.filter(x=>x.id!==f.id); STK.form=null; toast('ลบแล้ว'); drawStk(); }catch(err){ toast(errText(err)); t.disabled=false; } return; }
+});
+$('#stkView').addEventListener('submit', async e=>{
+  e.preventDefault(); const f=e.target, btn=f.querySelector('button[type=submit]'), err=$('#stkErr');
+  if(f.id==='stkItemForm'){
+    const d={id:STK.form.id}; f.querySelectorAll('[data-sf]').forEach(i=>{ const k=i.dataset.sf, v=i.value.trim(); d[k]=['minQty','unitCost','openingQty'].includes(k)?(v===''?null:toNum(v)):k==='active'?v==='1':v; });
+    if(!d.code||!d.name){ err.textContent='ใส่รหัสและชื่อ'; return; }
+    btn.disabled=true; err.textContent='';
+    try{ const o=await api('saveRdStockItem', d); stkUpsert(o); STK.form=null; toast(`บันทึก ${o.code} แล้ว`); drawStk(); }catch(e2){ err.textContent=errText(e2); btn.disabled=false; }
+    return;
+  }
+  if(f.id==='stkActForm'){
+    const a=STK.act, d={kind:a.kind}; f.querySelectorAll('[data-sx]').forEach(i=>{ const k=i.dataset.sx, v=i.value.trim(); d[k]=['qty','countTo'].includes(k)?(v===''?null:toNum(v)):v; });
+    btn.disabled=true; err.textContent='';
+    try{ const o=await api('addRdStockTx', a.id, d); stkUpsert(o); STK.act=null; toast(`บันทึกแล้ว · คงเหลือ ${stkN(o.balance,4)} ${o.unit}`); drawStk(); }catch(e2){ err.textContent=errText(e2); btn.disabled=false; }
+  }
+});
 
 async function boot(){
   showGate('loading');

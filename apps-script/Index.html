@@ -152,6 +152,32 @@ button,input,select,textarea{font:inherit;color:inherit}
 .sc-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:10px}
 .sc-cols h5{margin:0 0 6px;font-size:12.5px;color:var(--ink-muted)}
 .sc-prow{display:grid;grid-template-columns:96px 1fr 38px;gap:8px;align-items:center;font-size:12.5px;margin-bottom:4px}
+/* โครงการ R&D: บอร์ด 8 ขั้น การ์ด ขั้นตอน ชุดตัวอย่าง */
+.rd-board{display:flex;gap:10px;overflow-x:auto;padding-bottom:8px;align-items:flex-start}
+.rd-col{flex:0 0 232px;background:var(--tint);border-radius:12px;padding:8px;min-height:120px}
+.rd-col-end{flex-basis:200px;background:transparent;border:1px dashed var(--line-strong)}
+.rd-col-h{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:13px;margin:2px 4px 8px}
+.rd-card{display:block;width:100%;text-align:left;background:var(--card);border:1px solid var(--line-strong);border-radius:10px;padding:8px 10px;margin-bottom:8px;cursor:pointer;font:inherit;color:var(--ink)}
+.rd-card:hover{border-color:var(--accent)}.rd-card.late{border-color:var(--bad)}
+.rd-card-h{display:flex;justify-content:space-between;gap:6px;font-size:11.5px;color:var(--ink-muted)}
+.rd-card-t{font-weight:700;font-size:13.5px;margin:2px 0}
+.rd-card-f{display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:12px;margin-top:4px;flex-wrap:wrap}
+.rd-card-f .ava{width:20px;height:20px;font-size:10px;margin-right:-4px}
+.rd-steps{display:flex;gap:4px;overflow-x:auto;padding:4px 0 6px}
+.rd-step{display:flex;gap:8px;align-items:center;flex:1 0 118px;border:1px solid var(--line-strong);border-radius:10px;padding:6px 8px;background:var(--card);min-width:118px}
+.rd-step-n{width:24px;height:24px;border-radius:50%;border:1px solid var(--line-strong);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none}
+.rd-step-l{font-size:12px;font-weight:600;line-height:1.25}
+.rd-step.done .rd-step-n{background:var(--ok);color:#fff;border-color:var(--ok)}
+.rd-step.on{border-color:var(--primary);box-shadow:0 0 0 2px var(--tint)}.rd-step.on .rd-step-n{background:var(--primary);color:var(--primary-ink);border-color:var(--primary)}
+.rd-step.lost .rd-step-n{background:var(--bad);color:#fff;border-color:var(--bad)}
+.rd-sample{border:1px solid var(--line-strong);border-radius:10px;padding:10px 12px;margin-top:8px;background:var(--card)}
+.rd-sample.evaluated{border-color:var(--ok)}.rd-sample.sent{border-color:var(--warn)}
+.linklike{background:none;border:0;padding:0;color:var(--accent);cursor:pointer;font:inherit;text-decoration:underline}
+#rdForm .settings,#rdSampleForm .settings{grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px 16px;align-items:start;margin-bottom:0}
+#rdForm .field label,#rdSampleForm .field label{margin-bottom:5px}
+#rdForm .field input,#rdForm .field select,#rdForm .field textarea,#rdSampleForm .field input,#rdSampleForm .field select,#rdRaForm input,#rdRaForm select{width:100%;border:1px solid var(--line-strong);border-radius:8px;padding:8px 10px;background:var(--input-bg);min-height:38px;box-sizing:border-box}
+#rdForm .pf-wide,#rdSampleForm .pf-wide{grid-column:1/-1}
+#rdSampleForm td input,#rdSampleForm td select{border:1px solid var(--line-strong);border-radius:7px;padding:5px 8px;background:var(--input-bg);width:100%;min-width:90px}
 #docForm .field input,#docForm .field select{height:40px;box-sizing:border-box;width:100%;font-size:14px}
 #docForm .field input[type=date]{padding-block:0}
 #docForm .field[style*="grid-column"]{grid-column:1/-1}
@@ -400,6 +426,7 @@ tfoot td{font-weight:700;border-top:1px solid var(--ink);background:var(--bg-sof
   <section id="chkView" hidden style="padding-block:24px 56px"></section>
   <section id="docView" hidden style="padding-block:24px 56px"></section>
   <section id="msdsView" hidden style="padding-block:24px 56px"></section>
+  <section id="rdView" hidden style="padding-block:24px 56px"></section>
   <section id="perfView" hidden style="padding-block:24px 56px"></section>
   <div id="calcView">
   <div class="pagehead"><h1>คำนวณต้นทุนหัวน้ำหอม</h1><p>Scent &amp; Sense ✦ ทีมวิจัยและพัฒนา · Fragrance Oil Costing · ราคาวัตถุดิบ บาท/กรัม จากไฟล์ Summary RM</p></div>
@@ -1101,7 +1128,10 @@ const PERMS = [
   ['viewDb','ดูฐานราคา','ค้นหาราคาวัตถุดิบ'],
   ['editPrices','อัปเดตฐานราคา','อัปโหลดราคาใหม่ให้ทั้งทีม'],
   ['manageUsers','จัดการผู้ใช้','เพิ่มผู้ใช้ กำหนดบทบาท ระงับ'],
-  ['perfumer','Perfumer','รับบรีฟ ออกแบบกลิ่น และบันทึกกลิ่นในคลัง']
+  ['perfumer','Perfumer','รับบรีฟ ออกแบบกลิ่น และบันทึกกลิ่นในคลัง'],
+  ['projects','โครงการ R&D (Project Coordinator)','เปิดโครงการ วางแผน มอบหมาย ส่งตัวอย่าง ย้อนขั้น/ยกเลิก'],
+  ['pd','Product Development','ต้นแบบสินค้า Stability Pilot Batch BOM ในโครงการ'],
+  ['ra','RA ตรวจกฎหมาย','บันทึกผลตรวจ IFRA / อย. ก่อนมอบงานออกแบบ']
 ];
 const DOMAINS = ['scentandsense.co.th','scentandsense.co'];
 const S = {me:null, roles:{}, order:[], access:{autoJoin:false, defaultRole:'costing'}, perms:{}, roleName:'',
@@ -1282,6 +1312,7 @@ function renderUserBar(){
   const tab=(id,view,label)=>`<button type="button" id="${id}" class="${v===view?'on':''}" ${v===view?'aria-current="page"':''}>${label}</button>`;
   $('#navtabs').innerHTML = tab('btnCalc','calc','คำนวณ')
     + (can('calc') ? tab('btnChk','chk','ตรวจ IFRA / อย.') + tab('btnDoc','doc','เอกสาร MSDS / IFRA') : '')
+    + (rdCanView() ? tab('btnRd','rd','โครงการ') : '')
     + (pfCanView() ? tab('btnPerf','perf','Perfumer') : '')
     + (can('viewDb') ? tab('btnMsds','msds','MSDS วัตถุดิบ') : '')
     + (can('editPrices') ? tab('btnRm','rm','ฐานราคาวัตถุดิบ') : '')
@@ -1332,7 +1363,7 @@ $('#userbar').addEventListener('click', e=>{
 });
 $('#navtabs').addEventListener('click', e=>{
   const b=e.target.closest('button'); if(!b) return;
-  const view={btnCalc:'calc', btnChk:'chk', btnDoc:'doc', btnPerf:'perf', btnMsds:'msds', btnRm:'rm', btnAll:'all', btnPrice:'price', btnCmp:'cmp', btnAdmin:'admin'}[b.id];
+  const view={btnCalc:'calc', btnChk:'chk', btnDoc:'doc', btnRd:'rd', btnPerf:'perf', btnMsds:'msds', btnRm:'rm', btnAll:'all', btnPrice:'price', btnCmp:'cmp', btnAdmin:'admin'}[b.id];
   if(view) showView(view);
 });
 async function showView(v){
@@ -1345,13 +1376,15 @@ async function showView(v){
   if((v==='chk' || v==='doc') && !can('calc')) v='calc';
   if(v==='msds' && !can('viewDb')) v='calc';
   if(v==='perf' && !pfCanView()) v='calc';
+  if(v==='rd' && !rdCanView()) v='calc';
   S.view=v; S.admin = v!=='calc';                 /* S.admin = ไม่ได้อยู่หน้าคำนวณ */
-  $('#msdsView').hidden=v!=='msds'; $('#perfView').hidden=v!=='perf';
+  $('#msdsView').hidden=v!=='msds'; $('#perfView').hidden=v!=='perf'; $('#rdView').hidden=v!=='rd';
   $('#adminView').hidden=v!=='admin'; $('#allView').hidden=v!=='all'; $('#priceView').hidden=v!=='price'; $('#rmView').hidden=v!=='rm'; $('#cmpView').hidden=v!=='cmp'; $('#chkView').hidden=v!=='chk'; $('#docView').hidden=v!=='doc'; $('#calcView').hidden=v!=='calc';
   renderUserBar();
   if(v==='doc'){ window.scrollTo(0,0); renderDocView(); return; }
   if(v==='msds'){ window.scrollTo(0,0); renderMsdsView(); return; }
   if(v==='perf'){ window.scrollTo(0,0); renderPerfView(); return; }
+  if(v==='rd'){ window.scrollTo(0,0); renderRdView(); return; }
   if(v==='chk'){ window.scrollTo(0,0); renderChkView(); return; }
   if(v==='cmp'){ window.scrollTo(0,0); renderCmpView(); return; }
   if(v==='rm'){ window.scrollTo(0,0); renderRmView(); return; }
@@ -2968,7 +3001,7 @@ function drawPfTable(){
   } else {
     body.innerHTML=`<div class="tablebox"><table><thead><tr><th>รหัส</th><th>ชื่อกลิ่น</th><th>กลุ่มกลิ่น</th><th>สถานะ</th><th>บรีฟ / แบรนด์</th><th>ใช้ผลิตเป็น</th><th>สูตรต้นทุน</th><th>เวอร์ชัน</th><th>แก้ล่าสุด</th><th></th></tr></thead><tbody>
       ${list.map(s=>{ const d=s.data, apps=pfList(d.applications), vers=pfList(d.versions), fc=s.formulaId?pfFormulaCost(s.formulaId):null;
-        return `<tr><td class="mono">${esc(s.code)}</td><td style="min-width:160px"><b>${esc(s.name)}</b>${d.archetype&&PF_ARCH[d.archetype]?`<div class="muted" style="font-size:12px">${esc(PF_ARCH[d.archetype][0])}</div>`:''}</td><td style="font-size:12.5px">${esc(s.family)||'<span class="muted">–</span>'}</td><td>${pfChip(s.status,PF_SSTAT)}</td>
+        return `<tr><td class="mono">${esc(s.formulaCode||s.code)}${s.formulaCode?`<div class="muted" style="font-size:11px">${esc(s.code)}</div>`:''}</td><td style="min-width:160px"><b>${esc(s.name)}</b>${d.archetype&&PF_ARCH[d.archetype]?`<div class="muted" style="font-size:12px">${esc(PF_ARCH[d.archetype][0])}</div>`:''}</td><td style="font-size:12.5px">${esc(s.family)||'<span class="muted">–</span>'}</td><td>${pfChip(s.status,PF_SSTAT)}</td>
           <td style="font-size:12.5px">${esc(pfBrand(s.briefId))||'<span class="muted">–</span>'}</td>
           <td style="font-size:12.5px;max-width:240px">${apps.length?apps.map(a=>esc(a.type)+(a.dosage?` <span class="muted">${esc(a.dosage)}%</span>`:'')).join('<br>'):'<span class="muted">–</span>'}</td>
           <td style="font-size:12.5px">${fc?esc(fc.name)+(fc.total!=null?`<div class="muted">${fc.total.toLocaleString('th-TH',{maximumFractionDigits:0})} ฿/กก.${fc.complete?'':' (ราคาไม่ครบ)'}</div>`:''):s.formulaId?'<span class="muted">สูตรไม่อยู่ในเครื่องนี้</span>':'<span class="muted">–</span>'}</td>
@@ -2980,7 +3013,7 @@ function drawPfTable(){
 /* ---------- ฟอร์มแก้ไข ---------- */
 function pfNewBrief(){ return {id:'', kind:'ODM', brand:'', status:'new', contact:'', phone:'', email:'', summary:'', data:{arch:{answers:[], result:''}}}; }
 function pfNewScent(from){
-  const s={id:'', code:'', name:'', briefId:'', family:'', status:'draft', formulaId:'', data:{applications:[], versions:[]}};
+  const s={id:'', code:'', name:'', briefId:'', family:'', status:'draft', formulaId:'', projectId:'', formulaCode:'', data:{applications:[], versions:[]}};
   if(from){ const d=from.data;
     s.briefId=from.id; s.name=from.brand+' Signature Scent'; s.family=pfList(d.like)[0]||'';
     s.data.subfamilies=pfList(d.like).slice(1); s.data.character=pfList(d.feelings); s.data.archetype=(d.arch&&d.arch.result)||'';
@@ -3012,17 +3045,19 @@ function drawPfEdit(){
         ${b.id&&!ro?`<button class="btn" type="button" id="pfScentFrom">+ สร้างกลิ่นจากบรีฟนี้</button><button class="btn" type="button" id="pfDel" style="margin-left:auto;color:var(--bad)">ลบบรีฟ</button>`:''}<span class="muted" id="pfErr" role="alert" style="color:var(--bad)"></span></div></form>`;
   } else {
     const s=pfEdit.obj, d=s.data||{}, apps=pfList(d.applications), vers=pfList(d.versions), fs=pfFormulas(), fc=s.formulaId?pfFormulaCost(s.formulaId):null;
+    if(!RD.list && rdCanView() && !drawPfEdit._rdLoading){ drawPfEdit._rdLoading=true; loadRd().then(()=>{ if(pfEdit&&pfEdit.type==='scent'){ pfSyncEdit(); drawPfEdit(); } }).catch(()=>{}); }   /* รายชื่อโครงการสำหรับช่อง "โครงการ" */
     const briefOpts=PF.briefs.map(b=>`<option value="${b.id}" ${s.briefId===b.id?'selected':''}>${esc(b.brand)} · ${esc(PF_KIND[b.kind]||b.kind)}</option>`).join('');
     const fOpts=fs.map(f=>`<option value="${esc(f.id)}" ${s.formulaId===f.id?'selected':''}>${esc(f.name)}${f.owner!==S.me.email?' · '+esc(f.owner.split('@')[0]):''}</option>`).join('')+(s.formulaId&&!fs.some(f=>f.id===s.formulaId)?`<option value="${esc(s.formulaId)}" selected>${esc(s.formulaId)} (ไม่อยู่ในเครื่องนี้)</option>`:'');
     const appRow=(a,i)=>`<tr data-i="${i}"><td><input class="pa-type" list="pfAppList" value="${esc(a.type||'')}" maxlength="80" placeholder="ประเภทสินค้า"></td><td><input class="pa-dosage num" value="${esc(a.dosage||'')}" maxlength="20" placeholder="${esc((PF_APP.find(x=>x[0]===a.type)||[])[1]||'%')}" style="width:90px"></td><td><input class="pa-base" value="${esc(a.base||'')}" maxlength="120" placeholder="เบส / ตัวทำละลาย"></td><td><input class="pa-note" value="${esc(a.note||'')}" maxlength="200" placeholder="หมายเหตุ"></td><td>${ro?'':`<button class="x" type="button" data-pa-rm="${i}" aria-label="เอาออก">×</button>`}</td></tr>`;
     const verRow=(v,i)=>`<tr data-i="${i}"><td><input class="pv-v" value="${esc(v.v||'')}" maxlength="20" placeholder="V${i+1}" style="width:70px"></td><td><input class="pv-date" type="date" value="${esc(v.date||'')}" style="width:150px"></td><td><input class="pv-change" value="${esc(v.change||'')}" maxlength="300" placeholder="สิ่งที่ปรับ"></td><td><input class="pv-feedback" value="${esc(v.feedback||'')}" maxlength="300" placeholder="ผลตอบรับ / ความเห็นลูกค้า"></td><td><select class="pv-result"><option value="">–</option>${[['go','ไปต่อ'],['revise','ปรับแก้'],['chosen','เลือกเวอร์ชันนี้'],['drop','ยกเลิก']].map(([k,l])=>`<option value="${k}" ${v.result===k?'selected':''}>${l}</option>`).join('')}</select></td><td>${ro?'':`<button class="x" type="button" data-pv-rm="${i}" aria-label="เอาออก">×</button>`}</td></tr>`;
     el.innerHTML=`<form id="pfForm" class="card" style="margin:0 0 16px" novalidate><fieldset ${dis} style="border:0;padding:0;margin:0;min-width:0">
-      <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px"><h3 style="margin:0">${s.id?`<span class="mono">${esc(s.code)}</span> · ${esc(s.name)}`:'สร้างกลิ่นใหม่'}</h3><span class="muted" style="font-size:12px">${s.id?`เจ้าของ ${esc(s.owner||'')} · แก้ล่าสุด ${fmtSeen(s.updatedAt)}`:'รหัสกลิ่นจะออกให้อัตโนมัติเมื่อบันทึก'}</span></div>
+      <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px"><h3 style="margin:0">${s.id?`<span class="mono">${esc(s.formulaCode||s.code)}</span> · ${esc(s.name)}`:'สร้างกลิ่นใหม่'}</h3><span class="muted" style="font-size:12px">${s.id?`${s.formulaCode?'รหัสคลัง '+esc(s.code)+' · ':''}เจ้าของ ${esc(s.owner||'')} · แก้ล่าสุด ${fmtSeen(s.updatedAt)}`:'รหัสกลิ่นจะออกให้อัตโนมัติเมื่อบันทึก'+(s.projectId?' · รหัสสูตร PF ออกตามรหัสลูกค้าของโครงการ':'')}</span></div>
       <div class="settings" style="margin-top:10px">
         <div class="field"><label for="pfName">ชื่อกลิ่น *</label><input id="pfName" value="${esc(s.name)}" maxlength="160" required></div>
         <div class="field"><label for="pfFamily">กลุ่มกลิ่นหลัก</label><select id="pfFamily"><option value="">– เลือก –</option>${PF_OPT.families.map(f=>`<option value="${esc(f)}" ${s.family===f?'selected':''}>${esc(f)}</option>`).join('')}</select></div>
         <div class="field"><label for="pfStat">สถานะ</label><select id="pfStat">${Object.entries(PF_SSTAT).map(([k,[l]])=>`<option value="${k}" ${s.status===k?'selected':''}>${esc(l)}</option>`).join('')}</select></div>
         <div class="field"><label for="pfBrief">บรีฟ / ลูกค้า</label><select id="pfBrief"><option value="">– ไม่ผูกกับบรีฟ –</option>${briefOpts}</select></div>
+        <div class="field"><label for="pfProject">โครงการ (PDR)</label><select id="pfProject"><option value="">– ไม่ผูกกับโครงการ –</option>${(RD.list||[]).map(p=>`<option value="${p.id}" ${s.projectId===p.id?'selected':''}>${esc(p.pdrNo)} · ${esc(p.brand||p.company)}</option>`).join('')}${s.projectId&&!(RD.list||[]).some(p=>p.id===s.projectId)?`<option value="${esc(s.projectId)}" selected>${esc(s.projectId)}</option>`:''}</select>${!RD.list&&rdCanView()?'<div class="muted" style="font-size:12px;margin-top:3px">กำลังโหลดรายชื่อโครงการ…</div>':''}</div>
         <div class="field"><label for="pfFormula">สูตรต้นทุน (หน้า "คำนวณ")</label><select id="pfFormula"><option value="">– ยังไม่เชื่อม –</option>${fOpts}</select>${fc&&fc.total!=null?`<div class="muted" style="font-size:12px;margin-top:3px">ต้นทุนวัตถุดิบ ${fc.total.toLocaleString('th-TH',{maximumFractionDigits:0})} ฿/กก.${fc.complete?'':' · ราคาวัตถุดิบยังไม่ครบ'}</div>`:''}</div>
       </div>
       ${scPanel(s)}
@@ -3046,7 +3081,7 @@ function pfSyncEdit(){   /* เก็บค่าที่กรอกไว้�
   if(!pfEdit) return; const root=$('#pfForm'); if(!root) return;
   if(pfEdit.type==='brief'){ const b=pfEdit.obj; b.brand=$('#pfBrand').value; b.kind=$('#pfKindSel').value; b.status=$('#pfStat').value; b.summary=$('#pfSummary').value;
     b.data=Object.assign({}, b.data, pfCollect(root, PF_BRIEF_FIELDS), {arch:{answers:[...root.querySelectorAll('#pfQuiz select')].map(x=>x.value), result:(pfArchResult([...root.querySelectorAll('#pfQuiz select')].map(x=>x.value))||{}).key||''}}); }
-  else { const s=pfEdit.obj; s.name=$('#pfName').value; s.family=$('#pfFamily').value; s.status=$('#pfStat').value; s.briefId=$('#pfBrief').value; s.formulaId=$('#pfFormula').value;
+  else { const s=pfEdit.obj; s.name=$('#pfName').value; s.family=$('#pfFamily').value; s.status=$('#pfStat').value; s.briefId=$('#pfBrief').value; s.formulaId=$('#pfFormula').value; const pp=$('#pfProject'); if(pp) s.projectId=pp.value;
     s.data=Object.assign({}, s.data, pfCollect(root, PF_SCENT_FIELDS), {applications:pfReadApps(), versions:pfReadVers()}); const sc=scRead(); if(sc) s.data.composer=sc; }
 }
 async function pfSave(){
@@ -3059,8 +3094,9 @@ async function pfSave(){
     catch(e){ err.textContent=errText(e); btn.disabled=false; }
   } else { const s=pfEdit.obj; if(!s.name.trim()){ err.textContent='ใส่ชื่อกลิ่น'; $('#pfName').focus(); return; }
     btn.disabled=true; err.textContent='';
-    try{ const ns=await api('saveScent', {id:s.id, name:s.name, briefId:s.briefId, family:s.family, status:s.status, formulaId:s.formulaId, data:s.data});
-      PF.scents=PF.scents.filter(x=>x.id!==ns.id); PF.scents.unshift(ns); pfEdit=null; pfTab='scent'; drawPf(); toast('บันทึกกลิ่น '+ns.code+' แล้ว'); }
+    try{ const ns=await api('saveScent', {id:s.id, name:s.name, briefId:s.briefId, family:s.family, status:s.status, formulaId:s.formulaId, projectId:s.projectId||'', data:s.data});
+      PF.scents=PF.scents.filter(x=>x.id!==ns.id); PF.scents.unshift(ns); pfEdit=null; pfTab='scent'; drawPf(); toast('บันทึกกลิ่น '+(ns.formulaCode||ns.code)+' แล้ว');
+      if(RD.open && RD.open.project.id===ns.projectId){ try{ RD.open=await api('getProject', ns.projectId); }catch(ex){} } }
     catch(e){ err.textContent=errText(e); btn.disabled=false; }
   }
 }
@@ -3388,6 +3424,297 @@ pfv.addEventListener('click', async e=>{
 pfv.addEventListener('submit', e=>{ e.preventDefault();
   if(e.target.id==='pfForm' && pfEdit && pfCanEdit()) pfSave();
   if(e.target.id==='tfForm'){ const v=$('#tfToken').value.trim(); if(!v){ $('#tfMsg').textContent='วาง token ก่อน'; return; } tfRun('saveTypeformToken',[v],e.target.querySelector('button'),'เชื่อม Typeform แล้ว กำลังดึงคำตอบเก่าทั้งหมด…'); } });
+/* --- โครงการพัฒนาสินค้า (R&D): คำขอพัฒนา (PDR) → 8 ขั้นตอน → ตัวอย่างและผลประเมินของลูกค้า → BOM
+   ดู: projects / perfumer / pd / ra / calc / viewDb · แก้ไข: projects / perfumer / pd · RA: ra · ย้อนขั้น/ยกเลิก: projects หรือ admin (เซิร์ฟเวอร์ตรวจซ้ำทุกครั้ง) */
+let RD={list:null, sla:{}, customers:null, view:'board', q:'', stageF:'', open:null, edit:null, sampleEdit:null, sumPeriod:'', sumKind:'scent', sum:null, busy:false};
+const rdCanView=()=>['projects','perfumer','pd','ra','calc','viewDb'].some(can), rdCanEdit=()=>can('projects')||can('perfumer')||can('pd'), rdIsPc=()=>can('projects')||isAdminRole();
+const RD_STAGE=[['s1','รับบรีฟ / วางแผน','Project Co'],['s2','ตรวจกฎหมาย','RA'],['s3','ออกแบบกลิ่น','Perfumer'],['s4','ต้นแบบสินค้า','Product Dev'],['s5','ส่งต้นแบบ / ประเมิน','Project Co'],['s6','Stability / สูตรสุดท้าย','Product Dev'],['s7','BOM / ส่งมอบสูตร','Product Dev'],['s8','Pilot Batch','Product Dev'],['done','เสร็จสิ้น',''],['lost','ยกเลิก','']];
+const RD_STAGE_MAP=Object.fromEntries(RD_STAGE.map(s=>[s[0],s]));
+const RD_KIND={new:'สินค้าใหม่', cost:'ลดต้นทุน', topping:'Topping / ปรับกลิ่นเดิม', repeat:'สั่งซ้ำ / อื่น ๆ'};
+const RD_RA={pending:['รอตรวจ','info'], pass:['ผ่าน','ok'], cond:['ผ่านแบบมีเงื่อนไข','warn'], fail:['ไม่ผ่าน','bad']};
+const SAMPLE_KIND={scent:'ตัวอย่างกลิ่น', mockup:'ต้นแบบสินค้า'};
+const EVAL_CRIT=[['scent','กลิ่น'],['appearance','ลักษณะ'],['skinfeel','สัมผัส'],['target','กลุ่มเป้าหมาย'],['brand','แบรนด์'],['overall','ชอบรวม']];
+const RD_DEC={produce:['ผลิตจริงต่อไป','ok'], revise:['ปรับแก้','warn'], reject:['ไม่เลือก','bad']};
+const RD_SUBDOC=[['prototype','FM-RD-03','บันทึกสูตรต้นแบบผลิตภัณฑ์'],['stability','FM-RD-08','รายงาน Stability'],['finalFormula','FM-RD-06','สูตรสุดท้าย (Final Formula Sheet)'],['bom','FM-RD-09','ส่งมอบสูตร / BOM'],['pilot','FM-RD-07','Pilot Batch Record'],['retention','FM-RD-10','ตัวอย่างเก็บ (Retention)']];
+const rdDate=iso=>{ if(!iso) return ''; const d=new Date(iso); return isNaN(d)?'':d.toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}); };
+const rdDays=(a,b)=>Math.round((new Date(b||Date.now())-new Date(a))/86400000);
+const rdInputDate=iso=>iso?new Date(iso).toISOString().slice(0,10):'';
+/* กำหนดส่งของขั้นปัจจุบัน: วันที่เข้าขั้น + SLA (วัน) · ขั้น 3/5 ที่ส่งตัวอย่างแล้วนับ 7 วันจากวันส่ง */
+function rdDue(p, samples){
+  const sla=RD.sla||{}, st=p.stage, entered=p.actual&&p.actual[st]; if(!entered||st==='done'||st==='lost') return null;
+  let days=sla[st], label=RD_STAGE_MAP[st][1], from=entered;
+  if((st==='s3'||st==='s5') && samples){ const sent=samples.filter(s=>s.kind===(st==='s3'?'scent':'mockup')&&s.status==='sent').sort((a,b)=>(b.shippedAt||'').localeCompare(a.shippedAt||''))[0];
+    if(sent){ from=sent.shippedAt||entered; days=sla[st==='s3'?'s3eval':'s5eval']; label='รอลูกค้าประเมิน'; } }
+  if(!days) return {label, days:null, left:null, due:null, overdue:false};
+  const due=new Date(new Date(from).getTime()+days*86400000), left=Math.ceil((due-Date.now())/86400000);
+  return {label, days, left, due:due.toISOString(), overdue:left<0};
+}
+const rdDueChip=d=>!d||d.left==null?'':d.overdue?`<span class="chip bad">เกินกำหนด ${-d.left} วัน</span>`:d.left<=2?`<span class="chip warn">เหลือ ${d.left} วัน</span>`:`<span class="chip">เหลือ ${d.left} วัน</span>`;
+const rdPerson=e=>e?esc(String(e).split('@')[0]):'<span class="muted">–</span>';
+const rdBrand=p=>esc(p.brand||p.company||'(ไม่มีชื่อ)');
+async function loadRd(force){
+  if(RD.list && RD.customers && !force) return;
+  const [l,c]=await Promise.all([api('listProjects'), api('listCustomers')]); RD.list=l.items; RD.sla=l.sla||{}; RD.customers=c;
+  try{ await loadPf(false); }catch(e){}
+}
+function renderRdView(){
+  $('#rdView').innerHTML=`<div class="bh"><h2>โครงการพัฒนาสินค้า</h2><span class="hint">คำขอพัฒนา (FM-RD-01) หนึ่งใบ = หนึ่งโครงการ เดินผ่าน 8 ขั้นตามระเบียบ QP-RD-01 เลขเอกสาร รหัสสูตร และสรุปผลประเมิน (FM-RD-11) ออกให้อัตโนมัติ</span></div>
+    ${helpBox('ขั้นตอนการทำงาน', `<ol style="margin:6px 0 0 18px;padding:0">
+      <li><b>รับบรีฟ:</b> Project Coordinator เปิดโครงการจากบรีฟ Typeform หรือเอกสารสรุปจากฝ่ายขาย ระบุลูกค้า จำนวนกลิ่น และผู้รับผิดชอบ</li>
+      <li><b>ตรวจกฎหมาย:</b> RA บันทึกผลตรวจ IFRA / อย. ก่อนมอบงานให้ Perfumer</li>
+      <li><b>ออกแบบกลิ่น → ส่งตัวอย่าง → ลูกค้าประเมินผ่านลิงก์:</b> ลูกค้าเลือก "ผลิตจริงต่อไป" ระบบจึงปล่อยไปขั้นต้นแบบสินค้า (ยืนยันทางอื่นได้โดยใส่เหตุผล)</li>
+      <li><b>ต้นแบบ → Stability → BOM → Pilot Batch:</b> เบสเดิมใช้เอกสารมาตรฐาน เบสใหม่ต้องทดสอบ สูตรใหม่ต้องทำ Pilot ก่อนปิดงาน</li></ol>`)}
+    <div id="rdBody"><div class="empty">กำลังโหลด…</div></div>`;
+  loadRd().then(drawRd).catch(e=>{ $('#rdBody').innerHTML=`<div class="msg bad">${esc(errText(e))}</div>`; });
+}
+function drawRd(){
+  if(!RD.list) return;
+  if(RD.open){ $('#rdBody').innerHTML=rdProjectPage(RD.open); return; }
+  const ed=rdCanEdit(), active=RD.list.filter(p=>p.stage!=='done'&&p.stage!=='lost'), late=active.filter(p=>{ const d=rdDue(p); return d&&d.overdue; }).length;
+  $('#rdBody').innerHTML=`<div class="search" style="flex-wrap:wrap;gap:8px">
+      <div class="pf-tabs" role="tablist" style="margin:0"><button type="button" data-rdview="board" class="${RD.view==='board'?'on':''}">บอร์ด <span class="pf-n">${active.length}</span></button><button type="button" data-rdview="table" class="${RD.view==='table'?'on':''}">ตาราง <span class="pf-n">${RD.list.length}</span></button><button type="button" data-rdview="summary" class="${RD.view==='summary'?'on':''}">สรุปผลประเมิน FM-RD-11</button><button type="button" data-rdview="customers" class="${RD.view==='customers'?'on':''}">ลูกค้า <span class="pf-n">${RD.customers.length}</span></button></div>
+      <input id="rdQ" type="search" autocomplete="off" placeholder="ค้นหา PDR แบรนด์ บริษัท เลข SO…" value="${esc(RD.q)}" style="flex:1;min-width:200px">
+      ${RD.view==='table'?`<select id="rdStageF"><option value="">ทุกขั้น</option>${RD_STAGE.map(s=>`<option value="${s[0]}" ${RD.stageF===s[0]?'selected':''}>${esc(s[1])}</option>`).join('')}</select>`:''}
+      ${ed?'<button class="btn primary" type="button" id="rdNew">+ เปิดโครงการใหม่</button>':''}<button class="btn" type="button" id="rdRefresh">รีเฟรช</button>
+      ${late?`<span class="chip bad">เกินกำหนด ${late} โครงการ</span>`:''}</div>
+    <div id="rdMain">${RD.view==='board'?rdBoard():RD.view==='table'?rdTable():RD.view==='summary'?rdSummary():rdCustomers()}</div>`;
+  if(RD.view==='summary' && !RD.sum) rdLoadSummary();
+}
+function rdFiltered(){ const q=RD.q.trim().toLowerCase(); return RD.list.filter(p=>(!RD.stageF||p.stage===RD.stageF)&&(!q||[p.pdrNo,p.docNo,p.brand,p.company,p.soNo,p.title,p.customerCode,p.owners.pc,p.owners.sa,...(p.owners.perfumer||[])].join(' ').toLowerCase().includes(q))); }
+function rdCard(p){
+  const d=rdDue(p), days=p.actual&&p.actual[p.stage]?rdDays(p.actual[p.stage]):null;
+  return `<button type="button" class="rd-card ${d&&d.overdue?'late':''}" data-rd-open="${esc(p.id)}">
+    <div class="rd-card-h"><span class="mono">${esc(p.pdrNo)}</span><span class="muted">${esc(RD_KIND[p.kind]||p.kind)}</span></div>
+    <div class="rd-card-t">${rdBrand(p)}</div>${p.company&&p.brand?`<div class="muted" style="font-size:12px">${esc(p.company)}</div>`:''}
+    <div class="rd-card-f"><span>${p.scentCount} กลิ่น${p.scents?` · ${p.scents} สูตร`:''}${p.samples?` · ${p.samples} ชุดตัวอย่าง`:''}</span>${days!=null?`<span class="muted">${days} วันในขั้นนี้</span>`:''}</div>
+    <div class="rd-card-f">${(p.owners.perfumer||[]).length?`<span title="Perfumer">${(p.owners.perfumer||[]).map(ava).join('')}</span>`:''}${p.owners.pc?`<span title="Project Co">${ava(p.owners.pc)}</span>`:''}${rdDueChip(d)}</div></button>`;
+}
+function rdBoard(){
+  const list=rdFiltered(), cols=RD_STAGE.slice(0,8);
+  return `<div class="rd-board">${cols.map(([k,l,who])=>{ const items=list.filter(p=>p.stage===k); return `<div class="rd-col"><div class="rd-col-h"><b>${esc(l)}</b><span class="pf-n">${items.length}</span>${who?`<div class="muted" style="font-size:11px">${esc(who)}</div>`:''}</div>${items.map(rdCard).join('')||'<div class="empty" style="padding:10px;font-size:12px">ว่าง</div>'}</div>`; }).join('')}
+    <div class="rd-col rd-col-end"><div class="rd-col-h"><b>เสร็จสิ้น</b><span class="pf-n">${list.filter(p=>p.stage==='done').length}</span></div>${list.filter(p=>p.stage==='done').slice(0,8).map(rdCard).join('')}<div class="rd-col-h" style="margin-top:10px"><b>ยกเลิก</b><span class="pf-n">${list.filter(p=>p.stage==='lost').length}</span></div>${list.filter(p=>p.stage==='lost').slice(0,5).map(rdCard).join('')}</div></div>
+    <div class="muted" style="font-size:12px;margin-top:6px">กดการ์ดเพื่อเปิดโครงการ · กำหนดเวลา: ออกแบบกลิ่น ${RD.sla.s3||15} วัน ส่งตัวอย่าง ${RD.sla.s3send||2} วัน ลูกค้าประเมิน ${RD.sla.s3eval||7} วัน (ผู้ดูแลแก้ได้ที่ settings rdSla)</div>`;
+}
+function rdTable(){
+  const list=rdFiltered().sort((a,b)=>(b.updatedAt||'').localeCompare(a.updatedAt||''));
+  return `<div class="tablebox"><table><thead><tr><th>PDR</th><th>ลูกค้า / แบรนด์</th><th>ประเภท</th><th>ขั้น</th><th>กำหนด</th><th>Perfumer</th><th>Project Co</th><th>กลิ่น</th><th>ตัวอย่าง</th><th>อัปเดต</th></tr></thead>
+    <tbody>${list.map(p=>{ const d=rdDue(p); return `<tr><td class="mono"><button type="button" class="linklike" data-rd-open="${esc(p.id)}">${esc(p.pdrNo)}</button><div class="muted" style="font-size:11px">${esc(p.docNo)}</div></td><td><b>${rdBrand(p)}</b>${p.company&&p.brand?`<div class="muted" style="font-size:12px">${esc(p.company)}</div>`:''}</td><td style="font-size:12.5px">${esc(RD_KIND[p.kind]||p.kind)}</td><td>${pfChip(p.stage,{s1:['1 รับบรีฟ','info'],s2:['2 ตรวจกฎหมาย','info'],s3:['3 ออกแบบกลิ่น','warn'],s4:['4 ต้นแบบ','warn'],s5:['5 ส่งต้นแบบ','warn'],s6:['6 Stability','warn'],s7:['7 BOM','warn'],s8:['8 Pilot','warn'],done:['เสร็จสิ้น','ok'],lost:['ยกเลิก','bad']})}</td><td>${rdDueChip(d)}</td><td style="font-size:12.5px">${(p.owners.perfumer||[]).map(rdPerson).join(', ')||'–'}</td><td style="font-size:12.5px">${rdPerson(p.owners.pc)}</td><td class="num">${p.scents||0}</td><td class="num">${p.samples||0}${p.evaluated?` <span class="muted">(${p.evaluated} ประเมิน)</span>`:''}</td><td class="muted" style="font-size:12px">${fmtSeen(p.updatedAt)}</td></tr>`; }).join('')||'<tr><td colspan="10" class="empty">ไม่พบโครงการ</td></tr>'}</tbody></table></div>
+    <div class="row" style="margin-top:8px"><button class="btn small" type="button" id="rdXlsx">ดาวน์โหลด Excel</button></div>`;
+}
+function rdCustomers(){
+  const q=RD.q.trim().toLowerCase(), list=RD.customers.filter(c=>!q||[c.code,c.company,c.brand,c.contact].join(' ').toLowerCase().includes(q));
+  const n=code=>RD.list.filter(p=>p.customerCode===code).length;
+  return `<div class="tablebox"><table><thead><tr><th>รหัส</th><th>บริษัท</th><th>แบรนด์</th><th>ผู้ติดต่อ</th><th>โครงการ</th></tr></thead><tbody>${list.map(c=>`<tr><td class="mono">${esc(c.code)}</td><td>${esc(c.company)}</td><td>${esc(c.brand)}</td><td style="font-size:12.5px">${esc(c.contact)}${c.phone?' · '+esc(c.phone):''}${c.email?'<div class="muted">'+esc(c.email)+'</div>':''}</td><td class="num">${n(c.code)}</td></tr>`).join('')||'<tr><td colspan="5" class="empty">ไม่พบลูกค้า</td></tr>'}</tbody></table></div>
+    <div class="muted" style="font-size:12px;margin-top:6px">รหัสลูกค้าใช้สร้างรหัสสูตรกลิ่น (PF + รหัสลูกค้า + ลำดับ) · เพิ่มลูกค้าใหม่ได้ตอนเปิดโครงการ</div>`;
+}
+/* ---------- สรุปผลประเมินของลูกค้า (FM-RD-11) ---------- */
+async function rdLoadSummary(){
+  if(!RD.sumPeriod) RD.sumPeriod=new Date().toISOString().slice(0,7);
+  const box=$('#rdSumBody'); if(box) box.innerHTML='<div class="empty">กำลังโหลด…</div>';
+  try{ RD.sum=await api('evalSummary', RD.sumPeriod, RD.sumKind); }catch(e){ RD.sum={error:errText(e)}; }
+  const el=$('#rdSumBody'); if(el) el.innerHTML=rdSummaryTable();
+}
+function rdSummary(){
+  const yearly=/^\d{4}$/.test(RD.sumPeriod||'');
+  return `<div class="card" style="margin-bottom:12px"><div class="row" style="gap:8px;flex-wrap:wrap;align-items:end">
+      <div class="field"><label>ช่วงเวลา</label><div class="row" style="gap:6px"><input id="rdSumMonth" type="month" value="${esc(yearly?'':RD.sumPeriod)}" style="width:170px"><button class="btn small" type="button" id="rdSumYear">${yearly?'ปี '+esc(RD.sumPeriod):'ดูทั้งปี'}</button></div></div>
+      <div class="field"><label>ประเภท</label><select id="rdSumKind"><option value="scent" ${RD.sumKind==='scent'?'selected':''}>ด้านกลิ่น (FM-RD-11-01/02)</option><option value="mockup" ${RD.sumKind==='mockup'?'selected':''}>ด้านต้นแบบผลิตภัณฑ์ (FM-RD-11-03/04)</option></select></div>
+      <button class="btn small" type="button" id="rdSumXlsx">ดาวน์โหลด Excel</button></div>
+      <div class="muted" style="font-size:12px;margin-top:6px">คะแนนรวมเต็ม 30 (6 ด้าน × 5) คิดเป็นร้อยละ · ผลที่นำเข้าจากทะเบียนเดิมไม่มีคะแนนรายด้านจึงไม่นับ</div></div>
+    <div id="rdSumBody">${RD.sum?rdSummaryTable():'<div class="empty">กำลังโหลด…</div>'}</div>`;
+}
+function rdSummaryTable(){
+  const s=RD.sum; if(!s) return ''; if(s.error) return `<div class="msg bad">${esc(s.error)}</div>`;
+  return `<div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:8px"><span class="chip info">${s.count} รายการ</span><span class="chip ${s.avgPct>=s.passPct?'ok':'warn'}">เฉลี่ย ${s.avgPct}%</span><span class="chip">เกณฑ์ผ่าน ${s.passPct}%</span></div>
+    <div class="tablebox"><table><thead><tr><th>#</th><th>บริษัท (ผู้ประเมิน)</th><th>รหัสสูตร</th><th>ชื่อกลิ่น / ตัวอย่าง</th>${EVAL_CRIT.map(c=>`<th class="num">${c[1]}</th>`).join('')}<th class="num">รวม</th><th class="num">%</th><th>ผล</th><th>ความเห็น</th></tr></thead>
+    <tbody>${s.rows.map((r,i)=>`<tr><td>${i+1}</td><td>${esc(r.company||r.brand)}<div class="muted" style="font-size:11px">${esc(r.pdrNo)} · ${rdDate(r.submittedAt)}</div></td><td class="mono">${esc(r.formulaCode||r.code)}</td><td>${esc(r.name)}</td>${EVAL_CRIT.map(c=>`<td class="num">${r.scores[c[0]]}</td>`).join('')}<td class="num"><b>${r.total}</b></td><td class="num">${r.pct}</td><td>${r.pct>=s.passPct?'<span class="chip ok">ผ่าน</span>':'<span class="chip warn">ต่ำกว่าเกณฑ์</span>'}${r.decision?' '+pfChip(r.decision,RD_DEC):''}</td><td style="font-size:12px;max-width:220px">${esc(r.comment)}</td></tr>`).join('')||`<tr><td colspan="${9+EVAL_CRIT.length}" class="empty">ยังไม่มีผลประเมินในช่วงนี้</td></tr>`}</tbody></table></div>`;
+}
+/* ---------- หน้าโครงการ ---------- */
+function rdStepper(p, samples){
+  const order=RD_STAGE.slice(0,8), cur=RD_STAGE.findIndex(s=>s[0]===p.stage);
+  return `<div class="rd-steps">${order.map(([k,l],i)=>{ const done=p.stage==='done'||(cur>i&&p.stage!=='lost'), on=p.stage===k, at=p.actual&&p.actual[k]; return `<div class="rd-step ${done?'done':''} ${on?'on':''}"><div class="rd-step-n">${done?'✓':i+1}</div><div><div class="rd-step-l">${esc(l)}</div><div class="muted" style="font-size:11px">${at?rdDate(at):'–'}</div></div></div>`; }).join('')}
+    <div class="rd-step ${p.stage==='done'?'done on':p.stage==='lost'?'lost on':''}"><div class="rd-step-n">${p.stage==='lost'?'✕':'★'}</div><div><div class="rd-step-l">${p.stage==='lost'?'ยกเลิก':'เสร็จสิ้น'}</div><div class="muted" style="font-size:11px">${p.actual&&(p.actual.done||p.actual.lost)?rdDate(p.actual.done||p.actual.lost):'–'}</div></div></div></div>`;
+}
+function rdNextStage(p){ const i=RD_STAGE.findIndex(s=>s[0]===p.stage); if(p.stage==='done'||p.stage==='lost') return null; if(p.stage==='s7'&&!(p.data&&p.data.newFormula)) return 'done'; if(p.stage==='s8') return 'done'; return RD_STAGE[i+1][0]; }
+function rdField(label, inner, wide){ return `<div class="field${wide?' pf-wide':''}"><label>${label}</label>${inner}</div>`; }
+const rdInp=(k,v,ph,type)=>`<input data-k="${k}" type="${type||'text'}" value="${esc(v==null?'':v)}" placeholder="${esc(ph||'')}" maxlength="300">`;
+const rdSel=(k,v,opts)=>`<select data-k="${k}">${opts.map(([val,lab])=>`<option value="${esc(val)}" ${String(v)===String(val)?'selected':''}>${esc(lab)}</option>`).join('')}</select>`;
+function rdEmailList(){ const s=new Set(); (RD.list||[]).forEach(p=>{ ['pc','sa','pd'].forEach(k=>p.owners[k]&&s.add(p.owners[k])); (p.owners.perfumer||[]).forEach(e=>s.add(e)); }); if(S.me) s.add(S.me.email); if(S.adm&&S.adm.users) S.adm.users.forEach(u=>s.add(u.email)); return [...s]; }
+function rdProjectPage(o){
+  const p=o.project, d=p.data||{}, ed=rdCanEdit(), ro=ed?'':'disabled', due=rdDue(p, o.samples), next=rdNextStage(p), nextL=next?(next==='done'?'ปิดงาน (เสร็จสิ้น)':'ไปขั้น '+RD_STAGE_MAP[next][1]):'';
+  const brief=(PF.briefs||[]).find(b=>b.id===p.briefId);
+  const custOpts=[['', '– เลือกลูกค้า –'],['__new','+ ลูกค้าใหม่'],...RD.customers.map(c=>[c.code, `${c.code} · ${c.brand||c.company}${c.brand&&c.company?' ('+c.company+')':''}`])];
+  return `<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px"><div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button class="btn small" type="button" id="rdBack">← โครงการทั้งหมด</button><h3 style="margin:0"><span class="mono">${esc(p.pdrNo)}</span> · ${rdBrand(p)}</h3>${pfChip(p.stage,{s1:['1 รับบรีฟ','info'],s2:['2 ตรวจกฎหมาย','info'],s3:['3 ออกแบบกลิ่น','warn'],s4:['4 ต้นแบบ','warn'],s5:['5 ส่งต้นแบบ','warn'],s6:['6 Stability','warn'],s7:['7 BOM','warn'],s8:['8 Pilot','warn'],done:['เสร็จสิ้น','ok'],lost:['ยกเลิก','bad']})}${rdDueChip(due)}</div>
+      <span class="muted" style="font-size:12px">${esc(p.docNo)} · เปิดเมื่อ ${rdDate(p.createdAt)} โดย ${rdPerson(p.createdBy)} · แก้ล่าสุด ${fmtSeen(p.updatedAt)}</span></div>
+    ${rdStepper(p, o.samples)}
+    ${ed&&p.stage!=='done'&&p.stage!=='lost'?`<div class="row" style="gap:8px;flex-wrap:wrap;margin:10px 0 14px;align-items:center"><button class="btn primary" type="button" data-rd-stage="${esc(next||'')}" ${next?'':'disabled'}>${esc(nextL)} →</button>${due&&due.label?`<span class="muted" style="font-size:12.5px">${esc(due.label)}${due.days?` · กำหนด ${due.days} วัน (${rdDate(due.due)})`:''}</span>`:''}
+      <span style="flex:1"></span>${rdIsPc()&&p.stage!=='s1'?`<button class="btn small" type="button" data-rd-stage="${RD_STAGE[RD_STAGE.findIndex(s=>s[0]===p.stage)-1][0]}" data-rd-back="1">← ย้อนขั้น</button>`:''}${rdIsPc()?`<button class="btn small" type="button" data-rd-stage="lost" style="color:var(--bad)">ยกเลิกโครงการ</button>`:''}</div>`:''}
+    ${(d.overrides||[]).length?`<div class="msg warn" style="font-size:12.5px;margin-bottom:10px"><b>ข้ามเงื่อนไข ${d.overrides.length} ครั้ง:</b> ${d.overrides.map(x=>`${esc(RD_STAGE_MAP[x.stage]?RD_STAGE_MAP[x.stage][1]:x.stage)} — ${esc(x.note)} (${rdPerson(x.by)} ${rdDate(x.at)})`).join(' · ')}</div>`:''}
+    <form id="rdForm" class="card" style="margin:0 0 14px" novalidate><fieldset ${ro} style="border:0;padding:0;margin:0;min-width:0">
+      <div class="pf-group"><h4>ข้อมูลโครงการ (FM-RD-01)</h4><div class="settings">
+        ${rdField('ลูกค้า *', rdSel('customerCode', p.customerCode, custOpts))}
+        <div class="field" id="rdNewCust" ${p.customerCode?'hidden':''}><label>ลูกค้าใหม่: บริษัท</label>${rdInp('custCompany','', 'ชื่อบริษัท')}</div>
+        <div class="field" id="rdNewCust2" ${p.customerCode?'hidden':''}><label>ลูกค้าใหม่: แบรนด์</label>${rdInp('custBrand','', 'ชื่อแบรนด์')}</div>
+        ${rdField('ประเภทคำขอ', rdSel('kind', p.kind, Object.entries(RD_KIND)))}${rdField('เลข SO จากฝ่ายขาย', rdInp('soNo', p.soNo, 'SO#…'))}${rdField('จำนวนกลิ่นที่ต้องการ', rdInp('scentCount', p.scentCount, '', 'number'))}
+        ${rdField('บรีฟ Typeform', `<select data-k="briefId"><option value="">– ไม่ผูกบรีฟ –</option>${(PF.briefs||[]).map(b=>`<option value="${b.id}" ${p.briefId===b.id?'selected':''}>${esc(b.brand)} · ${esc(PF_KIND[b.kind]||b.kind)}${b.data&&b.data.tf?' · Typeform':''}</option>`).join('')}</select>`)}
+        ${rdField('เอกสารสรุปจากฝ่ายขาย (ลิงก์ / เลขอ้างอิง Typeform)', rdInp('salesDoc', d.salesDoc, 'https://… หรือเลขที่อ้างอิง'), true)}
+        ${rdField('สรุปโครงการ', rdInp('title', p.title, 'เช่น น้ำหอม 2 SKU กลิ่นดอกไม้ขาว วางขาย Q1'), true)}
+        ${rdField('สินค้า / ขนาด / จำนวน', rdInp('products', d.products, 'เช่น EDP 30 ml × 1,000'))}${rdField('Target cost / ราคาขาย ต่อหน่วย', rdInp('target', d.target, 'เช่น 250 / 1,000 บาท'))}${rdField('กำหนดวางจำหน่าย', rdInp('launch', d.launch, '', 'date'))}
+        ${rdField('ใบรับรองที่ต้องการ', rdInp('certs', d.certs, 'IFRA, MSDS, COA, จดแจ้ง อย. …'))}${rdField('บันทึก', `<textarea data-k="note" rows="2" maxlength="3000">${esc(d.note||'')}</textarea>`, true)}
+      </div></div>
+      <div class="pf-group"><h4>ผู้รับผิดชอบ</h4><div class="settings">
+        ${rdField('Project Coordinator *', rdInp('o_pc', p.owners.pc, 'อีเมลบริษัท'))}${rdField('Perfumer (คั่นด้วย , ได้หลายคน)', rdInp('o_perfumer', (p.owners.perfumer||[]).join(', '), 'อีเมลบริษัท'))}${rdField('Product Development', rdInp('o_pd', p.owners.pd, 'อีเมลบริษัท'))}${rdField('ฝ่ายขาย (SA/AE)', rdInp('o_sa', p.owners.sa, 'อีเมลหรือชื่อ'))}
+        <datalist id="rdEmails">${rdEmailList().map(e=>`<option value="${esc(e)}">`).join('')}</datalist></div>
+        ${d.import&&(d.import.rdName||d.import.saName)?`<div class="muted" style="font-size:12px;margin-top:4px">จากทะเบียนเดิม: R&D ${esc(d.import.rdName||'–')} · SA ${esc(d.import.saName||'–')}</div>`:''}</div>
+      ${brief?`<div class="pf-group"><h4>บรีฟที่ผูกไว้</h4><div class="muted" style="font-size:13px">${esc(brief.brand)} · ${esc(PF_KIND[brief.kind]||brief.kind)} · ชอบ: ${esc(pfList(brief.data.like).join(', ')||'–')} · ความรู้สึก: ${esc(pfList(brief.data.feelings).join(', ')||'–')}${brief.data.arch&&brief.data.arch.result&&PF_ARCH[brief.data.arch.result]?' · Archetype: '+esc(PF_ARCH[brief.data.arch.result][0]):''} <button class="btn small" type="button" data-rd-brief="${brief.id}">เปิดบรีฟ</button></div></div>`:''}
+      <div class="pf-group"><h4>พัฒนาสูตรสินค้า (ขั้น 4-8)</h4>
+        <div class="settings">
+          ${rdField('เบสที่ใช้', rdInp('base', d.stability&&d.stability.base, 'เช่น BASE Hair And Body Mist'))}
+          ${rdField('Stability', rdSel('stabMode', d.stability?(d.stability.standard?'standard':d.stability.result==='pass'?'pass':d.stability.result==='fail'?'fail':'todo'):'todo', [['todo','ยังไม่ทำ'],['standard','เบสเดิม ใช้เอกสารมาตรฐาน'],['pass','เบสใหม่ ทดสอบผ่าน'],['fail','เบสใหม่ ทดสอบไม่ผ่าน']]))}
+          ${rdField('สูตรใหม่ (ต้องทำ Pilot Batch)', rdSel('newFormula', d.newFormula?'1':'0', [['0','สูตรเดิม ไม่ต้อง Pilot'],['1','สูตรใหม่ ต้องทำ Pilot']]))}
+          ${rdField('BOM / ส่งมอบสูตรให้ฝ่ายผลิต', rdSel('bomReleased', d.bom&&d.bom.released?'1':'0', [['0','ยังไม่ส่งมอบ'],['1','ส่งมอบแล้ว']]))}
+          ${rdField('ผล Pilot Batch', rdSel('pilotResult', d.pilot&&d.pilot.result||'', [['','–'],['pass','ผ่าน'],['fail','ไม่ผ่าน']]))}${rdField('เลข Pilot Batch', rdInp('pilotBatch', d.pilot&&d.pilot.batchNo, ''))}
+          ${rdField('เลขจดแจ้ง อย.', rdInp('regNo', d.finalFormula&&d.finalFormula.regNo, ''))}${rdField('ตัวอย่างเก็บ: เลข Batch / ที่เก็บ', rdInp('retentionNote', d.retention&&d.retention.note, ''))}
+        </div>
+        <div class="tablebox" style="margin-top:8px"><table><thead><tr><th>เอกสาร</th><th>เลขที่</th><th>ออกเมื่อ</th><th></th></tr></thead><tbody>${RD_SUBDOC.map(([k,f,l])=>{ const x=d[k]||{}; return `<tr><td>${f} · ${esc(l)}</td><td class="mono">${esc(x.docNo||'')}</td><td class="muted" style="font-size:12px">${x.issuedAt?rdDate(x.issuedAt)+' · '+rdPerson(x.issuedBy):''}</td><td>${ed&&!x.docNo?`<button class="btn small" type="button" data-rd-doc="${k}">ออกเลขเอกสาร</button>`:''}</td></tr>`; }).join('')}</tbody></table></div></div>
+      </fieldset>
+      <div class="row" style="margin-top:14px;gap:8px;flex-wrap:wrap">${ed?'<button class="btn primary" type="submit">บันทึกโครงการ</button>':''}<span class="muted" id="rdErr" role="alert" style="color:var(--bad)"></span></div></form>
+    <div class="card" style="margin:0 0 14px"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><h4 style="margin:0">ตรวจกฎหมาย (RA) · ขั้น 2</h4>${p.ra&&p.ra.status?pfChip(p.ra.status,RD_RA):'<span class="chip info">รอตรวจ</span>'}</div>
+      ${p.ra&&p.ra.at?`<div class="muted" style="font-size:12.5px;margin-top:4px">${esc(p.ra.note||'')} — ${rdPerson(p.ra.by)} ${rdDate(p.ra.at)}</div>`:''}
+      ${can('ra')||isAdminRole()?`<form id="rdRaForm" class="row" style="gap:8px;flex-wrap:wrap;margin-top:8px;align-items:end" novalidate><div class="field"><label>ผลตรวจ</label><select id="rdRaStatus">${Object.entries(RD_RA).map(([k,[l]])=>`<option value="${k}" ${p.ra&&p.ra.status===k?'selected':''}>${l}</option>`).join('')}</select></div><div class="field" style="flex:1;min-width:220px"><label>หมายเหตุ / เงื่อนไข (IFRA หมวด, อย., คำกล่าวอ้าง)</label><input id="rdRaNote" value="${esc(p.ra&&p.ra.note||'')}" maxlength="2000"></div><button class="btn small primary" type="submit">บันทึกผลตรวจ</button></form>`:''}</div>
+    <div class="card" style="margin:0 0 14px"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><h4 style="margin:0">กลิ่นในโครงการ (FM-RD-02) · ${o.scents.length}</h4>${can('perfumer')?`<button class="btn small" type="button" id="rdNewScent">+ ออกแบบกลิ่นใหม่</button>`:''}</div>
+      ${o.scents.length?`<div class="tablebox" style="margin-top:8px"><table><thead><tr><th>รหัสสูตร</th><th>ชื่อกลิ่น</th><th>กลุ่ม</th><th>สถานะ</th><th>เวอร์ชัน</th><th>เจ้าของ</th><th></th></tr></thead><tbody>${o.scents.map(s=>`<tr><td class="mono">${esc(s.formulaCode||s.code)}</td><td><b>${esc(s.name)}</b></td><td style="font-size:12.5px">${esc(s.family)}</td><td>${pfChip(s.status,PF_SSTAT)}</td><td class="muted" style="font-size:12px">${pfList(s.data.versions).length||0}</td><td style="font-size:12.5px">${rdPerson(s.owner)}</td><td><button class="btn small" type="button" data-rd-scent="${s.id}">เปิด</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="muted" style="font-size:12.5px;margin-top:6px">ยังไม่มีกลิ่น · Perfumer กด "ออกแบบกลิ่นใหม่" ระบบจะออกรหัสสูตร PF ให้</div>'}</div>
+    <div class="card" style="margin:0 0 14px"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><h4 style="margin:0">ตัวอย่างที่ส่งและผลประเมิน (FM-RD-04 / 05) · ${o.samples.length}</h4>${ed?`<div class="row" style="gap:6px"><button class="btn small" type="button" data-rd-sample-new="scent">+ ส่งตัวอย่างกลิ่น</button><button class="btn small" type="button" data-rd-sample-new="mockup">+ ส่งต้นแบบสินค้า</button></div>`:''}</div>
+      <div id="rdSampleEdit">${RD.sampleEdit?rdSampleForm(o):''}</div>
+      ${o.samples.length?o.samples.slice().reverse().map(s=>rdSampleCard(s, ed)).join(''):'<div class="muted" style="font-size:12.5px;margin-top:6px">ยังไม่มีชุดตัวอย่าง</div>'}</div>
+    ${(d.stageLog||[]).length?`<details class="help"><summary>ประวัติการเปลี่ยนขั้น (${d.stageLog.length})</summary><table style="font-size:12.5px;margin-top:6px"><tbody>${d.stageLog.slice().reverse().map(x=>`<tr><td>${rdDate(x.at)}</td><td>${esc(RD_STAGE_MAP[x.from]?RD_STAGE_MAP[x.from][1]:x.from)} → <b>${esc(RD_STAGE_MAP[x.to]?RD_STAGE_MAP[x.to][1]:x.to)}</b></td><td>${rdPerson(x.by)}</td><td class="muted">${esc(x.note||'')}</td></tr>`).join('')}</tbody></table></details>`:''}`;
+}
+function rdSampleCard(s, ed){
+  const ev=s.eval||{}, evItems=pfList(ev.items);
+  return `<div class="rd-sample ${s.status}"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:6px"><div><b>${esc(SAMPLE_KIND[s.kind]||s.kind)}</b> <span class="mono muted" style="font-size:12px">${esc(s.docNo)}</span> ${pfChip(s.status,{draft:['ร่าง','info'],sent:['ส่งแล้ว รอประเมิน','warn'],evaluated:['ประเมินแล้ว','ok']})}${ev.produce?'<span class="chip ok">ลูกค้าเลือกผลิตจริง</span>':''}</div>
+      <div class="muted" style="font-size:12px">${s.requestedAt?'ขอส่ง '+rdDate(s.requestedAt)+' · ':''}${s.shippedAt?'ส่ง '+rdDate(s.shippedAt):''}${s.arrivalAt?' · ถึง '+rdDate(s.arrivalAt):''}${s.rdBy?' · R&D '+esc(s.rdBy.split('@')[0]):''}${s.saBy?' · SA '+esc(s.saBy.split('@')[0]):''}</div></div>
+    <div style="margin-top:6px;font-size:13px">${s.items.map(it=>`<span class="chip" style="margin:0 4px 4px 0">${esc(it.code)}${it.name?' · '+esc(it.name):''}${it.size?' · '+esc(it.size):''}${it.qty?' × '+esc(it.qty):''}</span>`).join('')}</div>
+    ${s.note?`<div class="muted" style="font-size:12.5px">${esc(s.note)}</div>`:''}
+    ${s.status==='sent'&&s.evalLink?`<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center"><input class="mono" readonly value="${esc(s.evalLink)}" style="flex:1;min-width:240px;font-size:12px;border:1px solid var(--line-strong);border-radius:8px;padding:6px 8px;background:var(--input-bg)"><button class="btn small" type="button" data-rd-copy="${esc(s.evalLink)}">คัดลอกลิงก์ประเมิน</button><a class="btn small" href="${esc(s.evalLink)}" target="_blank" rel="noopener">เปิดดู</a></div>`:''}
+    ${s.status==='evaluated'?`<div style="margin-top:8px"><div class="muted" style="font-size:12px">ประเมินเมื่อ ${rdDate(ev.submittedAt)}${ev.email?' โดย '+esc(ev.email):''} · เอกสาร ${esc(s.evalDocNo)}${ev.history&&ev.history.length?' · แก้ไข '+ev.history.length+' ครั้ง':''}</div>
+      <div class="tablebox" style="margin-top:4px"><table style="font-size:12.5px"><thead><tr><th>ตัวอย่าง</th>${EVAL_CRIT.map(c=>`<th class="num">${c[1]}</th>`).join('')}<th class="num">รวม/30</th><th>ลูกค้าเลือก</th><th>ความเห็น</th></tr></thead><tbody>${evItems.map(it=>{ const sc=it.scores||{}, tot=EVAL_CRIT.reduce((a,c)=>a+(Number(sc[c[0]])||0),0); return `<tr><td>${esc(it.code)}${it.name?' · '+esc(it.name):''}</td>${EVAL_CRIT.map(c=>`<td class="num">${sc[c[0]]||'–'}</td>`).join('')}<td class="num"><b>${tot||'–'}</b></td><td>${it.decision?pfChip(it.decision,RD_DEC):'–'}</td><td>${esc(it.comment||'')}</td></tr>`; }).join('')}</tbody></table></div>${ev.note?`<div style="font-size:12.5px;margin-top:4px">“${esc(ev.note)}”</div>`:''}</div>`:''}
+    ${ed&&s.status!=='evaluated'?`<div class="row" style="gap:6px;margin-top:8px"><button class="btn small" type="button" data-rd-sample-edit="${s.id}">แก้ไข</button>${s.status==='draft'?`<button class="btn small primary" type="button" data-rd-sample-send="${s.id}">ส่งแล้ว · สร้างลิงก์ประเมิน</button>`:''}<button class="btn small" type="button" data-rd-sample-del="${s.id}" style="color:var(--bad)">ลบ</button></div>`:(ed&&isAdminRole()?`<div class="row" style="gap:6px;margin-top:8px"><button class="btn small" type="button" data-rd-sample-del="${s.id}" style="color:var(--bad)">ลบ (ผู้ดูแล)</button></div>`:'')}</div>`;
+}
+function rdSampleForm(o){
+  const s=RD.sampleEdit, items=s.items.length?s.items:[{}];
+  const scentOpts=o.scents.map(x=>`<option value="${x.id}">${esc(x.formulaCode||x.code)} · ${esc(x.name)}</option>`).join('');
+  const row=(it,i)=>`<tr data-i="${i}"><td>${o.scents.length?`<select class="si-scent"><option value="">– พิมพ์เอง –</option>${scentOpts.replace(`value="${it.scentId}"`,`value="${it.scentId}" selected`)}</select>`:''}</td><td><input class="si-code" value="${esc(it.code||'')}" placeholder="รหัส / ชื่อบนขวด" maxlength="40"></td><td><input class="si-name" value="${esc(it.name||'')}" placeholder="ชื่อกลิ่น / สินค้า" maxlength="160"></td><td><input class="si-size" value="${esc(it.size||'')}" placeholder="5 ml" maxlength="40" style="width:80px"></td><td><input class="si-qty num" value="${esc(it.qty==null?'':it.qty)}" placeholder="1" style="width:60px"></td><td><button class="x" type="button" data-si-rm="${i}" aria-label="เอาออก">×</button></td></tr>`;
+  return `<form id="rdSampleForm" class="card" style="background:var(--tint);margin:8px 0 12px" novalidate><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><h4 style="margin:0">${s.id?'แก้ไขชุดตัวอย่าง '+esc(s.docNo):'ชุดตัวอย่างใหม่'} · ${esc(SAMPLE_KIND[s.kind])}</h4><span class="muted" style="font-size:12px">เลขเอกสาร FM-RD-04 ออกให้เมื่อบันทึก</span></div>
+    <div class="tablebox" style="margin-top:8px"><table><thead><tr><th>เลือกจากกลิ่นในโครงการ</th><th>รหัสตัวอย่าง</th><th>ชื่อ</th><th>ขนาด</th><th>จำนวน</th><th></th></tr></thead><tbody id="rdSi">${items.map(row).join('')}</tbody></table></div>
+    <div class="row" style="gap:8px;margin-top:6px"><button class="btn small" type="button" id="rdSiAdd">+ เพิ่มรายการ</button></div>
+    <div class="settings" style="margin-top:10px">${rdField('ลูกค้าขอให้ส่ง', rdInp('requestedAt', rdInputDate(s.requestedAt), '', 'date'))}${rdField('วันส่งจริง', rdInp('shippedAt', rdInputDate(s.shippedAt), '', 'date'))}${rdField('วันที่ถึงลูกค้า (คาด)', rdInp('arrivalAt', rdInputDate(s.arrivalAt), '', 'date'))}${rdField('ผู้รับผิดชอบ R&D', rdInp('rdBy', s.rdBy||(S.me?S.me.email:''), ''))}${rdField('ผู้รับผิดชอบฝ่ายขาย', rdInp('saBy', s.saBy||(RD.open.project.owners.sa||''), ''))}${rdField('หมายเหตุ', rdInp('note', s.note, 'ขนส่ง / สิ่งที่แนบ'), true)}</div>
+    <div class="row" style="gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn primary" type="submit">บันทึก</button>${!s.id||s.status==='draft'?`<button class="btn" type="button" id="rdSampleSaveSend">บันทึกและส่งแล้ว (สร้างลิงก์ประเมิน)</button>`:''}<button class="btn" type="button" id="rdSampleCancel">ยกเลิก</button><span class="muted" id="rdSampleErr" style="color:var(--bad)"></span></div></form>`;
+}
+function rdReadSample(){
+  const s=RD.sampleEdit, root=$('#rdSampleForm'); if(!root) return s;
+  s.items=[...root.querySelectorAll('#rdSi tr[data-i]')].map(tr=>{ const sel=tr.querySelector('.si-scent'), sc=sel&&sel.value?RD.open.scents.find(x=>x.id===sel.value):null; return {scentId:sel?sel.value:'', formulaCode:sc?sc.formulaCode:'', code:tr.querySelector('.si-code').value.trim(), name:tr.querySelector('.si-name').value.trim(), size:tr.querySelector('.si-size').value.trim(), qty:tr.querySelector('.si-qty').value.trim()}; }).filter(x=>x.code||x.name||x.scentId);
+  root.querySelectorAll('[data-k]').forEach(el=>{ s[el.dataset.k]=el.value.trim(); });
+  return s;
+}
+function rdReadProject(){
+  const o=RD.open, p=JSON.parse(JSON.stringify(o.project)), root=$('#rdForm'); if(!root) return p;
+  const v=k=>{ const el=root.querySelector(`[data-k="${k}"]`); return el?el.value.trim():''; };
+  const cc=v('customerCode'); p.customerCode=cc==='__new'?'':cc; if(cc==='__new') p.customer={company:v('custCompany'), brand:v('custBrand')};
+  p.kind=v('kind'); p.soNo=v('soNo'); p.scentCount=toNum(v('scentCount'))||1; p.briefId=v('briefId'); p.title=v('title');
+  p.owners={pc:v('o_pc'), sa:v('o_sa'), pd:v('o_pd'), perfumer:v('o_perfumer').split(',').map(x=>x.trim()).filter(Boolean)};
+  const d=Object.assign({}, p.data); d.salesDoc=v('salesDoc'); d.products=v('products'); d.target=v('target'); d.launch=v('launch'); d.certs=v('certs'); d.note=v('note');
+  const sm=v('stabMode'); d.stability=Object.assign({}, d.stability, {base:v('base'), standard:sm==='standard', result:sm==='pass'?'pass':sm==='fail'?'fail':''});
+  d.newFormula=v('newFormula')==='1'; d.bom=Object.assign({}, d.bom, {released:v('bomReleased')==='1'}); d.pilot=Object.assign({}, d.pilot, {result:v('pilotResult'), batchNo:v('pilotBatch')});
+  d.finalFormula=Object.assign({}, d.finalFormula, {regNo:v('regNo')}); d.retention=Object.assign({}, d.retention, {note:v('retentionNote')});
+  p.data=d; return p;
+}
+async function rdOpen(id){
+  $('#rdBody').innerHTML='<div class="empty">กำลังโหลดโครงการ…</div>';
+  try{ RD.open=await api('getProject', id); RD.sampleEdit=null; drawRd(); window.scrollTo(0,0); }catch(e){ RD.open=null; drawRd(); toast(errText(e)); }
+}
+function rdPatchList(p){ const i=RD.list.findIndex(x=>x.id===p.id); const prev=i>=0?RD.list[i]:{}; const row=Object.assign({}, prev, p, {scents:prev.scents||0, samples:prev.samples||0, evaluated:prev.evaluated||0}); if(i>=0) RD.list[i]=row; else RD.list.unshift(row); }
+async function rdRun(fn, args, btn, okMsg, after){
+  if(RD.busy) return; RD.busy=true; if(btn) btn.disabled=true;
+  try{ const r=await api(fn, ...args); if(after) await after(r); if(okMsg) toast(okMsg); }
+  catch(e){ const el=$('#rdErr'); if(el) el.textContent=errText(e); else toast(errText(e)); }
+  finally{ RD.busy=false; if(btn&&btn.isConnected) btn.disabled=false; }
+}
+function rdExportProjects(){
+  if(typeof XLSX==='undefined'){ toast('โหลดตัวเขียน Excel ไม่สำเร็จ'); return; }
+  const h=['PDR','เลขเอกสาร','รหัสลูกค้า','บริษัท','แบรนด์','SO','ประเภท','ขั้น','Project Co','Perfumer','Product Dev','SA','จำนวนกลิ่น','สูตร','ชุดตัวอย่าง','ประเมินแล้ว','RA','เปิดเมื่อ','อัปเดต'];
+  const rows=rdFiltered().map(p=>[p.pdrNo,p.docNo,p.customerCode,p.company,p.brand,p.soNo,RD_KIND[p.kind]||p.kind,RD_STAGE_MAP[p.stage]?RD_STAGE_MAP[p.stage][1]:p.stage,p.owners.pc,(p.owners.perfumer||[]).join(', '),p.owners.pd,p.owners.sa,p.scentCount,p.scents||0,p.samples||0,p.evaluated||0,p.ra&&p.ra.status?RD_RA[p.ra.status][0]:'',p.createdAt,p.updatedAt]);
+  const wb=XLSX.utils.book_new(), ws=XLSX.utils.aoa_to_sheet([h].concat(rows)); ws['!cols']=h.map(()=>({wch:18})); XLSX.utils.book_append_sheet(wb, ws, 'โครงการ');
+  saveFile(`RD_โครงการ_${new Date().toISOString().slice(0,10)}.xlsx`, XLSX.write(wb,{type:'array',bookType:'xlsx'})); toast('ดาวน์โหลดแล้ว');
+}
+function rdExportSummary(){
+  const s=RD.sum; if(!s||typeof XLSX==='undefined'){ toast('ยังไม่มีข้อมูลสรุป'); return; }
+  const h=['ลำดับ','บริษัท (ผู้ประเมิน)','PDR','รหัสสูตร','ชื่อกลิ่น',...EVAL_CRIT.map(c=>c[1]),'คะแนนรวม','ร้อยละ','ผลประเมิน','ลูกค้าเลือก','ความเห็น','วันที่ประเมิน','ผู้ประเมิน'];
+  const rows=s.rows.map((r,i)=>[i+1,r.company||r.brand,r.pdrNo,r.formulaCode||r.code,r.name,...EVAL_CRIT.map(c=>r.scores[c[0]]),r.total,r.pct,r.pct>=s.passPct?'ผ่าน':'ต่ำกว่าเกณฑ์',r.decision?RD_DEC[r.decision][0]:'',r.comment,r.submittedAt,r.email]);
+  const wb=XLSX.utils.book_new(), ws=XLSX.utils.aoa_to_sheet([[`สรุปแบบฟอร์มประเมินความพึงพอใจลูกค้า ด้าน${s.kind==='mockup'?'ต้นแบบผลิตภัณฑ์':'กลิ่น'} ${/^\d{4}$/.test(s.period)?'ประจำปี':'ประจำเดือน'} ${s.period} · ${s.kind==='mockup'?'FM-RD-11-03/04':'FM-RD-11-01/02'} · เฉลี่ย ${s.avgPct}%`],[],h].concat(rows)); ws['!cols']=h.map(()=>({wch:16})); XLSX.utils.book_append_sheet(wb, ws, 'FM-RD-11');
+  saveFile(`FM-RD-11_${s.kind}_${s.period}.xlsx`, XLSX.write(wb,{type:'array',bookType:'xlsx'})); toast('ดาวน์โหลดแล้ว');
+}
+/* ---------- events ---------- */
+const rdv=$('#rdView');
+rdv.addEventListener('input', e=>{ const t=e.target; if(t.id==='rdQ'){ RD.q=t.value; const m=$('#rdMain'); if(m) m.innerHTML=RD.view==='board'?rdBoard():RD.view==='table'?rdTable():RD.view==='customers'?rdCustomers():m.innerHTML; } });
+rdv.addEventListener('change', e=>{
+  const t=e.target;
+  if(t.id==='rdStageF'){ RD.stageF=t.value; $('#rdMain').innerHTML=rdTable(); return; }
+  if(t.id==='rdSumMonth'){ if(t.value){ RD.sumPeriod=t.value; rdLoadSummary(); } return; }
+  if(t.id==='rdSumKind'){ RD.sumKind=t.value; rdLoadSummary(); return; }
+  if(t.dataset.k==='customerCode'){ const nw=t.value==='__new'; $('#rdNewCust').hidden=!nw; $('#rdNewCust2').hidden=!nw; return; }
+  if(t.classList.contains('si-scent')){ const sc=RD.open.scents.find(x=>x.id===t.value); if(sc){ const tr=t.closest('tr'); if(!tr.querySelector('.si-code').value) tr.querySelector('.si-code').value=sc.formulaCode||sc.code; tr.querySelector('.si-name').value=sc.name; } }
+});
+rdv.addEventListener('click', async e=>{
+  const t=e.target.closest('button,a'); if(!t||t.tagName==='A') return;
+  if(t.dataset.rdview){ RD.view=t.dataset.rdview; RD.stageF=''; drawRd(); return; }
+  if(t.id==='rdRefresh'){ t.disabled=true; try{ await loadRd(true); if(RD.open) RD.open=await api('getProject', RD.open.project.id); drawRd(); }catch(ex){ toast(errText(ex)); } return; }
+  if(t.id==='rdNew'){ RD.open={project:{id:'', pdrNo:'ใหม่', docNo:'', customerCode:'', company:'', brand:'', soNo:'', kind:'new', title:'', scentCount:1, stage:'s1', owners:{pc:S.me.email, sa:'', pd:'', perfumer:[]}, briefId:'', ra:{}, actual:{}, data:{}}, scents:[], samples:[]}; RD.sampleEdit=null; drawRd(); window.scrollTo(0,0); return; }
+  if(t.dataset.rdOpen){ rdOpen(t.dataset.rdOpen); return; }
+  if(t.id==='rdBack'){ RD.open=null; RD.sampleEdit=null; drawRd(); return; }
+  if(t.id==='rdXlsx'){ rdExportProjects(); return; }
+  if(t.id==='rdSumXlsx'){ rdExportSummary(); return; }
+  if(t.id==='rdSumYear'){ RD.sumPeriod=/^\d{4}$/.test(RD.sumPeriod)?new Date().toISOString().slice(0,7):(RD.sumPeriod||new Date().toISOString().slice(0,7)).slice(0,4); drawRd(); rdLoadSummary(); return; }
+  if(t.dataset.rdCopy){ try{ await navigator.clipboard.writeText(t.dataset.rdCopy); toast('คัดลอกลิงก์แล้ว ส่งให้ลูกค้าทาง LINE หรืออีเมลได้เลย'); }catch(ex){ toast('คัดลอกไม่ได้ ให้เลือกข้อความในช่องแล้วกด Ctrl+C'); } return; }
+  if(!RD.open) return;
+  const p=RD.open.project;
+  if(t.dataset.rdStage!==undefined){
+    const to=t.dataset.rdStage; if(!to) return;
+    if(!p.id){ toast('บันทึกโครงการก่อน'); return; }
+    let note='', force=false;
+    if(to==='lost'){ note=prompt('เหตุผลที่ยกเลิกโครงการ'); if(note===null||!note.trim()) return; }
+    else if(t.dataset.rdBack){ note=prompt('เหตุผลที่ย้อนขั้น')||''; if(!note.trim()) return; }
+    const go=async(f,n)=>{ try{ const r=await api('setStage', p.id, to, n, f); RD.open.project=r; rdPatchList(r); drawRd(); toast(to==='lost'?'ยกเลิกโครงการแล้ว':to==='done'?'ปิดงานแล้ว':'ไปขั้น '+RD_STAGE_MAP[to][1]+' แล้ว'); return true; }
+      catch(ex){ const msg=errText(ex); if(!f && /ยังไปขั้นถัดไปไม่ได้/.test(msg)){ const why=msg.replace(/^.*ยังไปขั้นถัดไปไม่ได้:\s*/,''); const n2=prompt('ยังไม่ครบเงื่อนไข: '+why+'\n\nถ้าลูกค้ายืนยันทางอื่น (LINE / โทร / อีเมล) ใส่เหตุผลเพื่อข้ามเงื่อนไข หรือกดยกเลิก'); if(n2&&n2.trim()) return go(true, n2.trim()); } else toast(msg); return false; } };
+    t.disabled=true; await go(force, note); if(t.isConnected) t.disabled=false; return;
+  }
+  if(t.dataset.rdDoc){ if(!p.id){ toast('บันทึกโครงการก่อน'); return; } rdRun('issueProjectDoc',[p.id,t.dataset.rdDoc],t,'ออกเลขเอกสารแล้ว',r=>{ RD.open.project=r; rdPatchList(r); drawRd(); }); return; }
+  if(t.dataset.rdBrief){ pfTab='brief'; const b=(PF.briefs||[]).find(x=>x.id===t.dataset.rdBrief); if(b){ pfEdit={type:'brief', obj:JSON.parse(JSON.stringify(b))}; } showView('perf'); return; }
+  if(t.dataset.rdScent){ const s=RD.open.scents.find(x=>x.id===t.dataset.rdScent); if(s){ pfTab='scent'; pfEdit={type:'scent', obj:JSON.parse(JSON.stringify(s))}; showView('perf'); } return; }
+  if(t.id==='rdNewScent'){ if(!p.id){ toast('บันทึกโครงการก่อน'); return; } const b=(PF.briefs||[]).find(x=>x.id===p.briefId); const s=pfNewScent(b||null); s.projectId=p.id; if(!b){ s.name=(p.brand||p.company)+' Signature Scent'; } pfTab='scent'; pfEdit={type:'scent', obj:s}; showView('perf'); return; }
+  if(t.dataset.rdSampleNew){ if(!p.id){ toast('บันทึกโครงการก่อน'); return; } RD.sampleEdit={id:'', projectId:p.id, kind:t.dataset.rdSampleNew, items:RD.open.scents.filter(s=>t.dataset.rdSampleNew==='scent').slice(0,6).map(s=>({scentId:s.id, code:s.formulaCode||s.code, name:s.name, formulaCode:s.formulaCode, size:'5 ml', qty:1})), requestedAt:'', shippedAt:'', arrivalAt:'', rdBy:'', saBy:'', note:''}; drawRd(); $('#rdSampleForm').scrollIntoView({behavior:'smooth',block:'start'}); return; }
+  if(t.dataset.rdSampleEdit){ const s=RD.open.samples.find(x=>x.id===t.dataset.rdSampleEdit); if(s){ RD.sampleEdit=JSON.parse(JSON.stringify(s)); drawRd(); $('#rdSampleForm').scrollIntoView({behavior:'smooth',block:'start'}); } return; }
+  if(t.id==='rdSampleCancel'){ RD.sampleEdit=null; drawRd(); return; }
+  if(t.id==='rdSiAdd'){ rdReadSample(); RD.sampleEdit.items.push({}); $('#rdSampleEdit').innerHTML=rdSampleForm(RD.open); return; }
+  if(t.dataset.siRm!=null){ rdReadSample(); RD.sampleEdit.items.splice(+t.dataset.siRm,1); $('#rdSampleEdit').innerHTML=rdSampleForm(RD.open); return; }
+  if(t.id==='rdSampleSaveSend'){ const s=rdReadSample(); if(!s.items.length){ $('#rdSampleErr').textContent='ใส่รายการตัวอย่างอย่างน้อย 1 รายการ'; return; } if(!s.shippedAt) s.shippedAt=new Date().toISOString().slice(0,10);
+    t.disabled=true; try{ const saved=await api('saveSample', s); const sent=await api('sendSample', saved.id); RD.open.samples=RD.open.samples.filter(x=>x.id!==sent.id).concat([sent]); RD.sampleEdit=null; RD.open.project=(await api('getProject', p.id)).project; drawRd(); toast('บันทึกและสร้างลิงก์ประเมินแล้ว คัดลอกลิงก์ส่งให้ลูกค้าได้เลย'); }catch(ex){ $('#rdSampleErr').textContent=errText(ex); t.disabled=false; } return; }
+  if(t.dataset.rdSampleSend){ if(!confirm('ยืนยันว่าส่งตัวอย่างชุดนี้แล้ว? ระบบจะสร้างลิงก์ประเมินสำหรับลูกค้า')) return; rdRun('sendSample',[t.dataset.rdSampleSend],t,'สร้างลิงก์ประเมินแล้ว',async r=>{ RD.open.samples=RD.open.samples.map(x=>x.id===r.id?r:x); RD.open.project=(await api('getProject', p.id)).project; drawRd(); }); return; }
+  if(t.dataset.rdSampleDel){ const s=RD.open.samples.find(x=>x.id===t.dataset.rdSampleDel); if(!s||!confirm(`ลบชุดตัวอย่าง ${s.docNo}?`)) return; rdRun('deleteSample',[s.id],t,'ลบแล้ว',r=>{ RD.open.samples=RD.open.samples.filter(x=>x.id!==r.deleted); drawRd(); }); return; }
+});
+rdv.addEventListener('submit', async e=>{
+  e.preventDefault(); if(!RD.open) return;
+  const p=RD.open.project;
+  if(e.target.id==='rdForm'){
+    const np=rdReadProject(), err=$('#rdErr'), btn=e.target.querySelector('button[type=submit]'); err.textContent='';
+    if(!np.customerCode && !(np.customer&&(np.customer.company||np.customer.brand))){ err.textContent='เลือกลูกค้า หรือใส่ชื่อลูกค้าใหม่'; return; }
+    if(!np.owners.pc){ err.textContent='ระบุ Project Coordinator'; return; }
+    rdRun('saveProject',[np],btn,p.id?'บันทึกโครงการแล้ว':'เปิดโครงการแล้ว',async r=>{ rdPatchList(r); if(!p.id){ RD.customers=await api('listCustomers'); } RD.open=await api('getProject', r.id); drawRd(); });
+    return;
+  }
+  if(e.target.id==='rdRaForm'){ if(!p.id){ toast('บันทึกโครงการก่อน'); return; } rdRun('raCheck',[p.id,$('#rdRaStatus').value,$('#rdRaNote').value],e.target.querySelector('button'),'บันทึกผลตรวจกฎหมายแล้ว',r=>{ RD.open.project=r; rdPatchList(r); drawRd(); }); return; }
+  if(e.target.id==='rdSampleForm'){ const s=rdReadSample(), err=$('#rdSampleErr'); if(!s.items.length){ err.textContent='ใส่รายการตัวอย่างอย่างน้อย 1 รายการ'; return; }
+    rdRun('saveSample',[s],e.target.querySelector('button[type=submit]'),'บันทึกชุดตัวอย่างแล้ว',r=>{ RD.open.samples=RD.open.samples.filter(x=>x.id!==r.id).concat([r]); RD.sampleEdit=null; drawRd(); }); }
+});
 function renderAdmin(){
   if(!S.adm) return;
   if(adminTab==='forms') adminTab='dir';

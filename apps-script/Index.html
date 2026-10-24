@@ -4120,6 +4120,7 @@ const PD_SRC={db:['ฐานราคา','ok'], base:['จากเบส','inf
 async function loadPd(force){
   if(PD.bases && PD.list && !force) return;
   const [b,l]=await Promise.all([api('listPdBases'), api('listPdFormulas')]); PD.bases=b; PD.list=l;
+  try{ PD.trials=await api('listPdTrials'); }catch(e){ PD.trials=PD.trials||[]; }
   try{ await loadPf(false); }catch(e){}   /* คลังกลิ่น (Perfumer) ให้เลือกกลิ่นในสูตรผลิตภัณฑ์ */
   if(isAdminRole()){ try{ await loadAdminForms(false); }catch(e){} }   /* ให้เลือกสูตรน้ำหอมของทุกคนได้ */
 }
@@ -4192,15 +4193,16 @@ function renderPdView(){
 }
 function drawPd(){
   if(!PD.bases||!PD.list) return;
+  if(PD.trial){ $('#pdBody').innerHTML=ptPage(PD.trial); return; }
   if(PD.open){ $('#pdBody').innerHTML=pdFormulaPage(PD.open); return; }
   if(PD.baseOpen){ $('#pdBody').innerHTML=pdBasePage(PD.baseOpen); return; }
-  const ed=pdCanEdit(), bases=PD.tab==='bases';
+  const ed=pdCanEdit(), bases=PD.tab==='bases', trials=PD.tab==='trials';
   $('#pdBody').innerHTML=`<div class="search" style="flex-wrap:wrap;gap:8px">
-      <div class="pf-tabs" role="tablist" style="margin:0"><button type="button" data-pdtab="formulas" class="${bases?'':'on'}">สูตรผลิตภัณฑ์ <span class="pf-n">${PD.list.length}</span></button><button type="button" data-pdtab="bases" class="${bases?'on':''}">สูตรพื้นฐาน (เบส) <span class="pf-n">${PD.bases.length}</span></button></div>
-      <input id="pdQ" type="search" autocomplete="off" placeholder="${bases?'ค้นหาเบส ประเภท วัตถุดิบ…':'ค้นหาสูตร รหัส โครงการ แบรนด์ เบส กลิ่น…'}" value="${esc(PD.q)}" style="flex:1;min-width:200px">
-      ${bases?`<select id="pdCat"><option value="">ทุกประเภท</option>${pdCats().map(c=>`<option value="${esc(c)}" ${PD.cat===c?'selected':''}>${esc(c)}</option>`).join('')}</select>`:`<select id="pdStatusF"><option value="">ทุกสถานะ</option>${Object.entries(PD_STATUS).map(([k,[l]])=>`<option value="${k}" ${PD.statusF===k?'selected':''}>${l}</option>`).join('')}</select>`}
-      ${ed?(bases?'<button class="btn primary" type="button" id="pdNewBase">+ เบสใหม่</button>':'<button class="btn primary" type="button" id="pdNew">+ สูตรผลิตภัณฑ์ใหม่</button>'):''}<button class="btn" type="button" id="pdRefresh">รีเฟรช</button></div>
-    <div id="pdMain">${bases?pdBaseTable():pdFormulaTable()}</div>`;
+      <div class="pf-tabs" role="tablist" style="margin:0"><button type="button" data-pdtab="formulas" class="${bases||trials?'':'on'}">สูตรผลิตภัณฑ์ <span class="pf-n">${PD.list.length}</span></button><button type="button" data-pdtab="bases" class="${bases?'on':''}">สูตรพื้นฐาน (เบส) <span class="pf-n">${PD.bases.length}</span></button><button type="button" data-pdtab="trials" class="${trials?'on':''}">บันทึกขึ้นสินค้าทดลอง <span class="pf-n">${(PD.trials||[]).length}</span></button></div>
+      <input id="pdQ" type="search" autocomplete="off" placeholder="${bases?'ค้นหาเบส ประเภท วัตถุดิบ…':trials?'ค้นหาเลขที่บันทึก สูตร โครงการ แบรนด์…':'ค้นหาสูตร รหัส โครงการ แบรนด์ เบส กลิ่น…'}" value="${esc(PD.q)}" style="flex:1;min-width:200px">
+      ${trials?`<select id="pdStatusF"><option value="">ทุกสถานะ</option>${Object.entries(PT_ST).map(([k,[l]])=>`<option value="${k}" ${PD.statusF===k?'selected':''}>${l}</option>`).join('')}</select>`:bases?`<select id="pdCat"><option value="">ทุกประเภท</option>${pdCats().map(c=>`<option value="${esc(c)}" ${PD.cat===c?'selected':''}>${esc(c)}</option>`).join('')}</select>`:`<select id="pdStatusF"><option value="">ทุกสถานะ</option>${Object.entries(PD_STATUS).map(([k,[l]])=>`<option value="${k}" ${PD.statusF===k?'selected':''}>${l}</option>`).join('')}</select>`}
+      ${ed&&!trials?(bases?'<button class="btn primary" type="button" id="pdNewBase">+ เบสใหม่</button>':'<button class="btn primary" type="button" id="pdNew">+ สูตรผลิตภัณฑ์ใหม่</button>'):''}<button class="btn" type="button" id="pdRefresh">รีเฟรช</button></div>
+    <div id="pdMain">${trials?ptTable():bases?pdBaseTable():pdFormulaTable()}</div>`;
 }
 function pdBaseTable(){
   const q=PD.q.trim().toLowerCase();
@@ -4271,7 +4273,8 @@ function pdFormulaPage(f){
       </div><div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">${sel?`${pfChip(sel.status,PF_SSTAT)}<button class="btn small" type="button" data-pd-scentopen="${esc(sel.id)}">เปิดกลิ่นในคลัง</button>${sel.status==='draft'||sel.status==='trial'?'<span class="chip warn">กลิ่นยังไม่ผ่านการอนุมัติจากลูกค้า</span>':''}${sc?`<span class="muted" style="font-size:12px">ราคาน้ำหอม ${fmt(sc.price,2)} ฿/กก. ${sc.src==='formula'?'จากสูตรต้นทุนของกลิ่น':'จากต้นทุนที่บันทึกไว้กับกลิ่น'+(sc.at?' ('+rdDate(sc.at)+')':'')}${sc.src==='formula'&&!sc.complete?' · ราคาวัตถุดิบในสูตรกลิ่นยังไม่ครบ':''} · ใช้ราคาขายแทนต้นทุนได้โดยแก้ในช่อง "ราคาน้ำหอม"</span>`:'<span class="chip warn">กลิ่นนี้ยังไม่มีต้นทุน</span><span class="muted" style="font-size:12px">ผูกสูตรต้นทุนกับกลิ่นใน Perfumer หรือใส่ราคาน้ำหอมเอง</span>'}`:'<span class="muted" style="font-size:12px">ไม่ได้เลือกกลิ่นจากคลัง? ใส่ชื่อ รหัส และราคาน้ำหอมเอง</span>'}</div></div>
       <div class="pf-group"><h4>ส่วนประกอบ (เบส + น้ำหอม)</h4>${pdLinesTable(f, c, ed&&!lock, {})}${pdSummary(f, c)}</div>
       </fieldset>
-      <div class="row" style="margin-top:14px;gap:8px;flex-wrap:wrap;align-items:center">${ed?`<button class="btn primary" type="submit">บันทึก</button><select id="pdStatus" aria-label="สถานะ">${Object.entries(PD_STATUS).map(([k,[l]])=>`<option value="${k}" ${f.status===k?'selected':''}>${l}</option>`).join('')}</select>`:''}<button class="btn" type="button" id="pdPrint">พิมพ์ใบสูตร</button>${ed&&f.id&&!lock?'<button class="btn small" type="button" id="pdDelete" style="color:var(--bad);margin-left:auto">ลบสูตร</button>':''}<span class="muted" id="pdErr" role="alert" style="color:var(--bad)"></span></div></form>`;
+      <div class="row" style="margin-top:14px;gap:8px;flex-wrap:wrap;align-items:center">${ed?`<button class="btn primary" type="submit">บันทึก</button><select id="pdStatus" aria-label="สถานะ">${Object.entries(PD_STATUS).map(([k,[l]])=>`<option value="${k}" ${f.status===k?'selected':''}>${l}</option>`).join('')}</select>`:''}<button class="btn" type="button" id="pdPrint">พิมพ์ใบสูตร</button>${ed&&f.id&&!lock?'<button class="btn small" type="button" id="pdDelete" style="color:var(--bad);margin-left:auto">ลบสูตร</button>':''}<span class="muted" id="pdErr" role="alert" style="color:var(--bad)"></span></div></form>
+    ${ptCard(f)}`;
 }
 function pdBasePage(b){
   const ed=pdCanEdit(), ro=ed?'':'disabled', c=pdCost(b), used=PD.list.filter(f=>f.baseId===b.id);
@@ -4346,7 +4349,7 @@ function rdPdBlock(p){
     ${list.length?`<div class="tablebox" style="margin-top:8px"><table><thead><tr><th>รหัส</th><th>สูตร</th><th>เบส</th><th>กลิ่น</th><th class="num">฿/กก.</th><th>สถานะ</th><th></th></tr></thead><tbody>${list.map(f=>{ const c=pdCost(f); return `<tr><td class="mono">${esc(f.code)}</td><td><b>${esc(f.name)}</b><div class="muted" style="font-size:11.5px">${esc(PD_MODE[f.mode]||'')}</div></td><td style="font-size:12.5px">${esc(f.baseName||'–')}</td><td style="font-size:12.5px">${esc(f.fragranceName||'–')}</td><td class="num">${fmt(c.total,2)}</td><td>${pfChip(f.status,PD_STATUS)}</td><td><button class="btn small" type="button" data-pd-open="${esc(f.id)}">เปิด</button></td></tr>`; }).join('')}</tbody></table></div>`
     :`<div class="muted" style="font-size:12.5px;margin-top:6px">ยังไม่มีสูตรผลิตภัณฑ์ในโครงการนี้${PD.list?' · Product Development สร้างจากเบสในแท็บ Product Development':' (โหลดข้อมูล Product Development ไม่สำเร็จ)'}</div>`}</div>`;
 }
-async function pdOpenFormula(id){ try{ await loadPd(false); }catch(e){ toast(errText(e)); return; } const f=PD.list.find(x=>x.id===id); if(!f) return; PD.baseOpen=null; PD.open=JSON.parse(JSON.stringify(f)); PD.tab='formulas'; if(S.view==='pd') drawPd(); else showView('pd'); window.scrollTo(0,0); }
+async function pdOpenFormula(id){ try{ await loadPd(false); }catch(e){ toast(errText(e)); return; } const f=PD.list.find(x=>x.id===id); if(!f) return; PD.baseOpen=null; PD.trial=null; PD.open=JSON.parse(JSON.stringify(f)); PD.tab='formulas'; if(S.view==='pd') drawPd(); else showView('pd'); window.scrollTo(0,0); }
 /* ปุ่มจากหน้าอื่น (หน้าโครงการ): เปิดสูตร / สร้างสูตรให้โครงการ */
 document.addEventListener('click', async e=>{
   const t=e.target.closest('[data-pd-open],[data-pd-new]'); if(!t || t.closest('#pdView')) return;
@@ -4356,7 +4359,7 @@ document.addEventListener('click', async e=>{
   const sc=t.dataset.pdScent?(PF.scents||[]).find(x=>x.id===t.dataset.pdScent):null;
   PD.baseOpen=null; PD.open=pdNewFormula(null, p, sc); PD.tab='formulas'; showView('pd');
 });
-$('#pdView').addEventListener('input', e=>{ if(e.target.id==='pdQ'){ PD.q=e.target.value; const m=$('#pdMain'); if(m) m.innerHTML=PD.tab==='bases'?pdBaseTable():pdFormulaTable(); } });
+$('#pdView').addEventListener('input', e=>{ if(e.target.id==='pdQ'){ PD.q=e.target.value; const m=$('#pdMain'); if(m) m.innerHTML=PD.tab==='trials'?ptTable():PD.tab==='bases'?pdBaseTable():pdFormulaTable(); } });
 $('#pdView').addEventListener('change', e=>{
   const t=e.target;
   if(t.id==='pdCat'){ PD.cat=t.value; drawPd(); return; }
@@ -4372,7 +4375,7 @@ $('#pdView').addEventListener('change', e=>{
 });
 $('#pdView').addEventListener('click', async e=>{
   const t=e.target.closest('button'); if(!t) return;
-  if(t.dataset.pdtab){ PD.tab=t.dataset.pdtab; PD.q=''; drawPd(); return; }
+  if(t.dataset.pdtab){ PD.tab=t.dataset.pdtab; PD.q=''; PD.statusF=''; PD.trial=null; drawPd(); return; }
   if(t.id==='pdRefresh'){ t.disabled=true; try{ await loadPd(true); }catch(err){ toast(errText(err)); } drawPd(); return; }
   if(t.id==='pdNew'){ PD.open=pdNewFormula(null, null); drawPd(); window.scrollTo(0,0); return; }
   if(t.id==='pdNewBase'){ PD.baseOpen={id:'', category:PD.cat||'', name:'', targetPrice:null, shelfLife:'', stability:'', benchmark:'', note:'', fragranceAdjustable:false, active:true, lines:[{code:'',name:'',fn:'',pct:null,price:null,frag:false},{code:'',name:'Fragrance',fn:'',pct:null,price:3000,frag:true}]}; drawPd(); window.scrollTo(0,0); return; }
@@ -5105,6 +5108,110 @@ $('#stkView').addEventListener('submit', async e=>{
     try{ const o=await api('addRdStockTx', a.id, d); stkUpsert(o); STK.act=null; toast(`บันทึกแล้ว · คงเหลือ ${stkN(o.balance,4)} ${o.unit}`); drawStk(); }catch(e2){ err.textContent=errText(e2); btn.disabled=false; }
   }
 });
+
+/* ===== บันทึกขึ้นสินค้าทดลอง (Product Development) → ส่งลูกค้ายืนยัน / Feedback → ขั้นต่อไป ===== */
+const PT_ST={draft:['ร่าง','info'], made:['ผลิตแล้ว','ok'], sent:['ส่งลูกค้า รอผล','warn'], feedback:['ลูกค้าตอบแล้ว','ok'], accepted:['รับรองต้นแบบ','ok'], revised:['ปรับแก้ (มีรอบใหม่)','info'], rejected:['ไม่ผ่าน','bad']};
+const PT_CONC={'':'–', pass:'ผ่าน', adjust:'ต้องปรับ', fail:'ไม่ผ่าน'};
+const PT_CRIT=[['scent','กลิ่น'],['appearance','สี / ลักษณะ'],['skinfeel','ความรู้สึกหลังใช้'],['target','เหมาะกับกลุ่มเป้าหมาย'],['brand','เหมาะกับแบรนด์'],['overall','ชอบโดยรวม']];
+const PT_DEC={produce:['ผลิตจริงต่อไป','ok'], revise:['ปรับแก้แล้วส่งใหม่','warn'], reject:['ไม่เลือก','bad']};
+const ptStockEdit=()=>['research','pd','perfumer'].some(can)||isAdminRole();
+const ptOpenOf=t=>t.status==='draft'||t.status==='made';
+function ptTable(){
+  const q=PD.q.trim().toLowerCase(), list=(PD.trials||[]).filter(t=>(!PD.statusF||t.status===PD.statusF)&&(!q||[t.trialNo,(PD.list.find(f=>f.id===t.formulaId)||{}).name,(PD.list.find(f=>f.id===t.formulaId)||{}).code,(pdProj(t.projectId)||{}).pdrNo,(pdProj(t.projectId)||{}).brand].join(' ').toLowerCase().includes(q)));
+  if(!list.length) return `<div class="empty">${(PD.trials||[]).length?'ไม่พบบันทึก':'ยังไม่มีบันทึกขึ้นสินค้าทดลอง · เปิดสูตรผลิตภัณฑ์แล้วกด "+ บันทึกขึ้นสินค้าทดลอง"'}</div>`;
+  return `<div class="tablebox"><table><thead><tr><th>เลขที่</th><th>สูตรผลิตภัณฑ์</th><th>โครงการ</th><th class="num">Batch (g)</th><th>วันที่ผลิต</th><th>สรุปผล</th><th>สถานะ</th><th>ผลจากลูกค้า</th><th></th></tr></thead><tbody>
+    ${list.map(t=>{ const f=PD.list.find(x=>x.id===t.formulaId)||{}, p=pdProj(t.projectId), fb=t.feedback; return `<tr><td class="mono">${esc(t.trialNo)}</td><td><b>${esc(f.name||'–')}</b><div class="mono muted" style="font-size:11.5px">${esc(f.code||'')}</div></td><td style="font-size:12.5px">${p?`<span class="mono">${esc(p.pdrNo)}</span> · ${rdBrand(p)}`:'–'}</td><td class="num">${t.batchG!=null?fmt(t.batchG,0):'–'}</td><td style="font-size:12.5px">${esc(t.madeAt||'–')}</td><td>${esc(PT_CONC[t.conclusion||''])}</td><td>${pfChip(t.status,PT_ST)}</td>
+      <td style="font-size:12.5px">${fb&&fb.submittedAt?`<b>${fmt(fb.pct,0)}%</b> ${fb.decision?pfChip(fb.decision,PT_DEC):''}`:fb?'รอลูกค้า':'–'}</td><td><button class="btn small" type="button" data-pt-open="${esc(t.id)}">เปิด</button></td></tr>`; }).join('')}</tbody></table></div>`;
+}
+function ptCard(f){
+  const list=(PD.trials||[]).filter(t=>t.formulaId===f.id), ed=pdCanEdit();
+  return `<div class="card" style="margin:0 0 14px"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><h4 style="margin:0">บันทึกขึ้นสินค้าทดลอง · ${list.length}</h4>${ed&&f.id?`<button class="btn small" type="button" data-pt-new="${esc(f.id)}">+ บันทึกขึ้นสินค้าทดลอง</button>`:''}</div>
+    ${!f.id?'<div class="muted" style="font-size:12.5px;margin-top:6px">บันทึกสูตรก่อน จึงจะบันทึกขึ้นสินค้าทดลองได้</div>':list.length?`<div class="tablebox" style="margin-top:8px"><table><thead><tr><th>เลขที่</th><th>วันที่ผลิต</th><th class="num">Batch (g)</th><th>สถานะ</th><th>ผลลูกค้า</th><th></th></tr></thead><tbody>${list.map(t=>`<tr><td class="mono">${esc(t.trialNo)}</td><td>${esc(t.madeAt||'–')}</td><td class="num">${t.batchG!=null?fmt(t.batchG,0):'–'}</td><td>${pfChip(t.status,PT_ST)}</td><td style="font-size:12.5px">${t.feedback&&t.feedback.submittedAt?`<b>${fmt(t.feedback.pct,0)}%</b> ${t.feedback.decision?pfChip(t.feedback.decision,PT_DEC):''}`:t.feedback?'รอลูกค้า':'–'}</td><td><button class="btn small" type="button" data-pt-open="${esc(t.id)}">เปิด</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="muted" style="font-size:12.5px;margin-top:6px">ยังไม่มีการผลิตทดลอง · กดปุ่มด้านบนเพื่อบันทึกการขึ้นสินค้าทดลองครั้งแรก ระบบคัดลอกส่วนประกอบและคำนวณกรัมตามขนาด batch ให้</div>'}</div>`;
+}
+function ptPage(t){
+  const f=PD.list.find(x=>x.id===t.formulaId)||{}, p=pdProj(t.projectId||f.projectId), open=ptOpenOf(t), ed=pdCanEdit(), ro=ed&&open?'':'disabled', fb=t.feedback;
+  const sumP=(t.lines||[]).reduce((s,l)=>s+(toNum(l.plannedG)||0),0), sumA=(t.lines||[]).reduce((s,l)=>s+(toNum(l.actualG)||0),0), inp=PD_INP;
+  const lines=`<div class="tablebox"><table><thead><tr><th>รหัส RM</th><th>สาร</th><th class="num">%</th><th class="num">ตามสูตร (g)</th><th class="num">ชั่งจริง (g)</th><th>Lot</th><th class="num">ต่าง</th></tr></thead><tbody>${(t.lines||[]).map((l,i)=>{ const d=(toNum(l.actualG)||0)-(toNum(l.plannedG)||0), big=Math.abs(d)>Math.max(0.05,(toNum(l.plannedG)||0)*0.02);
+    return `<tr data-i="${i}"><td class="mono" style="font-size:12px">${esc(l.code||'')}</td><td>${l.frag?'<span class="chip">น้ำหอม</span> ':''}<b>${esc(l.name)}</b></td><td class="num">${l.pct!=null?fmt(l.pct,2):''}</td><td class="num mono">${fmt(l.plannedG,3)}</td><td class="num"><input data-ptl="actualG" type="number" step="any" min="0" value="${l.actualG==null?'':esc(l.actualG)}" style="${inp};width:100px;text-align:right" ${ro}></td><td><input data-ptl="lot" value="${esc(l.lot||'')}" maxlength="60" style="${inp};width:110px" ${ro}></td><td class="num" style="${big?'color:var(--bad);font-weight:600':'opacity:.7'}">${d>0?'+':''}${fmt(d,3)}</td></tr>`; }).join('')}</tbody><tfoot><tr><th colspan="3">รวม</th><th class="num">${fmt(sumP,3)}</th><th class="num">${fmt(sumA,3)}</th><th></th><th></th></tr></tfoot></table></div>`;
+  const O=t.obs||{}, of=(k,l,ph)=>`<div class="field"><label>${l}</label><input data-pto="${k}" value="${esc(O[k]||'')}" maxlength="200" placeholder="${esc(ph||'')}" ${ro}></div>`;
+  const si=t.stockIssued;
+  const stockBox=si?`<div class="msg ok" style="margin-top:10px;font-size:12.5px"><b>ตัดสต็อกคลัง R&D แล้ว</b> ${rdDate(si.at)} โดย ${rdPerson(si.by)} · ตัด ${si.issued.length} รายการ${si.skipped.length?` · ข้าม ${si.skipped.length}: ${si.skipped.map(x=>esc((x.code||x.name)+' ('+x.reason+')')).join(', ')}`:''}</div>`:'';
+  const sentBox=t.sentAt||t.evalLink?`<div class="card" style="margin:0 0 14px"><h4 style="margin:0 0 6px">ส่งให้ลูกค้าประเมิน</h4><div class="muted" style="font-size:12.5px">ส่งเมื่อ ${rdDate(t.sentAt||(fb&&fb.shippedAt))} · ชุดตัวอย่าง ${esc(fb?fb.docNo:'')}${p?` ในโครงการ <span class="mono">${esc(p.pdrNo)}</span>`:''}</div>
+    <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center"><input readonly id="ptLink" value="${esc((fb&&fb.evalLink)||t.evalLink||'')}" style="${inp};flex:1;min-width:260px"><button class="btn small" type="button" id="ptCopy">คัดลอกลิงก์</button><a class="btn small" href="${esc((fb&&fb.evalLink)||t.evalLink||'#')}" target="_blank" rel="noopener">เปิดหน้าลูกค้า</a></div>
+    <div class="muted" style="font-size:12px;margin-top:4px">ลูกค้าเปิดลิงก์ ให้คะแนน 6 ด้าน เลือกผลิตจริง/ปรับแก้/ไม่เลือก และใส่อีเมลผู้ประเมิน (ไม่ต้องเข้าสู่ระบบ) · ผลจะขึ้นด้านล่างอัตโนมัติเมื่อรีเฟรช</div></div>`:'';
+  let fbBox='';
+  if(fb && fb.submittedAt){
+    fbBox=`<div class="card" style="margin:0 0 14px"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><h4 style="margin:0">ผลตอบรับจากลูกค้า</h4><span class="muted" style="font-size:12.5px">${esc(fb.evalDocNo)} · ${rdDate(fb.submittedAt)} · ${esc(fb.email)}</span></div>
+      <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center;margin:8px 0"><span style="font-size:26px;font-weight:700">${fmt(fb.pct,0)}%</span><span class="chip ${fb.pct>=80?'ok':'warn'}">${fb.pct>=80?'ผ่านเกณฑ์ 80%':'ต่ำกว่าเกณฑ์ 80%'}</span>${fb.decision?pfChip(fb.decision,PT_DEC):''}</div>
+      <div class="settings">${PT_CRIT.map(([k,l])=>`<div class="field"><label>${l}</label><div style="display:flex;gap:6px;align-items:center"><div style="flex:1;height:8px;background:var(--line-strong);opacity:.5;border-radius:4px;overflow:hidden"><i style="display:block;height:100%;width:${((fb.scores[k]||0)/5*100).toFixed(0)}%;background:${(fb.scores[k]||0)>=4?'var(--ok,#25704f)':(fb.scores[k]||0)>=3?'#c46d4e':'var(--bad)'}"></i></div><b>${fb.scores[k]||'–'}</b>/5</div></div>`).join('')}</div>
+      ${fb.comment?`<div style="margin-top:8px"><b style="font-size:13px">ความเห็นเกี่ยวกับตัวอย่างนี้:</b> ${esc(fb.comment)}</div>`:''}${fb.note?`<div style="margin-top:4px"><b style="font-size:13px">ความเห็นโดยรวม:</b> ${esc(fb.note)}</div>`:''}</div>`;
+  }
+  const canDecide=ed&&t.status!=='draft'&&t.status!=='made'&&(t.status==='sent'||t.status==='feedback');
+  const decideBox=canDecide?`<div class="card" style="margin:0 0 14px"><h4 style="margin:0 0 6px">ขั้นต่อไปของ Product Development</h4><div class="field"><label>บันทึกการตัดสินใจ / สิ่งที่ต้องปรับ (ใช้กับรอบถัดไป)</label><textarea id="ptNext" rows="2" maxlength="1000">${esc(t.nextNote||'')}</textarea></div>
+    <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn primary" type="button" data-pt-decide="accept" ${fb&&fb.submittedAt?'':'title="ยังไม่มีผลจากลูกค้า"'}>รับรองต้นแบบ → ไปทดสอบ Stability</button><button class="btn" type="button" data-pt-decide="revise">ปรับแก้ → ทำรอบทดลองถัดไป</button><button class="btn small" type="button" data-pt-decide="reject" style="color:var(--bad)">ไม่ผ่าน / ยกเลิกต้นแบบ</button></div>
+    <div class="muted" style="font-size:12px;margin-top:6px">รับรอง = สูตรผลิตภัณฑ์เปลี่ยนเป็นสถานะ "ทดสอบ / Stability" · ปรับแก้ = สร้างบันทึกรอบใหม่จากรอบนี้ให้แก้ต่อ</div></div>`:(t.nextNote&&!open?`<div class="msg" style="font-size:12.5px;margin-bottom:12px"><b>บันทึกการตัดสินใจ:</b> ${esc(t.nextNote)}</div>`:'');
+  return `<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px"><div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button class="btn small" type="button" id="ptBack">← ${PD.open?'สูตรผลิตภัณฑ์':'บันทึกขึ้นสินค้าทดลอง'}</button><h3 style="margin:0"><span class="mono">${esc(t.trialNo)}</span> · ${esc(f.name||'')}</h3>${pfChip(t.status,PT_ST)}${f.id?`<button class="btn small" type="button" data-pd-open="${esc(f.id)}">สูตร ${esc(f.code||'')}</button>`:''}${p?`<button class="btn small" type="button" data-pd-proj="${esc(p.id)}">โครงการ ${esc(p.pdrNo)}</button>`:''}</div><span class="muted" style="font-size:12px">สร้าง ${rdDate(t.createdAt)} โดย ${rdPerson(t.createdBy)} · แก้ล่าสุด ${fmtSeen(t.updatedAt)}</span></div>
+    <form id="ptForm" class="card" style="margin:0 0 14px" novalidate><fieldset ${ro} style="border:0;padding:0;margin:0;min-width:0">
+      <div class="pf-group"><h4>การผลิตทดลอง</h4><div class="settings">
+        <div class="field"><label>ขนาด batch (g)</label><input data-pth="batchG" type="number" step="any" min="1" value="${t.batchG==null?'':esc(t.batchG)}" ${ro}></div>
+        <div class="field"><label>วันที่ผลิต</label><input data-pth="madeAt" type="date" value="${esc(t.madeAt||'')}" ${ro}></div>
+        <div class="field"><label>ผู้ผลิต / ผู้ทดลอง</label><input data-pth="operator" value="${esc(t.operator||'')}" maxlength="120" ${ro}></div></div>
+        <div style="margin-top:8px">${lines}</div>${open&&ed?'<div class="muted" style="font-size:12px;margin-top:4px">แก้ขนาด batch แล้วกดออกจากช่อง ระบบคำนวณกรัมตามสูตรใหม่ (ค่าชั่งจริงที่ยังเท่ากับค่าตามสูตรจะปรับตาม) · ต่างเกิน 2% แสดงสีแดง</div>':''}${stockBox}</div>
+      <div class="pf-group"><h4>ผลสังเกตและผลทดสอบ</h4><div class="settings">${of('appearance','ลักษณะเนื้อ / ความใส ขุ่น','เช่น เนื้อครีมเนียน ไม่แยกชั้น')}${of('color','สี','')}${of('odor','กลิ่นเทียบต้นแบบกลิ่น','')}${of('ph','pH','เช่น 5.5')}${of('viscosity','ความหนืด','เช่น 3000 cps')}${of('other','อื่น ๆ','')}
+        <div class="field"><label>สรุปผลการทดลอง (ภายในทีม)</label><select data-pth="conclusion" ${ro}>${Object.entries(PT_CONC).map(([k,l])=>`<option value="${k}" ${(t.conclusion||'')===k?'selected':''}>${l}</option>`).join('')}</select></div>
+        <div class="field" style="grid-column:1/-1"><label>หมายเหตุ</label><textarea data-pth="note" rows="2" maxlength="2000" ${ed&&t.status!=='accepted'&&t.status!=='rejected'&&t.status!=='revised'?'':'disabled'}>${esc(t.note||'')}</textarea></div></div></div></fieldset>
+      <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">${ed&&open?`<button class="btn primary" type="submit" data-pt-save="${t.status==='made'?'made':'draft'}">บันทึก</button>${t.status==='draft'?'<button class="btn" type="button" id="ptMade">บันทึกว่าผลิตแล้ว</button>':''}`:''}${ed&&t.status==='made'&&ptStockEdit()&&!t.stockIssued?'<button class="btn" type="button" id="ptStock">ตัดสต็อกคลัง R&D ตามที่ชั่งจริง</button>':''}${ed&&t.status==='made'?`<button class="btn primary" type="button" id="ptSend" ${t.conclusion==='fail'?'disabled title="ผลไม่ผ่าน"':''}>ส่งให้ลูกค้าประเมิน</button>`:''}<button class="btn" type="button" id="ptPrint">พิมพ์ใบบันทึก</button><span class="muted" id="ptErr" role="alert" style="color:var(--bad)"></span></div></form>
+    ${sentBox}${fbBox}${decideBox}`;
+}
+function ptCollect(t){
+  const box=$('#ptForm'); if(!box) return t;
+  box.querySelectorAll('[data-pth]').forEach(i=>{ const k=i.dataset.pth; const v=i.value.trim(); t[k]=k==='batchG'?pdNumOrNull(v):v; });
+  t.obs=t.obs||{}; box.querySelectorAll('[data-pto]').forEach(i=>{ t.obs[i.dataset.pto]=i.value.trim(); });
+  box.querySelectorAll('tbody tr[data-i]').forEach(tr=>{ const l=t.lines[Number(tr.dataset.i)]; if(!l) return; l.actualG=pdNumOrNull(tr.querySelector('[data-ptl=actualG]').value.trim()); l.lot=tr.querySelector('[data-ptl=lot]').value.trim(); });
+  return t;
+}
+function ptReplan(t, oldBatch){
+  const b=toNum(t.batchG); if(!(b>0)) return;
+  (t.lines||[]).forEach(l=>{ const old=l.plannedG, np=Math.round((toNum(l.pct)||0)*b/100*1000)/1000; if(l.actualG==null||Math.abs((toNum(l.actualG)||0)-(toNum(old)||0))<1e-9) l.actualG=np; l.plannedG=np; });
+}
+function ptUpsert(r){ PD.trials=PD.trials||[]; const i=PD.trials.findIndex(x=>x.id===r.id); if(i>=0) PD.trials[i]=r; else PD.trials.unshift(r); }
+function ptPrintHtml(t){
+  const f=PD.list.find(x=>x.id===t.formulaId)||{}, p=pdProj(t.projectId||f.projectId), O=t.obs||{}, fb=t.feedback;
+  const rows=(t.lines||[]).map((l,i)=>`<tr><td style="text-align:center">${i+1}</td><td>${esc(l.code||'')}</td><td>${esc(l.name)}</td><td style="text-align:right">${l.pct!=null?fmt(l.pct,2):''}</td><td style="text-align:right">${fmt(l.plannedG,3)}</td><td style="text-align:right">${l.actualG!=null?fmt(l.actualG,3):''}</td><td>${esc(l.lot||'')}</td></tr>`).join('');
+  return `${docHead('TRIAL BATCH RECORD', `Record No. ${esc(t.trialNo)} · Printed ${docDate()}`)}
+    ${docSec(1,'Product Information')}${docKv([['Product',f.name],['Formula code',f.code],['Project',p?`${p.pdrNo} · ${p.brand||p.company}`:''],['Customer',f.customer],['Brand',f.brand],['Base formula',f.baseName],['Fragrance',[f.fragranceCode,f.fragranceName].filter(Boolean).join(' · ')],['Batch size',t.batchG!=null?fmt(t.batchG,0)+' g':''],['Date made',t.madeAt],['Made by',t.operator]])}
+    ${docSec(2,'Weighing Record')}<table class="dt"><thead><tr><th>#</th><th>RM code</th><th>Ingredient</th><th>%</th><th>Planned (g)</th><th>Actual (g)</th><th>Lot</th></tr></thead><tbody>${rows}</tbody></table>
+    ${docSec(3,'Observations and Test Results')}${docKv([['Appearance',O.appearance],['Colour',O.color],['Odour vs. reference',O.odor],['pH',O.ph],['Viscosity',O.viscosity],['Other',O.other],['Conclusion',t.conclusion==='pass'?'Pass':t.conclusion==='adjust'?'Needs adjustment':t.conclusion==='fail'?'Fail':''],['Notes',t.note]])}
+    ${fb&&fb.submittedAt?`${docSec(4,'Customer Feedback')}${docKv([['Evaluation no.',fb.evalDocNo],['Evaluated by',fb.email],['Date',docDate(fb.submittedAt)],['Overall score',fmt(fb.pct,0)+'%'],['Decision',fb.decision==='produce'?'Proceed to production':fb.decision==='revise'?'Revise and resend':fb.decision==='reject'?'Not selected':''],['Comment',fb.comment],['Next step',t.nextNote]])}`:''}
+    ${docSign([['Made by',t.operator],['Approved by (Product Development)','']])}<p class="dsmall dfoot">Trial Batch Record ${esc(t.trialNo)} · Internal document</p>`;
+}
+async function ptOpen(id, fromFormula){
+  try{ await loadPd(false); const list=await api('listPdTrials'); PD.trials=list; }catch(e){ toast(errText(e)); return; }
+  const t=(PD.trials||[]).find(x=>x.id===id); if(!t) return; PD.trial=JSON.parse(JSON.stringify(t)); PD.baseOpen=null; if(!fromFormula) PD.open=null;
+  if(S.view==='pd') drawPd(); else showView('pd'); window.scrollTo(0,0);
+}
+async function ptRefresh(id){ const list=await api('listPdTrials'); PD.trials=list; const t=list.find(x=>x.id===id); if(t){ PD.trial=JSON.parse(JSON.stringify(t)); } drawPd(); }
+document.addEventListener('click', e=>{ const b=e.target.closest('[data-pt-open]'); if(!b||b.closest('#pdView')) return; ptOpen(b.dataset.ptOpen); });
+$('#pdView').addEventListener('change', e=>{
+  const t=PD.trial; if(!t||!e.target.closest('#ptForm')) return; const k=e.target.dataset.pth;
+  ptCollect(t); if(k==='batchG'){ ptReplan(t); drawPd(); }
+});
+$('#pdView').addEventListener('click', async e=>{
+  const b=e.target.closest('button'); if(!b) return; const t=PD.trial;
+  if(b.dataset.ptOpen){ await ptOpen(b.dataset.ptOpen, !!PD.open); return; }
+  if(b.dataset.ptNew){ b.disabled=true; try{ const r=await api('savePdTrial',{formulaId:b.dataset.ptNew}); ptUpsert(r); PD.trial=JSON.parse(JSON.stringify(r)); drawPd(); window.scrollTo(0,0); toast(`สร้างบันทึก ${r.trialNo} แล้ว`); }catch(err){ toast(errText(err)); b.disabled=false; } return; }
+  if(!t) return;
+  if(b.id==='ptBack'){ PD.trial=null; drawPd(); window.scrollTo(0,0); return; }
+  if(b.id==='ptPrint'){ ptCollect(t); $('#docPrint').innerHTML=ptPrintHtml(t); $('#docTitle').textContent='บันทึกขึ้นสินค้าทดลอง · '+t.trialNo; $('#docOverlay').hidden=false; document.body.classList.add('doc-open'); $('#docPrint').scrollTop=0; return; }
+  if(b.id==='ptCopy'){ const el=$('#ptLink'); try{ await navigator.clipboard.writeText(el.value); toast('คัดลอกลิงก์แล้ว'); }catch(err){ el.select(); document.execCommand('copy'); toast('คัดลอกลิงก์แล้ว'); } return; }
+  const save=async(status)=>{ ptCollect(t); const errEl=$('#ptErr'); errEl.textContent=''; try{ const r=await api('savePdTrial',{...t, status}); ptUpsert(r); PD.trial=JSON.parse(JSON.stringify(r)); drawPd(); toast(`บันทึก ${r.trialNo} แล้ว`); return r; }catch(err){ errEl.textContent=errText(err); return null; } };
+  if(b.id==='ptMade'){ if((t.lines||[]).every(l=>!(toNum(l.actualG)>0))){ $('#ptErr').textContent='ใส่น้ำหนักที่ชั่งจริงอย่างน้อย 1 รายการ'; ptCollect(t); if((t.lines||[]).every(l=>!(toNum(l.actualG)>0))) return; } b.disabled=true; await save('made'); return; }
+  if(b.id==='ptStock'){ if(!confirm('ตัดสต็อกคลัง R&D ตามน้ำหอมที่ชั่งจริง? (ตัดได้ครั้งเดียว · ข้ามรายการที่ไม่มีในคลังหรือหน่วยไม่ใช่ g/kg)')) return; b.disabled=true; try{ ptCollect(t); await api('savePdTrial',{...t, status:'made'}); const r=await api('issuePdTrialStock', t.id); ptUpsert(r); PD.trial=JSON.parse(JSON.stringify(r)); STK.items=null; drawPd(); toast(`ตัดสต็อก ${r.stockIssued.issued.length} รายการ`); }catch(err){ $('#ptErr').textContent=errText(err); b.disabled=false; } return; }
+  if(b.id==='ptSend'){ ptCollect(t); if(!confirm('ส่งให้ลูกค้าประเมิน? ระบบสร้างชุดตัวอย่างต้นแบบในโครงการและลิงก์สำหรับลูกค้า (ส่งแล้วแก้การชั่งและผลทดสอบไม่ได้)')) return; b.disabled=true; try{ await api('savePdTrial',{...t, status:'made'}); const r=await api('sendPdTrial', t.id); ptUpsert(r); PD.trial=JSON.parse(JSON.stringify(r)); if(typeof RD!=='undefined') RD.list=null; drawPd(); toast('สร้างลิงก์ประเมินแล้ว ส่งให้ลูกค้าได้เลย'); }catch(err){ $('#ptErr').textContent=errText(err); b.disabled=false; } return; }
+  if(b.dataset.ptDecide){ const act=b.dataset.ptDecide, txt={accept:'รับรองต้นแบบนี้และเปลี่ยนสูตรเป็นสถานะทดสอบ?',revise:'ปรับแก้และสร้างบันทึกรอบถัดไป?',reject:'บันทึกว่าต้นแบบนี้ไม่ผ่าน?'}[act]; if(!confirm(txt)) return; b.disabled=true;
+    try{ const r=await api('decidePdTrial', t.id, act, ($('#ptNext')||{}).value||''); ptUpsert(r.trial); if(r.next) ptUpsert(r.next); try{ PD.list=await api('listPdFormulas'); }catch(e){} PD.trial=JSON.parse(JSON.stringify(r.next||r.trial)); drawPd(); window.scrollTo(0,0); toast(r.next?`สร้างรอบถัดไป ${r.next.trialNo} แล้ว`:'บันทึกแล้ว'); }catch(err){ toast(errText(err)); b.disabled=false; } return; }
+});
+$('#pdView').addEventListener('submit', async e=>{ if(e.target.id!=='ptForm') return; e.preventDefault(); const t=PD.trial; if(!t) return; ptCollect(t); const btn=e.target.querySelector('button[type=submit]'); btn.disabled=true; try{ const r=await api('savePdTrial',{...t, status:t.status}); ptUpsert(r); PD.trial=JSON.parse(JSON.stringify(r)); drawPd(); toast(`บันทึก ${r.trialNo} แล้ว`); }catch(err){ $('#ptErr').textContent=errText(err); btn.disabled=false; } });
 
 async function boot(){
   showGate('loading');

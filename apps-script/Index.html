@@ -802,13 +802,13 @@ function showDriveFallback(filename, buf){
   let bar=$('#dlBar');
   if(!bar){ bar=document.createElement('div'); bar.id='dlBar'; bar.className='toast'; bar.style.cssText='display:flex;gap:10px;align-items:center;flex-wrap:wrap;bottom:calc(env(safe-area-inset-bottom,0px) + 70px)'; document.body.append(bar); }
   bar.hidden=false;
-  bar.innerHTML=`<span>ถ้าไฟล์ไม่ถูกดาวน์โหลด</span><button class="btn-ghost-dark" type="button" id="dlDrive">บันทึกลง Google Drive แทน</button><button class="btn-ghost-dark" type="button" id="dlClose" aria-label="ปิด">×</button>`;
+  bar.innerHTML=`<span>ถ้าไฟล์ไม่ถูกดาวน์โหลด</span><button class="btn-ghost-dark" type="button" id="dlDrive">รับลิงก์ดาวน์โหลดแทน</button><button class="btn-ghost-dark" type="button" id="dlClose" aria-label="ปิด">×</button>`;
   clearTimeout(showDriveFallback._t); showDriveFallback._t=setTimeout(()=>{ bar.hidden=true; },12000);
   $('#dlClose').onclick=()=>{ bar.hidden=true; };
   $('#dlDrive').onclick=async ()=>{
-    clearTimeout(showDriveFallback._t); bar.innerHTML='<span>กำลังบันทึกลง Google Drive…</span>';
+    clearTimeout(showDriveFallback._t); bar.innerHTML='<span>กำลังสร้างลิงก์ดาวน์โหลด…</span>';
     try{ const url=await api('saveExport', filename, bufToB64(buf));
-      bar.innerHTML=`<span>บันทึกแล้ว</span><a class="btn-ghost-dark" href="${esc(url)}" target="_blank" rel="noopener" style="text-decoration:none">เปิดไฟล์ใน Drive</a><button class="btn-ghost-dark" type="button" id="dlClose2" aria-label="ปิด">×</button>`;
+      bar.innerHTML=`<span>บันทึกแล้ว</span><a class="btn-ghost-dark" href="${esc(url)}" target="_blank" rel="noopener" style="text-decoration:none">ดาวน์โหลดไฟล์</a><button class="btn-ghost-dark" type="button" id="dlClose2" aria-label="ปิด">×</button>`;
       $('#dlClose2').onclick=()=>{ bar.hidden=true; };
     }catch(e){ bar.innerHTML=`<span>บันทึกไม่สำเร็จ: ${esc(errText(e))}</span>`; setTimeout(()=>{ bar.hidden=true; },6000); }
   };
@@ -1377,7 +1377,7 @@ async function loadAdminForms(force){
   });
 }
 function renderAllView(){
-  $('#allView').innerHTML = `<div class="bh"><h2>สูตรทั้งหมด</h2><span class="hint">ภาพรวมสูตรที่ผู้ใช้ทุกคนบันทึกไว้ · อ่านอย่างเดียว · เฉพาะเจ้าของระบบและบทบาทผู้ดูแลระบบ · การโหลดข้อมูลบันทึกในชีต Log</span></div>
+  $('#allView').innerHTML = `<div class="bh"><h2>สูตรทั้งหมด</h2><span class="hint">ภาพรวมสูตรที่ผู้ใช้ทุกคนบันทึกไว้ · อ่านอย่างเดียว · เฉพาะเจ้าของระบบและบทบาทผู้ดูแลระบบ · การโหลดข้อมูลบันทึกในบันทึกการใช้งาน (Log)</span></div>
     <div id="formStats" class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:16px"></div>
     <div class="search"><input id="formQ" type="search" autocomplete="off" placeholder="ค้นหาชื่อสูตร รหัส/ชื่อวัตถุดิบ หรืออีเมลเจ้าของ…" value="${esc(formQ)}">
       <select id="formOwner" aria-label="กรองเจ้าของสูตร"><option value="">ทุกคน</option></select>
@@ -1598,7 +1598,7 @@ function rmFiltered(){
 }
 function renderRmView(){
   const cats=[...new Set(DB.entries.map(e=>e.code.split('-')[2]))].filter(c=>CAT[c]).sort();
-  $('#rmView').innerHTML = `<div class="bh"><h2>ฐานราคาวัตถุดิบ</h2><span class="hint">เจ้าของระบบ แอดมิน และจัดซื้อแก้ราคาได้ · บันทึกอัตโนมัติ · ทีมเห็นราคาใหม่เมื่อเปิดระบบหรือกด "รีเฟรช" · ทุกการแก้ไขบันทึกในชีต Log</span></div>
+  $('#rmView').innerHTML = `<div class="bh"><h2>ฐานราคาวัตถุดิบ</h2><span class="hint">เจ้าของระบบ แอดมิน และจัดซื้อแก้ราคาได้ · บันทึกอัตโนมัติ · ทีมเห็นราคาใหม่เมื่อเปิดระบบหรือกด "รีเฟรช" · ทุกการแก้ไขบันทึกในบันทึกการใช้งาน (Log)</span></div>
     <div id="rmStats" class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:16px"></div>
     <div class="search"><input id="rmQ" type="search" autocomplete="off" placeholder="ค้นหารหัส ชื่อ หรือหมายเหตุ เช่น Hedione, RM-002-001" value="${esc(rmQ)}">
       <select id="rmSt" aria-label="กรองสถานะ"><option value="">ทุกสถานะ</option>${Object.entries({ok:'มีราคา',recheck:'ต้อง recheck ราคา',rd:'สกัดเอง · ถาม RD',cancel:'ยกเลิก / เลิกจำหน่าย',none:'ไม่มีราคา'}).map(([k,l])=>`<option value="${k}" ${rmStatus===k?'selected':''}>${l}</option>`).join('')}</select>
@@ -2516,7 +2516,7 @@ function renderMsdsView(){
     ${helpBox('วิธีอ่านค่าในหน้านี้', `<ul>
       <li><b>กรัมต่อ 1 มล.</b> คำนวณจากความถ่วงจำเพาะ (Specific Gravity) ใน MSDS หมวด 9: ถ้าเป็นช่วง ใช้ค่ากลาง แล้วคูณความหนาแน่นของน้ำที่อุณหภูมิอ้างอิง (เช่น 20/20 °C × 0.99821) ถ้า MSDS ให้ค่าเป็น g/ml หรือ g/cm³ อยู่แล้วใช้ค่านั้นตรง ๆ · ใช้ชั่งแทนการตวง: ปริมาตร (มล.) × ค่านี้ = น้ำหนัก (กรัม)</li>
       <li><b>สัญลักษณ์</b> มาจากรหัส H ใน MSDS ถ้ามี · MSDS ที่เขียนเป็นข้อความแทนรหัส (เช่น "Irritating to skin", "Harmful if swallowed") ระบบอนุมานสัญลักษณ์ให้และติดป้าย <span class="chip warn">อนุมานจากข้อความ</span> ควรตรวจกับไฟล์จริงก่อนใช้ทำฉลาก</li>
-      <li><b>ค่าในตารางเป็นข้อมูลจากซัพพลายเออร์</b> ถ้าค่าดูผิด จัดซื้อหรือแอดมินกด "แก้ไข" ที่เอกสารเพื่อแก้ได้ · การแก้ไขบันทึกในชีต Log</li></ul>`)}
+      <li><b>ค่าในตารางเป็นข้อมูลจากซัพพลายเออร์</b> ถ้าค่าดูผิด จัดซื้อหรือแอดมินกด "แก้ไข" ที่เอกสารเพื่อแก้ได้ · การแก้ไขบันทึกในบันทึกการใช้งาน (Log)</li></ul>`)}
     <div id="msStats" class="row" style="gap:12px;flex-wrap:wrap;margin:14px 0 16px"></div>
     <div class="search"><input id="msQ" type="search" autocomplete="off" placeholder="ค้นหารหัส ชื่อวัตถุดิบ ชื่อไฟล์ หรือซัพพลายเออร์ เช่น UA-3632, Hedione" value="${esc(msQ)}">
       <select id="msKind" aria-label="กรองประเภทเอกสาร"><option value="">ทุกประเภทเอกสาร</option>${Object.entries(MS_KINDS).map(([k,l])=>`<option value="${k}" ${msKind===k?'selected':''}>${l}</option>`).join('')}</select>
@@ -2700,7 +2700,7 @@ msv.addEventListener('click', async e=>{
   if(t.id==='meCancel'){ msEditId=null; drawMsEdit(); return; }
   if(t.id==='meDel'){
     const d=MS.items.find(x=>x.id===msEditId); if(!d) return;
-    if(!confirm(`ลบ ${d.file} ออกจากระบบ? (ไฟล์ใน Google Drive จะย้ายไปถังขยะ กู้คืนได้ภายใน 30 วัน)`)) return;
+    if(!confirm(`ลบ ${d.file} ออกจากระบบ? (ลบไฟล์ถาวร กู้คืนไม่ได้)`)) return;
     t.disabled=true;
     try{ await api('deleteRmDoc', d.id); MS.items=MS.items.filter(x=>x.id!==d.id); msEditId=null; drawMsEdit(); drawMs(); toast('ลบเอกสารแล้ว'); }
     catch(ex){ $('#meErr').textContent=errText(ex); t.disabled=false; }
@@ -2890,7 +2890,7 @@ function drawPfTf(){
     :`<p style="margin:0 0 8px;font-size:13px">ให้บรีฟที่ลูกค้ากรอกใน ODM Brief, SV Brief และ Brand Archetype Quiz ไหลเข้ามาเองโดยไม่ต้องคัดลอก</p>
       <ol style="margin:0 0 10px 18px;padding:0;font-size:13px;line-height:1.7"><li>เข้า Typeform → รูปโปรไฟล์ → <b>Settings → Personal tokens → Generate a new token</b></li><li>ตั้งชื่อ เช่น "Scent & Sense Costing" และติ๊กสิทธิ์ <b>forms:read, responses:read, webhooks:read, webhooks:write</b></li><li>คัดลอก token มาวางด้านล่าง ระบบจะตั้ง webhook ให้ทั้ง 3 ฟอร์มและดึงคำตอบเก่าทั้งหมดให้</li></ol>
       <form id="tfForm" class="row" style="gap:8px;flex-wrap:wrap" novalidate><input id="tfToken" type="password" autocomplete="off" placeholder="วาง Personal access token ของ Typeform" style="flex:1;min-width:260px;border:1px solid var(--line-strong);border-radius:8px;padding:8px 10px;background:var(--input-bg)"><button class="btn primary small" type="submit">เชื่อมต่อ</button></form>
-      <p class="muted" style="font-size:12px;margin:6px 0 0">token เก็บใน Script Properties ของ Apps Script เท่านั้น ไม่อยู่ในชีตและไม่ส่งกลับมาหน้าเว็บ</p>`}
+      <p class="muted" style="font-size:12px;margin:6px 0 0">token เก็บในฐานข้อมูลฝั่งเซิร์ฟเวอร์เท่านั้น ไม่ส่งกลับมาหน้าเว็บ</p>`}
     <div class="muted" id="tfMsg" aria-live="polite" style="font-size:12.5px;margin-top:6px"></div></div></details>`;
 }
 function renderPerfView(){
@@ -3099,7 +3099,7 @@ pfv.addEventListener('submit', e=>{ e.preventDefault();
 function renderAdmin(){
   if(!S.adm) return;
   if(adminTab==='forms') adminTab='dir';
-  $('#adminView').innerHTML = `<div class="bh"><h2>จัดการผู้ใช้และบทบาท</h2><span class="hint">ผู้ใช้เข้าสู่ระบบด้วยบัญชี Google ของบริษัท · ทุกการเปลี่ยนแปลงบันทึกในชีต Log</span></div>
+  $('#adminView').innerHTML = `<div class="bh"><h2>จัดการผู้ใช้และบทบาท</h2><span class="hint">ผู้ใช้เข้าสู่ระบบด้วยบัญชี Google ของบริษัท · ทุกการเปลี่ยนแปลงบันทึกในบันทึกการใช้งาน (Log)</span></div>
     <div class="atabs">${Object.entries(tabLabels()).map(([k,l])=>`<button type="button" class="ptab ${adminTab===k?'on':''}" data-tab="${k}">${esc(l)}</button>`).join('')}</div>
     <div id="admBody"></div>`;
   adminTab==='dir' ? renderDirTab() : adminTab==='users' ? renderUsersTab() : renderRolesTab();

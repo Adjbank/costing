@@ -5245,7 +5245,7 @@ $('#pdView').addEventListener('click', async e=>{
 $('#pdView').addEventListener('submit', async e=>{ if(e.target.id!=='ptForm') return; e.preventDefault(); const t=PD.trial; if(!t) return; ptCollect(t); const btn=e.target.querySelector('button[type=submit]'); btn.disabled=true; try{ const r=await api('savePdTrial',{...t, status:t.status}); ptUpsert(r); PD.trial=JSON.parse(JSON.stringify(r)); drawPd(); toast(`บันทึก ${r.trialNo} แล้ว`); }catch(err){ $('#ptErr').textContent=errText(err); btn.disabled=false; } });
 
 /* ===== งาน RA: จดแจ้งเครื่องสำอาง (อย.) — ทะเบียนเลขจดแจ้ง (ต่ออายุทุก 3 ปี) + คำขอจดแจ้ง ===== */
-let FDA={regs:null, reqs:null, canEdit:false, reqStatus:[], sub:'regs', q:'', f:'', rq:'', rf:'', shown:150, form:null, renew:null, rform:null, open:null};
+let FDA={alert:null, regs:null, reqs:null, canEdit:false, reqStatus:[], sub:'regs', q:'', f:'', rq:'', rf:'', shown:150, form:null, renew:null, rform:null, open:null};
 const fdaCanView=()=>['projects','perfumer','pd','ra','calc','viewDb'].some(can);
 const FDA_DEC={'':['ยังไม่ตัดสินใจ','info'], renew:['ต่ออายุ','ok'], no:['ไม่ต่ออายุ','bad']};
 const FDA_ST={ok:['ใช้งาน','ok'], soon:['ใกล้หมดอายุ','warn'], urgent:['หมดอายุใน 90 วัน','bad'], expired:['หมดอายุแล้ว','bad'], no:['ไม่ต่ออายุ','info'], cancel:['ยกเลิก','bad']};
@@ -5286,8 +5286,8 @@ function drawFda(){
   const k=(v,l,f,cls)=>`<button type="button" class="field" data-fdaf="${f}" style="min-width:120px;text-align:left;border:1px solid ${FDA.f===f&&FDA.sub==='regs'?'var(--accent,#2b6)':'var(--line)'};border-radius:10px;padding:8px 10px;background:var(--card,transparent);cursor:pointer"><label style="cursor:pointer">${l}</label><div style="font-size:22px;font-weight:600;${cls||''}">${v}</div></button>`;
   const openReqs=(FDA.reqs||[]).filter(q=>!['เรียบร้อย','ยกเลิกใบจดแจ้ง'].includes(q.status)).length;
   $('#fdaBody').innerHTML=`<div class="settings" style="margin-bottom:10px">${k(regs.length,'เลขจดแจ้งทั้งหมด','')}${k(cnt('ok')+cnt('soon')+cnt('urgent'),'ใช้งานอยู่','active')}${k(due,'ใกล้หมดอายุ ≤ 180 วัน (ยังไม่ต่อ)','due',due?'color:var(--warn,#8a5200)':'')}${k(cnt('expired'),'หมดอายุแล้ว','expired',cnt('expired')?'color:var(--bad)':'')}${k(cnt('no'),'ไม่ต่ออายุ','no')}${k(renewed,'ต่ออายุแล้ว','renewed')}</div>
-    <div class="pf-tabs" role="tablist" style="margin:0 0 10px"><button type="button" data-fdasub="regs" class="${FDA.sub==='regs'?'on':''}">ทะเบียนเลขจดแจ้ง <span class="pf-n">${regs.length}</span></button><button type="button" data-fdasub="reqs" class="${FDA.sub==='reqs'?'on':''}">คำขอจดแจ้ง <span class="pf-n">${(FDA.reqs||[]).length}</span>${openReqs?` <span class="badge">${openReqs}</span>`:''}</button></div>
-    ${FDA.sub==='reqs'?fdaReqView():fdaRegView()}`;
+    <div class="pf-tabs" role="tablist" style="margin:0 0 10px"><button type="button" data-fdasub="regs" class="${FDA.sub==='regs'?'on':''}">ทะเบียนเลขจดแจ้ง <span class="pf-n">${regs.length}</span></button><button type="button" data-fdasub="reqs" class="${FDA.sub==='reqs'?'on':''}">คำขอจดแจ้ง <span class="pf-n">${(FDA.reqs||[]).length}</span>${openReqs?` <span class="badge">${openReqs}</span>`:''}</button>${FDA.canEdit?`<button type="button" data-fdasub="alert" class="${FDA.sub==='alert'?'on':''}">ตั้งค่าการเตือนทางอีเมล</button>`:''}</div>
+    ${FDA.sub==='alert'?fdaAlertView():FDA.sub==='reqs'?fdaReqView():fdaRegView()}`;
 }
 function fdaRegView(){
   return `<div class="search" style="flex-wrap:wrap;gap:8px"><input id="fdaQ" type="search" autocomplete="off" placeholder="ค้นหาเลขจดแจ้ง ชื่อการค้า ชื่อผลิตภัณฑ์…" value="${esc(FDA.q)}" style="flex:1;min-width:220px">
@@ -5377,6 +5377,32 @@ function fdaExport(kind){
   else { const rows=fdaReqFiltered(); aoa=[['ลำดับ','สถานะงาน',...FDA_RQF.map(x=>x[1]),'เลขจดแจ้ง','หมายเหตุ'],...rows.map(r=>[r.seq,r.status,...FDA_RQF.map(([k])=>/Date$/.test(k)?(r[k]?fdaTh(r[k]):''):r[k]),(FDA.regs.find(g=>g.id===r.regId)||{}).regNo||'',r.note])]; name=`คำขอจดแจ้ง อย._${rows.length}รายการ`; }
   const wb=XLSX.utils.book_new(), ws=XLSX.utils.aoa_to_sheet(aoa); XLSX.utils.book_append_sheet(wb,ws,'Sheet1'); saveFile(`${name}_${fdaToday()}.xlsx`, XLSX.write(wb,{type:'array',bookType:'xlsx'}));
 }
+/* ---------- ตั้งค่าเตือนวันหมดอายุทางอีเมล (Gmail ผ่าน Apps Script) ---------- */
+async function fdaLoadAlert(){
+  try{ FDA.alert=await api('getFdaAlert'); }catch(e){ FDA.alert={error:errText(e)}; }
+  if(FDA.sub==='alert') drawFda();
+}
+function fdaAlertView(){
+  const a=FDA.alert; if(!a){ fdaLoadAlert(); return '<div class="empty">กำลังโหลด…</div>'; }
+  if(a.error) return `<div class="msg bad">${esc(a.error)}</div>`;
+  const installed=!!a.lastPoll;
+  return `<div class="card" style="margin:0 0 12px"><h4 style="margin:0 0 6px">สถานะ</h4>
+      <div class="settings"><div class="field"><label>สคริปต์ส่งอีเมล (Apps Script)</label><div style="font-weight:600">${installed?`<span class="chip ok">ทำงานอยู่</span> <span class="muted" style="font-weight:400;font-size:12.5px">ตรวจล่าสุด ${esc(a.lastPoll)}</span>`:'<span class="chip warn">ยังไม่ได้ติดตั้ง</span>'}</div></div>
+      <div class="field"><label>ส่งอีเมลล่าสุด</label><div>${esc(a.last||'–')}</div></div>
+      <div class="field"><label>ถึงรอบเตือนตอนนี้ (ยังไม่ได้ส่ง)</label><div style="font-weight:600">${a.freshCount} รายการ <span class="muted" style="font-weight:400">จากที่ใกล้หมดอายุทั้งหมด ${a.dueCount}</span></div></div></div></div>
+    <form id="fdaAlertForm" class="card" style="margin:0 0 12px" novalidate><h4 style="margin:0 0 6px">ผู้รับและรอบเตือน</h4><div class="settings">
+      <div class="field" style="grid-column:1/-1"><label>ผู้รับอัตโนมัติ: ผู้ใช้ที่บทบาทมีสิทธิ์ RA (${a.recipients.length} คน รวมอีเมลเพิ่มเติม)</label><div style="font-size:13px">${a.recipients.length?a.recipients.map(e=>`<span class="chip">${esc(e)}</span>`).join(' '):'<span class="chip bad">ยังไม่มีผู้รับ · เพิ่มบทบาทที่มีสิทธิ์ RA ในหน้า "ผู้ใช้และบทบาท" หรือใส่อีเมลเพิ่มเติม</span>'}</div></div>
+      <div class="field"><label>เตือนก่อนหมดอายุ (วัน คั่นด้วย ,)</label><input data-fa="days" value="${esc(a.days)}" placeholder="180,90,60,30,14,7"></div>
+      <div class="field" style="grid-column:span 2"><label>อีเมลเพิ่มเติม (คั่นด้วย , · เฉพาะอีเมลบริษัท)</label><input data-fa="extra" value="${esc(a.extra)}" placeholder="name@scentandsense.co.th"></div></div>
+      <div class="muted" style="font-size:12.5px;margin-top:6px">ระบบส่งอีเมลสรุปวันละ 1 ฉบับ (08:00) เฉพาะวันที่มีเลขจดแจ้งถึงรอบเตือนใหม่ · แต่ละเลขเตือนครั้งเดียวต่อรอบ และเตือนอีกครั้งเมื่อหมดอายุแล้ว (ภายใน 30 วัน) · เลขที่ "ไม่ต่ออายุ" หรือยกเลิกจะไม่เตือน · เมื่อบันทึกการต่ออายุ รอบเตือนจะเริ่มใหม่ตามวันหมดอายุใหม่</div>
+      <div class="row" style="gap:8px;margin-top:8px;align-items:center"><button class="btn primary" type="submit">บันทึกการตั้งค่า</button><span class="muted" id="fdaErr" role="alert" style="color:var(--bad)"></span></div></form>
+    ${a.admin?`<div class="card" style="margin:0 0 12px"><h4 style="margin:0 0 6px">ติดตั้งสคริปต์ส่งอีเมล (ทำครั้งเดียว โดยเจ้าของบัญชี Gmail ที่จะใช้ส่ง)</h4>
+      <ol style="margin:4px 0 8px 18px;padding:0;font-size:13.5px;line-height:1.7"><li>เปิด <a href="https://script.new" target="_blank" rel="noopener">script.new</a> ด้วยบัญชี Google ของบริษัท (สร้างโปรเจกต์ Apps Script ใหม่) ตั้งชื่อเช่น "RD เตือน อย."</li><li>ลบโค้ดเดิมทั้งหมด แล้ววางโค้ดด้านล่าง (กด "คัดลอกโค้ด") → กดบันทึก</li><li>เลือกฟังก์ชัน <b>setup</b> ที่แถบด้านบน → กด <b>Run</b> → อนุญาตสิทธิ์ (ส่งอีเมลในนามคุณ, เชื่อมต่อบริการภายนอก, ทำงานตามเวลา)</li><li>กลับมาหน้านี้ กด "รีเฟรช" สถานะจะเป็น "ทำงานอยู่"</li></ol>
+      <textarea id="fdaScript" rows="8" readonly style="width:100%;font-family:monospace;font-size:12px">${esc(a.script)}</textarea>
+      <div class="row" style="gap:8px;margin-top:6px;flex-wrap:wrap"><button class="btn" type="button" id="fdaCopyScript">คัดลอกโค้ด</button><button class="btn small" type="button" id="fdaAlertRefresh">รีเฟรช</button><button class="btn small" type="button" id="fdaResetSecret" style="margin-left:auto">สร้างรหัสลับใหม่</button></div>
+      <div class="msg warn" style="margin-top:8px;font-size:12.5px">โค้ดนี้มีรหัสลับของระบบ ห้ามส่งต่อหรือวางในที่สาธารณะ · ถ้ารั่วให้กด "สร้างรหัสลับใหม่" แล้ววางโค้ดใหม่ในสคริปต์</div></div>`:'<div class="msg info" style="margin-bottom:12px">การติดตั้งสคริปต์ส่งอีเมลทำได้เฉพาะผู้ดูแลระบบ</div>'}
+    <div class="card" style="margin:0 0 12px"><h4 style="margin:0 0 6px">ตัวอย่างอีเมลรอบถัดไป</h4><div class="muted" style="font-size:13px;margin-bottom:6px">หัวเรื่อง: ${esc(a.subject)}</div>${a.freshCount?`<iframe title="ตัวอย่างอีเมล" sandbox="" style="width:100%;height:360px;border:1px solid var(--line);border-radius:8px;background:#fff" srcdoc="${esc(a.html)}"></iframe>`:'<div class="empty">ยังไม่มีรายการถึงรอบเตือน</div>'}</div>`;
+}
 function fdaUpsert(arr, o){ const i=arr.findIndex(x=>x.id===o.id); if(i>=0) arr[i]=o; else arr.push(o); }
 /* ---------- events ---------- */
 $('#fdaView').addEventListener('input', e=>{
@@ -5391,6 +5417,9 @@ $('#fdaView').addEventListener('click', async e=>{
   const t=e.target.closest('button'); if(!t) return;
   if(t.dataset.fdasub){ FDA.sub=t.dataset.fdasub; FDA.form=FDA.renew=FDA.rform=null; drawFda(); return; }
   if(t.dataset.fdaf!==undefined){ FDA.sub='regs'; FDA.f=FDA.f===t.dataset.fdaf?'':t.dataset.fdaf; FDA.shown=150; drawFda(); return; }
+  if(t.id==='fdaCopyScript'){ copyField($('#fdaScript'),'คัดลอกโค้ดแล้ว'); return; }
+  if(t.id==='fdaAlertRefresh'){ FDA.alert=null; drawFda(); return; }
+  if(t.id==='fdaResetSecret'){ if(!confirm('สร้างรหัสลับใหม่? สคริปต์ที่ติดตั้งไว้จะหยุดทำงานจนกว่าจะวางโค้ดใหม่')) return; t.disabled=true; try{ FDA.alert=await api('resetFdaAlertSecret'); toast('สร้างรหัสใหม่แล้ว · วางโค้ดใหม่ในสคริปต์'); drawFda(); }catch(err){ toast(errText(err)); t.disabled=false; } return; }
   if(t.id==='fdaRefresh'){ t.disabled=true; try{ await loadFda(true); }catch(err){ toast(errText(err)); } drawFda(); return; }
   if(t.id==='fdaMore'){ FDA.shown+=150; drawFda(); return; }
   if(t.id==='fdaExport'){ fdaExport('regs'); return; }
@@ -5417,6 +5446,7 @@ $('#fdaView').addEventListener('submit', async e=>{
     if(f.id==='fdaRegForm'){ const d=grab('data-ff'); d.id=FDA.form.id; d.cancelled=d.cancelled==='1'; d.files=fdaFilesParse(d.files);
       const o=await api('saveFdaReg', d); fdaUpsert(FDA.regs,o); if(o.requestId){ const q=FDA.reqs.find(x=>x.id===o.requestId); if(q) q.regId=o.id; } FDA.form=null; toast(`บันทึก ${o.regNo} แล้ว`); drawFda(); return; }
     if(f.id==='fdaRenewForm'){ const d=grab('data-fr'); d.files=fdaFilesParse(d.files); const o=await api('renewFdaReg', FDA.renew, d); fdaUpsert(FDA.regs,o); FDA.renew=null; toast(`ต่ออายุแล้ว · หมดอายุใหม่ ${fdaTh(o.expiry)}`); drawFda(); return; }
+    if(f.id==='fdaAlertForm'){ const d=grab('data-fa'); FDA.alert=await api('saveFdaAlert', d); toast('บันทึกการตั้งค่าการเตือนแล้ว'); drawFda(); return; }
     if(f.id==='fdaReqForm'){ const d=grab('data-fq'); d.id=FDA.rform.id; d.files=fdaFilesParse(d.files); d.projectId=FDA.rform.projectId||''; const o=await api('saveFdaRequest', d); fdaUpsert(FDA.reqs,o); FDA.reqs.sort((a,b)=>b.seq-a.seq); FDA.rform=null; toast(`บันทึกคำขอลำดับ ${o.seq} แล้ว`); drawFda(); return; }
   }catch(e2){ err.textContent=errText(e2); btn.disabled=false; }
 });

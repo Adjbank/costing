@@ -4562,9 +4562,12 @@ function btExtBlock(r){
 }
 function btPriceBlock(r){
   const p=(BT.prices&&BT.prices[r.regNo])||{}, rr=btArr(p.retailRef);
-  const F=[['freshThb','ราคาสด ฿/กก.'],['dryThb','ราคาแห้ง ฿/กก.'],['oilThb','ราคาน้ำมัน ฿/กก.'],['stockCost','ต้นทุนสต็อก ฿/กก.'],['rdCost','ต้นทุนสกัดเอง ฿/กก.'],['priceAsOf','ข้อมูลราคา ณ'],['priceNote','หมายเหตุราคา'],['rdCostSource','ที่มาต้นทุนสกัด']];
+  const F=[['freshThb','ราคาสด ฿/กก.'],['dryThb','ราคาแห้ง ฿/กก.'],['oilThb','ราคาน้ำมัน ฿/กก.'],['priceAsOf','ข้อมูลราคา ณ'],['priceNote','หมายเหตุราคา']];
+  const sc=btArr(p.stockCost), rc=btArr(p.rdCost);   /* ต้นทุนสต็อก / ต้นทุนสกัดเองเป็นตารางนำเข้า (แสดงอย่างเดียว) */
   return `<div class="card" style="margin:0 0 12px"><h4 style="margin:0 0 4px">ราคาอ้างอิงและต้นทุน <span class="chip warn">เฉพาะผู้มีสิทธิ์แก้ฐานราคา</span></h4><div class="muted" style="font-size:12px;margin-bottom:6px">ตัวเลขส่วนใหญ่เป็นค่าประมาณจากความรู้ทั่วไป (ตุลาคม 2026) ยังต้องตรวจกับผู้จำหน่าย</div>
     <form id="btPriceForm" novalidate><div class="settings">${F.map(([k,l])=>`<div class="field"><label>${l}</label><input data-bp="${k}" value="${p[k]==null?'':esc(p[k])}" maxlength="300" ${BT.canEdit||BT.canPrice?'':'disabled'}></div>`).join('')}</div>
+    ${sc.length?`<div style="margin-top:8px"><b style="font-size:13px">ต้นทุนสต็อกในคลัง${p.stockCostAsOf?` · ณ ${esc(p.stockCostAsOf)}`:''}</b>${btTbl(['รหัส RM','฿/หน่วย','หน่วย','฿/กก. หรือ ลิตร','มูลค่าคงเหลือ ฿'],sc.map(x=>`<tr><td class="mono">${esc(x.rmCode||'')}</td><td class="num">${x.costPerUnit!=null?fmt(x.costPerUnit,3):''}</td><td>${esc(x.unit||'')}</td><td class="num">${x.perKgOrL!=null?fmt(x.perKgOrL,0):''}</td><td class="num">${x.valueThb!=null?fmt(x.valueThb,0):''}</td></tr>`))}</div>`:''}
+    ${rc.length?`<div style="margin-top:8px"><b style="font-size:13px">ต้นทุนสกัดเอง (จากข้อมูล R&D)</b>${btTbl(['รายการ','พืช ฿/กก.','น้ำมัน ฿/กก.','รวม ฿/กก.'],rc.map(x=>`<tr><td>${esc(x.label||'')}</td><td class="num">${x.plantThbKg!=null?fmt(x.plantThbKg,0):''}</td><td class="num">${x.eoCostThbKg!=null?fmt(x.eoCostThbKg,0):''}</td><td class="num">${x.totalCostThbKg!=null?fmt(x.totalCostThbKg,0):''}</td></tr>`))}${p.rdCostSource?`<div class="muted" style="font-size:12px">${esc(p.rdCostSource)}</div>`:''}</div>`:''}
     ${rr.length?`<div style="margin-top:8px">${btTbl(['ผลิตภัณฑ์ (doTERRA ไทย)','ml','ราคาปลีก','ราคาสมาชิก'],rr.map(x=>`<tr><td>${esc(x.product||'')}</td><td class="num">${esc(x.ml??'')}</td><td class="num">${x.retail!=null?fmt(x.retail,0):''}</td><td class="num">${x.member!=null?fmt(x.member,0):''}</td></tr>`))}${p.retailSrc?`<div class="muted" style="font-size:12px">${esc(p.retailSrc)}</div>`:''}</div>`:''}
     <div class="row" style="gap:8px;margin-top:8px;align-items:center"><button class="btn small primary" type="submit">บันทึกราคา</button><span class="muted" id="btPriceErr" role="alert" style="color:var(--bad)"></span></div></form></div>`;
 }
@@ -4628,7 +4631,7 @@ $('#btView').addEventListener('submit', async e=>{
     return;
   }
   if(f.id==='btPriceForm'){
-    const regNo=BT.open.regNo, cur={...((BT.prices&&BT.prices[regNo])||{})}, err=$('#btPriceErr'); f.querySelectorAll('[data-bp]').forEach(i=>{ const v=i.value.trim(); if(v!==''||cur[i.dataset.bp]!=null) cur[i.dataset.bp]=i.dataset.bp==='stockCost'||i.dataset.bp==='rdCost'?(v===''?null:(isFinite(toNum(v))&&/^[0-9.,\s]+$/.test(v)?toNum(v):v)):v; });
+    const regNo=BT.open.regNo, cur={...((BT.prices&&BT.prices[regNo])||{})}, err=$('#btPriceErr'); f.querySelectorAll('[data-bp]').forEach(i=>{ const v=i.value.trim(); if(v!==''||cur[i.dataset.bp]!=null) cur[i.dataset.bp]=v; });   /* แก้เฉพาะช่องข้อความ ตารางต้นทุนที่นำเข้าคงเดิม */
     btn.disabled=true; err.textContent='';
     try{ const o=await api('saveBotanicalPrice', regNo, cur); BT.prices[regNo]=o; toast('บันทึกราคาแล้ว'); btn.disabled=false; }
     catch(e2){ err.textContent=errText(e2); btn.disabled=false; }

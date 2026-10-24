@@ -105,6 +105,15 @@ button,input,select,textarea{font:inherit;color:inherit}
 .gate-card .btn.primary{width:100%;justify-content:center}
 .gate-card .who{width:100%;text-align:left}
 .gate-card .gate-err{min-height:1.2em;width:100%}
+.pw-form{width:100%;display:flex!important;flex-direction:column;gap:12px;text-align:left}
+.pw-form label{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;color:var(--ink)}
+.pw-form input[type=email],.pw-form input[type=password],.pw-form input[type=text]{width:100%;box-sizing:border-box;border:1px solid var(--line-strong);border-radius:10px;padding:11px 12px;font:inherit;font-size:15px;font-weight:400;background:var(--input-bg);color:var(--ink)}
+.pw-form input:focus{outline:2px solid var(--accent);outline-offset:1px}
+.pw-wrap{position:relative;display:block}.pw-wrap input{padding-right:64px!important}
+.pw-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:none;color:var(--accent);font:inherit;font-size:12.5px;cursor:pointer;padding:6px}
+.pw-form label.pw-check{flex-direction:row;align-items:center;gap:8px;font-weight:400;font-size:12.5px;color:var(--ink-muted)}
+.pw-check input{width:16px;height:16px;accent-color:var(--accent)}
+.pw-hint{font-size:12px;color:var(--ink-muted);line-height:1.5}
 /* ฟอร์มออกเอกสาร: ช่องกรอกสูงเท่ากัน ป้ายบรรทัดเดียว เรียงตรงแนวเดียวกัน */
 #docForm .settings{grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px 16px;align-items:end}
 #docForm .field{display:flex;flex-direction:column;justify-content:flex-end;min-width:0}
@@ -1145,19 +1154,32 @@ function can(p){ return !!S.perms[p]; }
       แล้วส่ง ID token ไปที่ Apps Script API (doPost) ซึ่งตรวจ token กับ Google ทุกครั้ง */
 const CFG = window.COSTING_CONFIG || null;
 const HTTP = !!CFG;
-const TOKEN_KEY = 'ss-cost-idtoken';
+/* เข้าสู่ระบบด้วยอีเมล + รหัสผ่าน: เซิร์ฟเวอร์ออกโทเคนเซสชัน เก็บไว้ในเบราว์เซอร์ (จดจำ = localStorage 30 วัน, ไม่จดจำ = ปิดแท็บแล้วออก)
+   Google ใช้เฉพาะยืนยันตัวตนตอน "ตั้งรหัสผ่านครั้งแรก / ลืมรหัสผ่าน" */
+const SESSION_KEY = 'ss-rd-session';
 function jwtExp(t){ try{ const p=JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); return Number(p.exp)||0; }catch(e){ return 0; } }
-function getToken(){ try{ const t=sessionStorage.getItem(TOKEN_KEY); return t && jwtExp(t)*1000 > Date.now()+60000 ? t : null; }catch(e){ return S.token && jwtExp(S.token)*1000 > Date.now()+60000 ? S.token : null; } }
-function setToken(t){ S.token=t; try{ sessionStorage.setItem(TOKEN_KEY, t); }catch(e){} }
-function clearToken(){ S.token=null; try{ sessionStorage.removeItem(TOKEN_KEY); }catch(e){} }
+function jwtEmail(t){ try{ return String(JSON.parse(decodeURIComponent(escape(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))))).email||''); }catch(e){ return ''; } }
+function readSession(){ for(const st of [()=>localStorage, ()=>sessionStorage]){ try{ const v=JSON.parse(st().getItem(SESSION_KEY)||'null'); if(v&&v.session) return v; }catch(e){} } return S.sess||null; }
+function getToken(){ const v=readSession(); return v && new Date(v.expiresAt).getTime() > Date.now()+60000 ? v.session : null; }
+function setSession(r, remember){ const v={session:r.session, expiresAt:r.expiresAt, email:r.email, remember:!!remember}; S.sess=v; clearToken(true); try{ (remember?localStorage:sessionStorage).setItem(SESSION_KEY, JSON.stringify(v)); }catch(e){} }
+function clearToken(keepMem){ if(!keepMem) S.sess=null; for(const st of [()=>localStorage, ()=>sessionStorage]){ try{ st().removeItem(SESSION_KEY); st().removeItem('ss-cost-idtoken'); }catch(e){} } }
+/* เรียก API โดยตรง (ไม่ต้องมีเซสชัน): ใช้กับ pwLogin และ setMyPassword ผ่าน Google */
+async function rawApi(body){
+  let j;
+  for(let attempt=0; ; attempt++){
+    try{ const r=await fetch(CFG.apiUrl, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(body)}); const txt=await r.text(); if(!/^\s*\{/.test(txt)) throw new Error('bad response '+r.status); j=JSON.parse(txt); break; }
+    catch(e){ if(attempt>=2) throw new Error('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง'); await new Promise(res=>setTimeout(res, 800*(attempt+1))); }
+  }
+  if(!j.ok) throw new Error(j.error); return j.result;
+}
 async function httpApi(fn, ...args){
   const tok=getToken();
   if(!tok){ authLost(); throw new Error('AUTH_REQUIRED'); }
-  /* Apps Script ตอบผิดพลาดเป็นครั้งคราว (หน้า HTML / 404 แทน JSON โดยเฉพาะหลังปล่อยเวอร์ชันใหม่) → ลองซ้ำเองสูงสุด 4 ครั้ง */
+  /* เซิร์ฟเวอร์ตอบผิดพลาดเป็นครั้งคราว (หน้า HTML / 404 แทน JSON) → ลองซ้ำเองสูงสุด 4 ครั้ง */
   let j;
   for(let attempt=0; ; attempt++){
     try{
-      const r=await fetch(CFG.apiUrl, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify({fn, args, idToken:tok})});
+      const r=await fetch(CFG.apiUrl, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify({fn, args, session:tok})});
       const txt=await r.text();
       if(!/^\s*\{/.test(txt)) throw new Error('bad response '+r.status);
       j=JSON.parse(txt); break;
@@ -1172,15 +1194,15 @@ async function httpApi(fn, ...args){
 function authLost(){ clearToken(); if(S.gate!=='signin'){ S.inApp=false; showGate('signin','เซสชันหมดอายุ เข้าสู่ระบบอีกครั้ง'); } }
 const api = (fn, ...args) => HTTP ? httpApi(fn, ...args)
   : new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](...args));
-function renderGsi(msg){
+/* ปุ่ม Google ใช้เฉพาะยืนยันตัวตนก่อนตั้งรหัสผ่าน (ไม่ได้ใช้เข้าระบบ) */
+function renderGsi(){
   const el=$('#gsiBtn'); if(!el) return;
   let tries=0;
   (function wait(){
     if(window.google && google.accounts && google.accounts.id){
-      google.accounts.id.initialize({client_id:CFG.googleClientId, auto_select:true, cancel_on_tap_outside:false,
-        callback:r=>{ if(r && r.credential){ setToken(r.credential); boot(); } }});
-      google.accounts.id.renderButton(el, {theme:'outline', size:'large', text:'signin_with', shape:'pill', locale:'th', width:280});
-      if(!msg) google.accounts.id.prompt();
+      google.accounts.id.initialize({client_id:CFG.googleClientId, auto_select:false, cancel_on_tap_outside:false,
+        callback:r=>{ if(r && r.credential){ S.gTok=r.credential; showGate('setpw'); } }});
+      google.accounts.id.renderButton(el, {theme:'outline', size:'large', text:'continue_with', shape:'pill', locale:'th', width:280});
     } else if(++tries<100) setTimeout(wait,100);
     else el.innerHTML='<div class="msg bad">โหลดปุ่มเข้าสู่ระบบของ Google ไม่สำเร็จ ตรวจสอบอินเทอร์เน็ตแล้วรีเฟรช</div>';
   })();
@@ -1218,22 +1240,69 @@ function showGate(kind, info){
   if(kind==='loading') body = `<div class="spin" role="status" aria-label="กำลังตรวจสอบสิทธิ์"></div><p>กำลังตรวจสอบบัญชี Google ของคุณ…</p>`;
   else if(kind==='noPlatform') body = `<h1>เปิดผ่านลิงก์ของระบบ</h1><p>หน้านี้ต้องเปิดผ่านลิงก์ Google Apps Script ของบริษัท</p>`;
   else if(kind==='noIdentity') body = `<h1>ไม่พบบัญชี Google</h1><p>เข้าสู่ระบบ Google ด้วยอีเมลบริษัท (${esc(domains)}) แล้วเปิดลิงก์อีกครั้ง</p>`;
-  else if(kind==='signin') body = `<h1>เข้าสู่ระบบ</h1><p>ใช้บัญชี Google ของบริษัท (${esc(domains)})</p><div id="gsiBtn" style="min-height:44px"></div><div class="gate-err" id="gateErr">${esc(info||'')}</div>`;
+  else if(kind==='signin'){ const last=(readSession()||{}).email||(()=>{ try{ return localStorage.getItem('ss-rd-lastemail')||''; }catch(e){ return ''; } })();
+    body = `<h1>เข้าสู่ระบบ</h1><p>อีเมลบริษัท (${esc(domains)}) และรหัสผ่าน</p>
+      <form id="pwLoginForm" class="pw-form" novalidate><label>อีเมล<input id="pwEmail" type="email" autocomplete="username" value="${esc(last)}" placeholder="name@scentandsense.co.th" required></label>
+        <label>รหัสผ่าน<span class="pw-wrap"><input id="pwPass" type="password" autocomplete="current-password" required><button type="button" class="pw-eye" data-eye="pwPass" aria-label="แสดงรหัสผ่าน">แสดง</button></span></label>
+        <label class="pw-check"><input id="pwRemember" type="checkbox" checked> จดจำการเข้าสู่ระบบในเครื่องนี้ (30 วัน)</label>
+        <button class="btn primary" type="submit">เข้าสู่ระบบ</button></form>
+      <div class="gate-err" id="gateErr">${esc(info||'')}</div>
+      <button type="button" class="linklike" id="btnSetPw" style="font-size:13px">ตั้งรหัสผ่านครั้งแรก / ลืมรหัสผ่าน</button>`; }
+  else if(kind==='setpw'){ const em=S.gTok?jwtEmail(S.gTok):'';
+    body = S.gTok&&jwtExp(S.gTok)*1000>Date.now()+30000
+      ? `<h1>ตั้งรหัสผ่าน</h1><p>ยืนยันตัวตนแล้ว: <b>${esc(em)}</b></p>
+        <form id="pwSetForm" class="pw-form" novalidate><input type="email" autocomplete="username" value="${esc(em)}" hidden>
+          <label>รหัสผ่านใหม่<span class="pw-wrap"><input id="pwNew" type="password" autocomplete="new-password" required><button type="button" class="pw-eye" data-eye="pwNew" aria-label="แสดงรหัสผ่าน">แสดง</button></span></label>
+          <label>ยืนยันรหัสผ่านใหม่<input id="pwNew2" type="password" autocomplete="new-password" required></label>
+          <div class="pw-hint">อย่างน้อย 8 ตัว มีทั้งตัวอักษรและตัวเลข และไม่มีชื่ออีเมลอยู่ในนั้น · ตั้งใหม่แล้วเครื่องอื่นที่เคยเข้าไว้จะออกจากระบบ</div>
+          <label class="pw-check"><input id="pwRemember" type="checkbox" checked> จดจำการเข้าสู่ระบบในเครื่องนี้ (30 วัน)</label>
+          <button class="btn primary" type="submit">บันทึกรหัสผ่านและเข้าสู่ระบบ</button></form>
+        <div class="gate-err" id="gateErr">${esc(info||'')}</div><button type="button" class="linklike" id="btnBackLogin" style="font-size:13px">← กลับไปหน้าเข้าสู่ระบบ</button>`
+      : `<h1>ตั้งรหัสผ่านครั้งแรก / ลืมรหัสผ่าน</h1><p>ยืนยันตัวตนด้วยบัญชี Google ของบริษัท (${esc(domains)}) ครั้งเดียว แล้วตั้งรหัสผ่านสำหรับเข้าระบบ</p>
+        <div id="gsiBtn" style="min-height:44px"></div><div class="gate-err" id="gateErr">${esc(info||'')}</div><button type="button" class="linklike" id="btnBackLogin" style="font-size:13px">← กลับไปหน้าเข้าสู่ระบบ</button>`; }
+  else if(kind==='changepw') body = `${whoBlock()}<h1>เปลี่ยนรหัสผ่าน</h1>
+      <form id="pwChangeForm" class="pw-form" novalidate><input type="email" autocomplete="username" value="${esc(S.me?S.me.email:'')}" hidden>
+        <label>รหัสผ่านเดิม<input id="pwOld" type="password" autocomplete="current-password" required></label>
+        <label>รหัสผ่านใหม่<span class="pw-wrap"><input id="pwNew" type="password" autocomplete="new-password" required><button type="button" class="pw-eye" data-eye="pwNew" aria-label="แสดงรหัสผ่าน">แสดง</button></span></label>
+        <label>ยืนยันรหัสผ่านใหม่<input id="pwNew2" type="password" autocomplete="new-password" required></label>
+        <div class="pw-hint">อย่างน้อย 8 ตัว มีทั้งตัวอักษรและตัวเลข · เปลี่ยนแล้วเครื่องอื่นที่เคยเข้าไว้จะออกจากระบบ</div>
+        <button class="btn primary" type="submit">เปลี่ยนรหัสผ่าน</button></form>
+      <div class="gate-err" id="gateErr">${esc(info||'')}</div><button type="button" class="linklike" id="btnBackApp" style="font-size:13px">← กลับ</button>`;
   else if(kind==='domain') body = `<h1>อีเมลนี้ใช้ไม่ได้</h1><p>บัญชี <b>${esc(info||'')}</b> ไม่ใช่อีเมลบริษัท ${HTTP?'เลือกบัญชีอื่น':'ออกจากระบบ Google หรือสลับบัญชี แล้วเข้า'}ด้วย ${esc(domains)}</p>${HTTP?'<button class="btn primary" type="button" id="btnSwitch">ใช้บัญชีอื่น</button>':''}`;
   else if(kind==='noAccess') body = `${whoBlock()}<h1>ยังไม่มีสิทธิ์ใช้งาน</h1><p>กดส่งคำขอ ระบบจะแจ้งผู้ดูแลทางอีเมล เมื่ออนุมัติแล้วคุณจะได้รับอีเมลแจ้ง แล้วเปิดลิงก์นี้อีกครั้ง</p>
       <button class="btn primary" type="button" id="btnRequest" ${S.requested?'disabled':''}>${S.requested?'ส่งคำขอแล้ว · รอผู้ดูแลอนุมัติ':'ส่งคำขอสิทธิ์ใช้งาน'}</button><div class="gate-err" id="gateErr"></div>`;
   else if(kind==='suspended') body = `${whoBlock()}<h1>บัญชีถูกระงับ</h1><p>บัญชีนี้ถูกระงับการใช้งานระบบของแผนกวิจัยและพัฒนา ติดต่อผู้ดูแลระบบหากต้องการเปิดใช้อีกครั้ง</p>`;
   else if(kind==='error') body = `<h1>เปิดระบบไม่สำเร็จ</h1><p>${esc(info||'')}</p><button class="btn primary" type="button" id="btnRetry">ลองอีกครั้ง</button>`;
   $('#gateCard').innerHTML = head + body + '<div class="gate-foot">Scent &amp; Sense Laboratory Co., Ltd.</div>';
-  if(kind==='signin') renderGsi(info);
+  if(kind==='setpw' && !(S.gTok&&jwtExp(S.gTok)*1000>Date.now()+30000)) renderGsi();
+  const f=$('#gateCard input:not([hidden]):not([type=checkbox])'); if(f){ const e=$('#pwEmail'); setTimeout(()=>((e&&e.value)?$('#pwPass'):f).focus(),30); }
 }
 function signOut(){
   if(SYNC.dirty && !SYNC.busy && SYNC.loaded){ try{ syncNow(); }catch(e){} }   /* ส่งการแก้ไขที่ค้างก่อนออก */
-  clearToken(); S.inApp=false; S.admin=false; S.view='calc'; ADM_FORMS=null;
-  try{ if(window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect(); }catch(e){}
+  if(HTTP && getToken()) api('pwLogout').catch(()=>{});   /* ยกเลิกเซสชันที่เซิร์ฟเวอร์ */
+  setTimeout(()=>clearToken(),300); S.inApp=false; S.admin=false; S.view='calc'; ADM_FORMS=null; S.gTok=null;
   showGate('signin','ออกจากระบบแล้ว');
 }
+function pwFormErr(msg){ const el=$('#gateErr'); if(el) el.textContent=msg; }
+$('#gateCard').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const btn=e.target.querySelector('button[type=submit]'), remember=$('#pwRemember')?$('#pwRemember').checked:!!(readSession()||{}).remember;
+  const go=async(fn)=>{ btn.disabled=true; pwFormErr(''); try{ await fn(); }catch(x){ pwFormErr(errText(x)); btn.disabled=false; } };
+  if(e.target.id==='pwLoginForm'){
+    const email=$('#pwEmail').value.trim().toLowerCase(), pw=$('#pwPass').value;
+    if(!email||!pw){ pwFormErr('ใส่อีเมลและรหัสผ่าน'); return; }
+    return go(async()=>{ const r=await rawApi({fn:'pwLogin', args:[email, pw, remember]}); setSession(r, remember); try{ localStorage.setItem('ss-rd-lastemail', email); }catch(x){} boot(); });
+  }
+  const nw=$('#pwNew')?$('#pwNew').value:'', nw2=$('#pwNew2')?$('#pwNew2').value:'';
+  if(nw!==nw2){ pwFormErr('ยืนยันรหัสผ่านใหม่ไม่ตรงกัน'); return; }
+  if(e.target.id==='pwSetForm') return go(async()=>{ const r=await rawApi({fn:'setMyPassword', args:[nw, '', remember], idToken:S.gTok}); S.gTok=null; setSession(r, remember); try{ localStorage.setItem('ss-rd-lastemail', r.email); }catch(x){} toast('ตั้งรหัสผ่านแล้ว'); boot(); });
+  if(e.target.id==='pwChangeForm') return go(async()=>{ const r=await api('setMyPassword', nw, $('#pwOld').value, remember); setSession(r, remember); toast('เปลี่ยนรหัสผ่านแล้ว'); boot(); });
+});
 $('#gateCard').addEventListener('click', async e=>{
+  if(e.target.dataset && e.target.dataset.eye){ const i=$('#'+e.target.dataset.eye); const show=i.type==='password'; i.type=show?'text':'password'; e.target.textContent=show?'ซ่อน':'แสดง'; return; }
+  if(e.target.id==='btnSetPw'){ S.gTok=null; showGate('setpw'); return; }
+  if(e.target.id==='btnBackLogin'){ S.gTok=null; showGate('signin'); return; }
+  if(e.target.id==='btnBackApp'){ S.gate=''; evaluate(); return; }
   if(e.target.id==='btnRetry'){ boot(); return; }
   if(e.target.id==='btnSwitch'){ signOut(); return; }
   if(e.target.id!=='btnRequest') return;
@@ -1325,7 +1394,7 @@ function renderUserBar(){
     <button class="tbtn" type="button" id="btnShare">แชร์ลิงก์</button>
     <button class="tbtn" type="button" id="btnReload" title="โหลดสิทธิ์และฐานราคาล่าสุด">รีเฟรช</button>
     ${ava(S.me.email)}<span id="ubName"></span><span class="rolepill" id="ubRole"></span>
-    ${HTTP?'<button class="tbtn" type="button" id="btnSignOut">ออกจากระบบ</button>':''}`;
+    ${HTTP?'<button class="tbtn" type="button" id="btnChangePw">เปลี่ยนรหัสผ่าน</button><button class="tbtn" type="button" id="btnSignOut">ออกจากระบบ</button>':''}`;
   $('#ubName').textContent=shortName(S.me.email); $('#ubName').title=S.me.email; $('#ubRole').textContent=S.roleName+(S.me.auto?' (อัตโนมัติ)':'');
 }
 async function reloadAll(){
@@ -1340,7 +1409,7 @@ function openShare(){
   const url=S.appUrl || '(ลิงก์ Web app จากเมนู Deploy)';
   const role = S.access.autoJoin && S.roles[S.access.defaultRole] ? S.roles[S.access.defaultRole].name : null;
   $('#shareUrl').value=url;
-  $('#shareMsg').value=`แผนกวิจัยและพัฒนา (Scent & Sense)\n${url}\n\nเปิดลิงก์ด้วยบัญชี Google ของบริษัท (@scentandsense.co.th หรือ @scentandsense.co)`;
+  $('#shareMsg').value=`แผนกวิจัยและพัฒนา (Scent & Sense)\n${url}\n\nเข้าสู่ระบบด้วยอีเมลบริษัท (@scentandsense.co.th หรือ @scentandsense.co) และรหัสผ่าน\nครั้งแรกกด "ตั้งรหัสผ่านครั้งแรก" แล้วยืนยันตัวตนด้วยบัญชี Google ของบริษัท`;
   $('#shareNote').textContent = role
     ? `บัญชี Google ของบริษัทเปิดลิงก์แล้วเข้าใช้ได้ทันทีในบทบาท "${role}" อีเมลอื่นเข้าไม่ได้`
     : 'บัญชี Google ของบริษัทเปิดลิงก์แล้วกด "ส่งคำขอสิทธิ์ใช้งาน" ผู้ดูแลจะได้รับอีเมลแจ้ง อีเมลอื่นเข้าไม่ได้';
@@ -1361,6 +1430,7 @@ $('#userbar').addEventListener('click', e=>{
   if(e.target.id==='btnShare') openShare();
   if(e.target.id==='btnReload') reloadAll();
   if(e.target.id==='btnSignOut') signOut();
+  if(e.target.id==='btnChangePw'){ S.inApp=false; showGate('changepw'); }
   if(e.target.id==='btnTheme') toggleTheme();
 });
 $('#navtabs').addEventListener('click', e=>{
@@ -3799,9 +3869,9 @@ function renderUsersTab(){
       return `<tr data-email="${esc(u.email)}">
         <td><div class="person">${ava(u.email)}<div><span>${esc(u.email)}</span>${u.owner?'<small>เจ้าของระบบ</small>':self?'<small>คุณ</small>':''}${u.addedBy&&!u.owner?`<small>เพิ่มโดย ${esc(shortName(u.addedBy))}</small>`:''}</div></div></td>
         <td>${locked?`<span class="chip info">${esc(S.roles[u.role]?S.roles[u.role].name:u.role)}</span>`:`<select data-act="role" aria-label="บทบาท">${roleOpts(u.role)}</select>${S.roles[u.role]?'':' <span class="chip bad">บทบาทถูกลบ</span>'}`}</td>
-        <td>${u.active?'<span class="chip ok">ใช้งาน</span>':'<span class="chip bad">ระงับ</span>'}</td>
+        <td>${u.active?'<span class="chip ok">ใช้งาน</span>':'<span class="chip bad">ระงับ</span>'} ${(u.hasPassword||(d.withPassword||[]).includes(u.email))?'<span class="chip info" title="ตั้งรหัสผ่านแล้ว">มีรหัสผ่าน</span>':'<span class="chip warn" title="ยังไม่เคยตั้งรหัสผ่าน">ยังไม่ตั้งรหัส</span>'}</td>
         <td class="muted" style="white-space:nowrap">${fmtDate(u.addedAt)}</td>
-        <td>${locked?'':`<div class="adm-actions"><button class="btn small" type="button" data-act="toggle">${u.active?'ระงับ':'เปิดใช้งาน'}</button><button class="btn small danger" type="button" data-act="remove">ลบ</button></div>`}</td></tr>`; }).join('')}
+        <td>${locked?'':`<div class="adm-actions"><button class="btn small" type="button" data-act="toggle">${u.active?'ระงับ':'เปิดใช้งาน'}</button>${u.hasPassword?'<button class="btn small" type="button" data-act="resetpw" title="ลบรหัสผ่านและออกจากระบบทุกเครื่อง ผู้ใช้ต้องตั้งใหม่ด้วย Google">รีเซ็ตรหัส</button>':''}<button class="btn small danger" type="button" data-act="remove">ลบ</button></div>`}</td></tr>`; }).join('')}
     </tbody></table></div>
     <div class="card"><h3>เพิ่มผู้ใช้</h3>
       <form id="addUserForm" style="display:flex;flex-direction:column;gap:12px;margin-top:10px" novalidate>
@@ -3844,6 +3914,7 @@ adm.addEventListener('click', e=>{
   if(act==='decline'){ if(!twoStep(e.target,'ยืนยันปฏิเสธ?')) return; return admCall('declineRequest',[email],'ปฏิเสธคำขอแล้ว', e.target); }
   if(act==='suspendNew'){ if(!twoStep(e.target,'ยืนยันระงับ?')) return; return admCall('setUser',[email, roleSel.value, false, false],'ระงับผู้ใช้แล้ว', e.target); }
   if(act==='toggle' && u) return admCall('setUser',[email, u.role, !u.active, false], u.active?'ระงับผู้ใช้แล้ว':'เปิดใช้งานแล้ว', e.target);
+  if(act==='resetpw'){ if(!twoStep(e.target,'ยืนยันรีเซ็ต?')) return; return admCall('resetUserPassword',[email], 'รีเซ็ตรหัสผ่านแล้ว ผู้ใช้ต้องกด "ตั้งรหัสผ่านครั้งแรก" เพื่อตั้งใหม่', e.target); }
   if(act==='remove'){ if(!twoStep(e.target,'ยืนยันลบ?')) return; return admCall('removeUser',[email], S.access.autoJoin?'ลบแล้ว · คนนี้ยังเข้าได้ด้วยบทบาทเริ่มต้น ใช้ "ระงับ" ถ้าต้องการกันออก':'ลบผู้ใช้แล้ว', e.target); }
   const rr=e.target.closest('tr[data-rid]');
   if(act==='delrole' && rr){ if(!twoStep(e.target,'ยืนยันลบ?')) return; return admCall('deleteRole',[rr.dataset.rid],'ลบบทบาทแล้ว', e.target); }

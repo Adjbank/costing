@@ -12,9 +12,9 @@ import { TF_FORMS } from "./tf_forms.ts";
 
 const GOOGLE_CLIENT_ID = "715998679704-s1u0frj5cj2vhf4el67mj54sarbu5iq7.apps.googleusercontent.com";
 const DOMAINS = ["scentandsense.co.th", "scentandsense.co"];
-const PERM_KEYS = ["calc", "export", "viewDb", "editPrices", "manageUsers", "perfumer"];
+const PERM_KEYS = ["calc", "export", "viewDb", "editPrices", "manageUsers", "perfumer", "projects", "pd", "ra"];
 const BUILTIN_SOURCE = { file: "PRODUCT RM - Summary RM.pdf", updated: "12/10/2026 11:41:18" };
-const DEFAULT_PUBLIC_URL = "https://costing.scentandsense.co.th/";
+const DEFAULT_PUBLIC_URL = "https://rd.scentandsense.co.th/";
 
 const sql = postgres(Deno.env.get("SUPABASE_DB_URL")!, {
   max: 4, prepare: false, idle_timeout: 20, connect_timeout: 15, transform: { undefined: null },
@@ -700,7 +700,8 @@ const briefOut = (r: Any) => ({ id: String(r.id), kind: String(r.kind), brand: S
   phone: String(r.phone || ""), email: String(r.email || ""), summary: String(r.summary || ""), createdAt: iso(r.created_at), createdBy: String(r.created_by || ""),
   updatedAt: iso(r.updated_at), updatedBy: String(r.updated_by || ""), data: r.data || {} });
 const scentOut = (r: Any) => ({ id: String(r.id), code: String(r.code), name: String(r.name), briefId: String(r.brief_id || ""), family: String(r.family || ""), status: String(r.status),
-  owner: String(r.owner).toLowerCase(), formulaId: String(r.formula_id || ""), createdAt: iso(r.created_at), updatedAt: iso(r.updated_at), updatedBy: String(r.updated_by || ""), data: r.data || {} });
+  owner: String(r.owner).toLowerCase(), formulaId: String(r.formula_id || ""), projectId: String(r.project_id || ""), formulaCode: String(r.formula_code || ""),
+  createdAt: iso(r.created_at), updatedAt: iso(r.updated_at), updatedBy: String(r.updated_by || ""), data: r.data || {} });
 async function listBriefs(ctx: Ctx) { await needAny(ctx, PF_VIEW); return (await ctx.db`select * from costing.briefs order by updated_at desc`).map(briefOut); }
 async function listScents(ctx: Ctx) { await needAny(ctx, PF_VIEW); return (await ctx.db`select * from costing.scents order by updated_at desc`).map(scentOut); }
 async function saveBrief(ctx: Ctx, b: Any) {
@@ -753,8 +754,16 @@ async function saveScent(ctx: Ctx, s: Any) {
       const seq = (await db`select count(*)::int as n from costing.scents where code like ${"SC-" + year + "-%"}`)[0].n + 1;
       code = "SC-" + year + "-" + ("0000" + seq).slice(-4);
     }
+    /* ผูกกับโครงการ: รหัสสูตรกลิ่น PF+ลูกค้า+ลำดับกลิ่น+01 ออกให้ครั้งแรกที่ผูก (คงเดิมเมื่อย้ายโครงการของลูกค้าเดียวกัน) */
+    const projectId = str(s.projectId, 40);
+    let formulaCode = ex ? String(ex.formula_code || "") : "";
+    if (projectId) {
+      const pr = (await db`select customer_code from costing.projects where id = ${projectId}`)[0];
+      if (!pr) throw new Error("ไม่พบโครงการที่เลือก");
+      if (!formulaCode) formulaCode = await nextFormulaCode(db, String(pr.customer_code || ""));
+    }
     const row = { id: ex ? String(ex.id) : "s" + uuid(12), code, name, brief_id: briefId, family: str(s.family, 80), status, owner: ex ? String(ex.owner) : m.email, formula_id: formulaId,
-      created_at: ex ? ex.created_at : now, updated_at: now, updated_by: m.email, data: db.json(pfData(s.data)) };
+      project_id: projectId, formula_code: formulaCode, created_at: ex ? ex.created_at : now, updated_at: now, updated_by: m.email, data: db.json(pfData(s.data)) };
     if (ex) await db`update costing.scents set ${db(row, ...Object.keys(row).filter((k) => k !== "id"))} where id = ${row.id}`;
     else await db`insert into costing.scents ${db(row)}`;
     await log(db, m.email, "saveScent", (ex ? "แก้ไข " : "สร้าง ") + code + " · " + name + " [" + status + "]");
@@ -992,12 +1001,378 @@ async function finishMigration(ctx: Ctx) {
   return { ok: true };
 }
 
+/* ===== แผนกวิจัยและพัฒนา: ลูกค้า โครงการพัฒนาสินค้า (PDR) ตัวอย่างที่ส่ง และผลประเมินของลูกค้า =====
+   โครงการหนึ่งรายการ = คำขอพัฒนา (FM-RD-01) หนึ่งใบ เดินผ่านขั้น s1..s8 → done (หรือ lost) ตามระเบียบปฏิบัติ QP-RD-01
+   เลขเอกสาร FM-RD-XX-DDMMYY-NNN ออกให้เองจากตัวนับ docseq (NNN รันต่อเดือน) · ลูกค้าประเมินตัวอย่างผ่านลิงก์สาธารณะ (ไม่ต้อง log in) */
+const RD_VIEW = ["projects", "perfumer", "pd", "ra", "calc", "viewDb"], RD_EDIT = ["projects", "perfumer", "pd"], RD_DATA_MAX = 60000;
+const RD_STAGES = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "done", "lost"];
+const RD_KINDS: Record<string, number> = { new: 1, cost: 1, topping: 1, repeat: 1 };
+const RD_SLA_DEFAULT: Record<string, number> = { s1: 1, s2: 2, s3: 15, s3send: 2, s3eval: 7, s5send: 2, s5eval: 7, s7: 1 };
+const RA_STATUS: Record<string, number> = { pending: 1, pass: 1, cond: 1, fail: 1 };
+const SAMPLE_KINDS: Record<string, number> = { scent: 1, mockup: 1 };
+const EVAL_FIELDS = ["scent", "appearance", "skinfeel", "target", "brand", "overall"];
+const EVAL_DECISIONS: Record<string, number> = { produce: 1, revise: 1, reject: 1 };
+
+function bkkParts(d: Date) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(d).map((x) => [x.type, x.value]));
+  return { dd: p.day, mm: p.month, yyyy: p.year };
+}
+/** เลขเอกสาร FM-RD-XX-DDMMYY-NNN (วันที่ไทย ปี พ.ศ. 2 หลัก, NNN รันต่อเดือนต่อฟอร์ม) */
+async function nextDocNo(db: Db, prefix: string, at: Date) {
+  const p = bkkParts(at);
+  const r = await db`insert into costing.docseq (prefix, period, n) values (${prefix}, ${p.yyyy + p.mm}, 1) on conflict (prefix, period) do update set n = costing.docseq.n + 1 returning n`;
+  return `${prefix}-${p.dd}${p.mm}${String((Number(p.yyyy) + 543) % 100).padStart(2, "0")}-${String(Number(r[0].n)).padStart(3, "0")}`;
+}
+/** เลข PDR: PDR + ปี ค.ศ. 2 หลัก + เดือน + ลำดับ 3 หลัก (รูปแบบเดียวกับฟอร์ม PDR เดิม เช่น PDR2505001) */
+async function nextPdrNo(db: Db, at: Date) {
+  const p = bkkParts(at), period = p.yyyy + p.mm;
+  const r = await db`insert into costing.docseq (prefix, period, n) values ('PDR', ${period}, 1) on conflict (prefix, period) do update set n = costing.docseq.n + 1 returning n`;
+  return "PDR" + p.yyyy.slice(2) + p.mm + String(Number(r[0].n)).padStart(3, "0");
+}
+/** รหัสสูตรกลิ่น PF + รหัสลูกค้า 3 หลัก + ลำดับกลิ่นของลูกค้า 2 หลัก + 01 */
+async function nextFormulaCode(db: Db, customerCode: string) {
+  const cust = (customerCode || "000").replace(/[^0-9A-Za-z]/g, "").padStart(3, "0").slice(-3).toUpperCase();
+  const n = (await db`select count(*)::int as n from costing.scents where formula_code like ${"PF" + cust + "%"}`)[0].n + 1;
+  return "PF" + cust + String(n).padStart(2, "0") + "01";
+}
+const custCode = (v: unknown) => str(v, 10).replace(/[^0-9A-Za-z-]/g, "").toUpperCase();
+const custOut = (r: Any) => ({ code: String(r.code), company: String(r.company || ""), brand: String(r.brand || ""), contact: String(r.contact || ""), phone: String(r.phone || ""),
+  email: String(r.email || ""), note: String(r.note || ""), updatedAt: iso(r.updated_at) });
+async function listCustomers(ctx: Ctx) { await needAny(ctx, RD_VIEW); return (await ctx.db`select * from costing.customers order by code`).map(custOut); }
+async function upsertCustomer(db: Db, c: Any, email: string) {
+  let code = custCode(c.code);
+  if (!code) {   /* รหัสใหม่ = เลขสูงสุดที่เป็นตัวเลข + 1 (3 หลัก) */
+    const r = await db`select max((code)::int) as m from costing.customers where code ~ '^[0-9]+$'`;
+    code = String((Number(r[0].m) || 0) + 1).padStart(3, "0");
+  }
+  const now = new Date(), ex = (await db`select * from costing.customers where code = ${code}`)[0];
+  const row = { code, company: str(c.company, 200), brand: str(c.brand, 200), contact: str(c.contact, 120), phone: str(c.phone, 60), email: str(c.email, 120), note: str(c.note, 1000),
+    created_at: ex ? ex.created_at : now, updated_at: now, updated_by: email };
+  if (!row.company && !row.brand) throw new Error("ใส่ชื่อบริษัทหรือแบรนด์");
+  if (ex) await db`update costing.customers set ${db(row, "company", "brand", "contact", "phone", "email", "note", "updated_at", "updated_by")} where code = ${code}`;
+  else await db`insert into costing.customers ${db(row)}`;
+  return custOut(row);
+}
+async function saveCustomer(ctx: Ctx, c: Any) {
+  return await locked(ctx, async (cx) => { const m = await needAny(cx, RD_EDIT); const out = await upsertCustomer(cx.db, c || {}, m.email); await log(cx.db, m.email, "saveCustomer", out.code + " · " + (out.brand || out.company)); return out; });
+}
+
+const rdData = (d: unknown) => { const o = d && typeof d === "object" ? d : {}; if (JSON.stringify(o).length > RD_DATA_MAX) throw new Error("ข้อมูลใหญ่เกินไป (ลดความยาวข้อความ)"); return o; };
+const emailList = (v: unknown) => (Array.isArray(v) ? v : splitList(v)).map((x) => str(x, 120).toLowerCase()).filter(Boolean).slice(0, 10);
+function cleanOwners(o: Any) { o = o || {}; return { pc: str(o.pc, 120).toLowerCase(), sa: str(o.sa, 120).toLowerCase(), pd: str(o.pd, 120).toLowerCase(), perfumer: emailList(o.perfumer) }; }
+const projOut = (r: Any) => ({ id: String(r.id), pdrNo: String(r.pdr_no || ""), docNo: String(r.doc_no || ""), customerCode: String(r.customer_code || ""), company: String(r.company || ""),
+  brand: String(r.brand || ""), soNo: String(r.so_no || ""), kind: String(r.kind || "new"), title: String(r.title || ""), scentCount: Number(r.scent_count) || 0, stage: String(r.stage || "s1"),
+  owners: r.owners || {}, briefId: String(r.brief_id || ""), ra: r.ra || {}, actual: r.actual || {}, data: r.data || {},
+  createdAt: iso(r.created_at), createdBy: String(r.created_by || ""), updatedAt: iso(r.updated_at), updatedBy: String(r.updated_by || "") });
+async function rdSla(db: Db) { const s = jsonOf(await getSetting(db, "rdSla"), {}); return { ...RD_SLA_DEFAULT, ...(s && typeof s === "object" ? s : {}) }; }
+async function listProjects(ctx: Ctx) {
+  await needAny(ctx, RD_VIEW); const db = ctx.db;
+  const rows = await db`select * from costing.projects order by updated_at desc`;
+  const sc = await db`select project_id, count(*)::int as n from costing.scents where project_id <> '' group by project_id`;
+  const sm = await db`select project_id, count(*)::int as n, sum(case when status = 'evaluated' then 1 else 0 end)::int as ev from costing.samples group by project_id`;
+  const scN: Record<string, number> = {}, smN: Record<string, Any> = {};
+  sc.forEach((r: Any) => { scN[String(r.project_id)] = Number(r.n); }); sm.forEach((r: Any) => { smN[String(r.project_id)] = r; });
+  return { sla: await rdSla(db), items: rows.map((r: Any) => ({ ...projOut(r), scents: scN[String(r.id)] || 0, samples: smN[String(r.id)] ? Number(smN[String(r.id)].n) : 0, evaluated: smN[String(r.id)] ? Number(smN[String(r.id)].ev) : 0 })) };
+}
+async function getProject(ctx: Ctx, id: string) {
+  await needAny(ctx, RD_VIEW); const db = ctx.db;
+  const r = (await db`select * from costing.projects where id = ${String(id || "")}`)[0];
+  if (!r) throw new Error("ไม่พบโครงการนี้");
+  return { project: projOut(r), scents: (await db`select * from costing.scents where project_id = ${String(r.id)} order by created_at`).map(scentOut),
+    samples: (await db`select * from costing.samples where project_id = ${String(r.id)} order by created_at`).map((s: Any) => sampleOut(s, "")), sla: await rdSla(db) };
+}
+async function saveProject(ctx: Ctx, p: Any) {
+  return await locked(ctx, async (c) => {
+    const m = await needAny(c, ["projects", "perfumer"]), db = c.db;
+    p = p || {};
+    const now = new Date(), ex = p.id ? (await db`select * from costing.projects where id = ${String(p.id)}`)[0] : null;
+    if (p.id && !ex) throw new Error("ไม่พบโครงการนี้ (อาจถูกลบไปแล้ว)");
+    const kind = RD_KINDS[p.kind] ? String(p.kind) : "new";
+    let cust: Any = null;
+    if (p.customer && typeof p.customer === "object" && (p.customer.company || p.customer.brand)) cust = await upsertCustomer(db, p.customer, m.email);   /* สร้าง/แก้ลูกค้าในคำขอเดียวกัน */
+    const code = cust ? cust.code : custCode(p.customerCode);
+    if (code && !cust) { cust = (await db`select * from costing.customers where code = ${code}`)[0]; if (!cust) throw new Error("ไม่พบรหัสลูกค้า " + code); cust = custOut(cust); }
+    const company = str(p.company, 200) || (cust ? cust.company : ""), brand = str(p.brand, 200) || (cust ? cust.brand : "");
+    if (!company && !brand) throw new Error("ใส่ชื่อลูกค้าหรือแบรนด์");
+    const briefId = str(p.briefId, 40);
+    if (briefId && !(await db`select 1 from costing.briefs where id = ${briefId}`).length) throw new Error("ไม่พบบรีฟที่เลือก");
+    const scentCount = Math.max(1, Math.min(99, Math.round(Number(p.scentCount) || 1)));
+    const actual = ex ? (ex.actual || {}) : { s1: now.toISOString() };
+    /* ส่วนที่เซิร์ฟเวอร์ดูแลเอง (ประวัติขั้น การข้ามเงื่อนไข เลขเอกสารย่อย) คงค่าเดิมไว้เสมอ แม้หน้าเว็บส่ง data ชุดเก่ามา */
+    const data: Any = rdData(p.data), old: Any = ex ? ex.data || {} : {};
+    if (ex) { data.stageLog = old.stageLog; data.overrides = old.overrides; Object.keys(RD_SUBDOCS).forEach((k) => { if (old[k] && old[k].docNo) data[k] = { ...(data[k] && typeof data[k] === "object" ? data[k] : {}), docNo: old[k].docNo, issuedAt: old[k].issuedAt, issuedBy: old[k].issuedBy }; }); }
+    const row = { id: ex ? String(ex.id) : "p" + uuid(12), pdr_no: ex ? String(ex.pdr_no) : await nextPdrNo(db, now), doc_no: ex ? String(ex.doc_no) : await nextDocNo(db, "FM-RD-01", now),
+      customer_code: code, company, brand, so_no: str(p.soNo, 60), kind, title: str(p.title, 300), scent_count: scentCount, stage: ex ? String(ex.stage) : "s1",
+      owners: db.json(cleanOwners(p.owners)), brief_id: briefId, ra: db.json(ex ? ex.ra || {} : {}), actual: db.json(actual), data: db.json(data),
+      created_at: ex ? ex.created_at : now, created_by: ex ? String(ex.created_by) : m.email, updated_at: now, updated_by: m.email };
+    if (ex) await db`update costing.projects set ${db(row, ...Object.keys(row).filter((k) => k !== "id"))} where id = ${row.id}`;
+    else await db`insert into costing.projects ${db(row)}`;
+    await log(db, m.email, "saveProject", (ex ? "แก้ไข " : "เปิด ") + row.pdr_no + " · " + (brand || company));
+    return projOut({ ...row, owners: cleanOwners(p.owners), ra: ex ? ex.ra || {} : {}, actual, data });
+  });
+}
+/** เงื่อนไขผ่านด่านของแต่ละขั้น (ตาม QP-RD-01) — คืนข้อความเหตุผลถ้ายังไปต่อไม่ได้ */
+async function gateCheck(db: Db, pr: Any, to: string): Promise<string> {
+  const d = pr.data || {}, ra = pr.ra || {}, ow = pr.owners || {};
+  const decided = async (kind: string) => (await db`select 1 from costing.samples where project_id = ${String(pr.id)} and kind = ${kind} and status = 'evaluated' and eval->>'produce' = 'true' limit 1`).length > 0;
+  switch (to) {
+    case "s2": return !pr.customer_code ? "ระบุรหัสลูกค้าก่อน" : !ow.pc ? "ระบุผู้ประสานงาน (Project Coordinator) ก่อน" : "";
+    case "s3": return ra.status !== "pass" && ra.status !== "cond" ? "RA ต้องตรวจกฎหมายผ่าน (หรือผ่านแบบมีเงื่อนไข) ก่อน" : !(ow.perfumer || []).length ? "มอบหมาย Perfumer ก่อน" : "";
+    case "s4": return (await decided("scent")) ? "" : 'ลูกค้ายังไม่ได้เลือก "ผลิตจริงต่อไป" ให้กลิ่นใด (ต้องมีผลประเมินตัวอย่างกลิ่น)';
+    case "s5": return (await db`select 1 from costing.samples where project_id = ${String(pr.id)} and kind = 'mockup' limit 1`).length ? "" : "ยังไม่มีชุดตัวอย่างต้นแบบสินค้า (FM-RD-04)";
+    case "s6": return (await decided("mockup")) ? "" : 'ลูกค้ายังไม่ได้ยืนยันต้นแบบ (ต้องมีผลประเมินต้นแบบที่เลือก "ผลิตจริงต่อไป")';
+    case "s7": return d.stability && (d.stability.standard || d.stability.result === "pass") ? "" : "บันทึก Stability ก่อน: เบสเดิมใช้เอกสารมาตรฐาน หรือเบสใหม่ต้องมีผลทดสอบผ่าน (FM-RD-08)";
+    case "s8": return d.bom && d.bom.released ? "" : "ออก BOM และบันทึกส่งมอบสูตร (FM-RD-09) ก่อน";
+    case "done": return !(d.bom && d.bom.released) ? "ออก BOM และบันทึกส่งมอบสูตร (FM-RD-09) ก่อน" : d.newFormula && !(d.pilot && d.pilot.result === "pass") ? "สูตรใหม่ต้องทำ Pilot Batch ให้ผ่านก่อน (FM-RD-07)" : "";
+    default: return "";
+  }
+}
+async function setStage(ctx: Ctx, id: string, stage: string, note: string, force: boolean) {
+  return await locked(ctx, async (c) => {
+    const m = await needAny(c, RD_EDIT), db = c.db;
+    const pr = (await db`select * from costing.projects where id = ${String(id || "")}`)[0];
+    if (!pr) throw new Error("ไม่พบโครงการนี้");
+    if (RD_STAGES.indexOf(stage) < 0) throw new Error("ขั้นตอนไม่ถูกต้อง");
+    const from = String(pr.stage), fi = RD_STAGES.indexOf(from), ti = RD_STAGES.indexOf(stage);
+    note = str(note, 1000);
+    if (stage === "lost" && !note) throw new Error("ใส่เหตุผลที่ยกเลิกโครงการ");
+    const forward = ti > fi && stage !== "lost";
+    const data = pr.data || {};
+    if (forward) {
+      if (ti - fi > 1 && stage !== "done") throw new Error("ข้ามขั้นไม่ได้ ไปทีละขั้น");
+      if (stage === "done" && from !== "s8" && !(from === "s7" && !data.newFormula)) throw new Error(data.newFormula ? "สูตรใหม่ต้องผ่าน Pilot Batch (ขั้น 8) ก่อนปิดงาน" : "ต้องออก BOM (ขั้น 7) ก่อนปิดงาน");
+      const why = await gateCheck(db, pr, stage);
+      if (why) {
+        if (!force) throw new Error("ยังไปขั้นถัดไปไม่ได้: " + why);
+        if (!note) throw new Error("ข้ามเงื่อนไขต้องใส่เหตุผล (เช่น ลูกค้ายืนยันทาง LINE)");
+        data.overrides = (Array.isArray(data.overrides) ? data.overrides : []).concat([{ stage, why, note, by: m.email, at: new Date().toISOString() }]).slice(-50);
+      }
+    } else if (!isAdmin(m) && !hasPerm(m, "projects")) throw new Error("ย้อนขั้นหรือยกเลิกได้เฉพาะ Project Coordinator หรือผู้ดูแลระบบ");
+    const actual = { ...(pr.actual || {}) };
+    if (!actual[stage]) actual[stage] = new Date().toISOString();
+    data.stageLog = (Array.isArray(data.stageLog) ? data.stageLog : []).concat([{ from, to: stage, note, by: m.email, at: new Date().toISOString() }]).slice(-100);
+    await db`update costing.projects set stage = ${stage}, actual = ${db.json(actual)}, data = ${db.json(data)}, updated_at = now(), updated_by = ${m.email} where id = ${String(pr.id)}`;
+    await log(db, m.email, "setStage", String(pr.pdr_no) + " · " + from + " → " + stage + (note ? " · " + note : ""));
+    return projOut({ ...pr, stage, actual, data, updated_by: m.email, updated_at: new Date() });
+  });
+}
+async function raCheck(ctx: Ctx, id: string, status: string, note: string) {
+  return await locked(ctx, async (c) => {
+    const m = await need(c, "ra"), db = c.db;
+    const pr = (await db`select * from costing.projects where id = ${String(id || "")}`)[0];
+    if (!pr) throw new Error("ไม่พบโครงการนี้");
+    if (!RA_STATUS[status]) throw new Error("ผลตรวจไม่ถูกต้อง");
+    const ra = { status, note: str(note, 2000), by: m.email, at: new Date().toISOString() };
+    const actual = { ...(pr.actual || {}) }; if (status !== "pending" && !actual.s2ra) actual.s2ra = ra.at;
+    await db`update costing.projects set ra = ${db.json(ra)}, actual = ${db.json(actual)}, updated_at = now(), updated_by = ${m.email} where id = ${String(pr.id)}`;
+    await log(db, m.email, "raCheck", String(pr.pdr_no) + " · " + status + (ra.note ? " · " + ra.note.slice(0, 200) : ""));
+    return projOut({ ...pr, ra, actual, updated_by: m.email, updated_at: new Date() });
+  });
+}
+/** ออกเลขเอกสารให้ส่วนย่อยของโครงการ (FM-RD-03/06/07/08/09/10) ครั้งแรกครั้งเดียว แล้วเก็บไว้ใน data[key].docNo */
+const RD_SUBDOCS: Record<string, string> = { prototype: "FM-RD-03", finalFormula: "FM-RD-06", pilot: "FM-RD-07", stability: "FM-RD-08", bom: "FM-RD-09", retention: "FM-RD-10", plan: "FM-RD-12" };
+async function issueProjectDoc(ctx: Ctx, id: string, key: string) {
+  return await locked(ctx, async (c) => {
+    const m = await needAny(c, RD_EDIT), db = c.db;
+    const pr = (await db`select * from costing.projects where id = ${String(id || "")}`)[0];
+    if (!pr) throw new Error("ไม่พบโครงการนี้");
+    if (!RD_SUBDOCS[key]) throw new Error("ไม่รู้จักเอกสาร " + key);
+    const data = pr.data || {}; data[key] = data[key] && typeof data[key] === "object" ? data[key] : {};
+    if (!data[key].docNo) { data[key].docNo = await nextDocNo(db, RD_SUBDOCS[key], new Date()); data[key].issuedAt = new Date().toISOString(); data[key].issuedBy = m.email; }
+    await db`update costing.projects set data = ${db.json(data)}, updated_at = now(), updated_by = ${m.email} where id = ${String(pr.id)}`;
+    await log(db, m.email, "issueProjectDoc", String(pr.pdr_no) + " · " + data[key].docNo);
+    return projOut({ ...pr, data, updated_by: m.email, updated_at: new Date() });
+  });
+}
+
+/* ---- ตัวอย่างที่ส่งให้ลูกค้า (FM-RD-04) และผลประเมิน (FM-RD-05) ---- */
+const sampleOut = (r: Any, base: string) => ({ id: String(r.id), docNo: String(r.doc_no || ""), projectId: String(r.project_id), kind: String(r.kind), items: Array.isArray(r.items) ? r.items : [],
+  requestedAt: iso(r.requested_at), shippedAt: iso(r.shipped_at), arrivalAt: iso(r.arrival_at), rdBy: String(r.rd_by || ""), saBy: String(r.sa_by || ""), note: String(r.note || ""),
+  status: String(r.status), evalDocNo: String(r.eval_doc_no || ""), evalLink: r.eval_token && base ? base + "eval/" + String(r.eval_token) : "", eval: r.eval || {},
+  createdAt: iso(r.created_at), createdBy: String(r.created_by || ""), updatedAt: iso(r.updated_at), updatedBy: String(r.updated_by || "") });
+function cleanItems(v: Any) {
+  if (!Array.isArray(v)) return [];
+  return v.slice(0, 30).map((x: Any) => ({ code: str(x && x.code, 40), name: str(x && x.name, 160), scentId: str(x && x.scentId, 40), formulaCode: str(x && x.formulaCode, 40), size: str(x && x.size, 40), qty: numOrNull(x && x.qty) }))
+    .filter((x: Any) => x.code || x.name || x.scentId);
+}
+const evalBase = async (db: Db) => { const u = await appUrl(db); return u.endsWith("/") ? u : u + "/"; };
+async function listSamples(ctx: Ctx, projectId: string) {
+  await needAny(ctx, RD_VIEW); const db = ctx.db, base = await evalBase(db);
+  const rows = projectId ? await db`select * from costing.samples where project_id = ${String(projectId)} order by created_at` : await db`select * from costing.samples order by created_at desc limit 500`;
+  return rows.map((r: Any) => sampleOut(r, base));
+}
+async function saveSample(ctx: Ctx, s: Any) {
+  return await locked(ctx, async (c) => {
+    const m = await needAny(c, RD_EDIT), db = c.db;
+    s = s || {};
+    const pr = (await db`select * from costing.projects where id = ${str(s.projectId, 40)}`)[0];
+    if (!pr) throw new Error("ไม่พบโครงการของตัวอย่างนี้");
+    const kind = SAMPLE_KINDS[s.kind] ? String(s.kind) : "scent";
+    const items = cleanItems(s.items);
+    if (!items.length) throw new Error("ใส่รายการตัวอย่างอย่างน้อย 1 รายการ");
+    const now = new Date(), ex = s.id ? (await db`select * from costing.samples where id = ${String(s.id)}`)[0] : null;
+    if (s.id && !ex) throw new Error("ไม่พบชุดตัวอย่างนี้");
+    if (ex && String(ex.status) === "evaluated") throw new Error("ชุดตัวอย่างที่ลูกค้าประเมินแล้วแก้ไขไม่ได้ สร้างชุดใหม่แทน");
+    const row = { id: ex ? String(ex.id) : "x" + uuid(12), doc_no: ex ? String(ex.doc_no) : await nextDocNo(db, "FM-RD-04", now), project_id: String(pr.id), kind, items: db.json(items),
+      requested_at: ts(s.requestedAt), shipped_at: ts(s.shippedAt), arrival_at: ts(s.arrivalAt), rd_by: str(s.rdBy, 120), sa_by: str(s.saBy, 120), note: str(s.note, 2000),
+      status: ex ? String(ex.status) : "draft", eval_token: ex ? ex.eval_token : null, eval_doc_no: ex ? String(ex.eval_doc_no || "") : "", eval: db.json(ex ? ex.eval || {} : {}),
+      created_at: ex ? ex.created_at : now, created_by: ex ? String(ex.created_by) : m.email, updated_at: now, updated_by: m.email };
+    if (ex) await db`update costing.samples set ${db(row, ...Object.keys(row).filter((k) => k !== "id"))} where id = ${row.id}`;
+    else await db`insert into costing.samples ${db(row)}`;
+    await log(db, m.email, "saveSample", String(pr.pdr_no) + " · " + row.doc_no + " · " + kind + " × " + items.length);
+    return sampleOut({ ...row, items, eval: ex ? ex.eval || {} : {} }, await evalBase(db));
+  });
+}
+/** ส่งตัวอย่าง: บันทึกวันส่ง สร้างลิงก์ประเมิน และบันทึกวันที่จริงของขั้นในโครงการ */
+async function sendSample(ctx: Ctx, id: string) {
+  return await locked(ctx, async (c) => {
+    const m = await needAny(c, RD_EDIT), db = c.db;
+    const ex = (await db`select * from costing.samples where id = ${String(id || "")}`)[0];
+    if (!ex) throw new Error("ไม่พบชุดตัวอย่างนี้");
+    if (String(ex.status) === "evaluated") throw new Error("ชุดนี้ประเมินแล้ว");
+    const now = new Date(), token = ex.eval_token || uuid(24), shipped = ex.shipped_at || now;
+    await db`update costing.samples set status = 'sent', eval_token = ${token}, shipped_at = ${shipped}, updated_at = now(), updated_by = ${m.email} where id = ${String(ex.id)}`;
+    const pr = (await db`select * from costing.projects where id = ${String(ex.project_id)}`)[0];
+    if (pr) { const key = String(ex.kind) === "mockup" ? "s5send" : "s3send", actual = { ...(pr.actual || {}) }; if (!actual[key]) actual[key] = now.toISOString(); await db`update costing.projects set actual = ${db.json(actual)}, updated_at = now() where id = ${String(pr.id)}`; }
+    await log(db, m.email, "sendSample", String(ex.doc_no) + " · ส่งแล้ว");
+    return sampleOut({ ...ex, status: "sent", eval_token: token, shipped_at: shipped, updated_by: m.email, updated_at: now }, await evalBase(db));
+  });
+}
+async function deleteSample(ctx: Ctx, id: string) {
+  return await locked(ctx, async (c) => {
+    const m = await needAny(c, RD_EDIT), db = c.db;
+    const ex = (await db`select * from costing.samples where id = ${String(id || "")}`)[0];
+    if (!ex) throw new Error("ไม่พบชุดตัวอย่างนี้");
+    if (String(ex.status) === "evaluated" && !isAdmin(m)) throw new Error("ชุดที่ประเมินแล้วลบได้เฉพาะผู้ดูแลระบบ");
+    await db`delete from costing.samples where id = ${String(ex.id)}`;
+    await log(db, m.email, "deleteSample", String(ex.doc_no));
+    return { deleted: String(ex.id) };
+  });
+}
+/** สรุปผลประเมินของลูกค้า (FM-RD-11): period = "YYYY-MM" (รายเดือน) หรือ "YYYY" (รายปี) ตามเวลาไทย */
+async function evalSummary(ctx: Ctx, period: string, kind: string) {
+  await needAny(ctx, RD_VIEW); const db = ctx.db;
+  period = str(period, 7); kind = SAMPLE_KINDS[kind] ? kind : "scent";
+  if (!/^\d{4}(-\d{2})?$/.test(period)) throw new Error("ช่วงเวลาไม่ถูกต้อง");
+  const rows = await db`select s.*, p.company, p.brand, p.pdr_no from costing.samples s join costing.projects p on p.id = s.project_id where s.status = 'evaluated' and s.kind = ${kind} and (s.eval->>'submittedAt') like ${period + "%"} order by s.eval->>'submittedAt'`;
+  const out: Any[] = [];
+  rows.forEach((r: Any) => { const ev = r.eval || {}; (Array.isArray(ev.items) ? ev.items : []).forEach((it: Any) => {
+    const sc = it.scores || {}, vals = EVAL_FIELDS.map((f) => Number(sc[f]) || 0), total = vals.reduce((a, b) => a + b, 0);
+    if (!total) return;   /* ผลที่นำเข้าจากทะเบียนเดิมไม่มีคะแนนรายด้าน ไม่นับในสรุป */
+    out.push({ pdrNo: String(r.pdr_no), company: String(r.company || ""), brand: String(r.brand || ""), docNo: String(r.eval_doc_no || ""), code: String(it.code || ""), name: String(it.name || ""), formulaCode: String(it.formulaCode || ""),
+      scores: Object.fromEntries(EVAL_FIELDS.map((f, i) => [f, vals[i]])), total, pct: Math.round(total / 30 * 10000) / 100, decision: String(it.decision || ""), comment: String(it.comment || ""), submittedAt: String(ev.submittedAt || ""), email: String(ev.email || "") }); }); });
+  const n = out.length, avg = n ? Math.round(out.reduce((a, r) => a + r.pct, 0) / n * 100) / 100 : 0;
+  return { period, kind, rows: out, count: n, avgPct: avg, passPct: Number(await getSetting(db, "evalPassPct")) || 80 };
+}
+const hx = (s: unknown) => String(s === undefined || s === null ? "" : s).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch] as string));
+/** หน้าประเมินตัวอย่างสำหรับลูกค้า (สาธารณะ ผ่าน token ของชุดตัวอย่าง) */
+async function evalPage(token: string): Promise<Response> {
+  const html = (body: string, title = "ประเมินตัวอย่าง · Scent & Sense") => new Response(`<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${hx(title)}</title>
+<style>body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Thai",sans-serif;background:#f6f3ee;color:#1f2430;line-height:1.5}.wrap{max-width:720px;margin:0 auto;padding:20px 16px 60px}.card{background:#fff;border:1px solid #e6e1d8;border-radius:14px;padding:18px 18px 14px;margin:14px 0}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:17px;margin:0 0 8px}.muted{color:#6b7280;font-size:13px}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.crit{display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center;padding:6px 0;border-top:1px solid #f0ece5}.crit:first-of-type{border-top:0}
+.scale{display:flex;gap:4px}.scale label{width:36px;height:36px;border:1px solid #cfc8bb;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:600;background:#fff}.scale input{display:none}.scale input:checked+span{background:#1f3a5f;color:#fff;border-radius:7px;width:100%;height:100%;display:flex;align-items:center;justify-content:center}
+textarea,input[type=email]{width:100%;box-sizing:border-box;border:1px solid #cfc8bb;border-radius:8px;padding:9px 10px;font:inherit}.dec label{display:inline-flex;align-items:center;gap:6px;border:1px solid #cfc8bb;border-radius:999px;padding:6px 12px;margin:4px 6px 0 0;cursor:pointer;background:#fff}.dec input:checked+span{font-weight:700}.dec label:has(input:checked){background:#e9f1fb;border-color:#1f3a5f}
+button{background:#1f3a5f;color:#fff;border:0;border-radius:10px;padding:12px 20px;font:inherit;font-weight:700;cursor:pointer;width:100%}button:disabled{opacity:.6}.ok{background:#e5f4e4;border-color:#b7dcb5}.bad{color:#b42318}.brandbar{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#8a6a4b;font-weight:700}</style></head><body><div class="wrap">${body}</div></body></html>`, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+  const r = (await sql`select s.*, p.company, p.brand, p.pdr_no from costing.samples s join costing.projects p on p.id = s.project_id where s.eval_token = ${str(token, 40)}`)[0];
+  if (!r) return html(`<div class="card"><h1>ไม่พบแบบประเมิน</h1><p class="muted">ลิงก์อาจหมดอายุหรือพิมพ์ไม่ครบ กรุณาติดต่อเจ้าหน้าที่ Scent & Sense</p></div>`, "ไม่พบแบบประเมิน");
+  const items = Array.isArray(r.items) ? r.items : [], ev = r.eval || {}, done = String(r.status) === "evaluated";
+  const CRIT = [["scent", "กลิ่น (Scent)"], ["appearance", "สี / ลักษณะภายนอก (Appearance)"], ["skinfeel", "ความรู้สึกหลังใช้งาน (Skin feel)"], ["target", "ความเหมาะสมกับกลุ่มเป้าหมาย (Target fit)"], ["brand", "ความเหมาะสมกับแบรนด์ (Brand alignment)"], ["overall", "ความชอบโดยรวม (Overall liking)"]];
+  const prev = (code: string) => (Array.isArray(ev.items) ? ev.items : []).find((x: Any) => x.code === code) || {};
+  const itemHtml = (it: Any, i: number) => { const pv = prev(it.code); return `<div class="card" data-item="${i}"><h2>${hx(it.code || "ตัวอย่าง " + (i + 1))}${it.name ? " · " + hx(it.name) : ""}</h2>${it.size ? `<div class="muted">${hx(it.size)}${it.qty ? " × " + hx(it.qty) : ""}</div>` : ""}
+    ${CRIT.map(([k, l]) => `<div class="crit"><span>${l}</span><div class="scale">${[1, 2, 3, 4, 5].map((v) => `<label><input type="radio" name="s${i}_${k}" value="${v}" ${Number((pv.scores || {})[k]) === v ? "checked" : ""}><span>${v}</span></label>`).join("")}</div></div>`).join("")}
+    <div style="margin-top:8px"><div class="muted">ความเห็น / ข้อเสนอแนะ</div><textarea name="c${i}" rows="2" maxlength="1000">${hx(pv.comment || "")}</textarea></div>
+    <div class="dec" style="margin-top:8px"><div class="muted">ตัวอย่างนี้เหมาะสำหรับ</div><label><input type="radio" name="d${i}" value="produce" ${pv.decision === "produce" ? "checked" : ""}><span>ผลิตจริงต่อไป</span></label><label><input type="radio" name="d${i}" value="revise" ${pv.decision === "revise" ? "checked" : ""}><span>ปรับแก้แล้วส่งใหม่</span></label><label><input type="radio" name="d${i}" value="reject" ${pv.decision === "reject" ? "checked" : ""}><span>ไม่เลือก</span></label></div></div>`; };
+  const body = `<div class="brandbar">Scent &amp; Sense · แผนกวิจัยและพัฒนา</div><h1>แบบประเมิน${String(r.kind) === "mockup" ? "ต้นแบบผลิตภัณฑ์" : "ตัวอย่างกลิ่น"}</h1>
+    <div class="muted">${hx(r.brand || r.company)}${r.brand && r.company ? " · " + hx(r.company) : ""} · เอกสาร ${hx(r.doc_no)} · ส่งเมื่อ ${r.shipped_at ? hx(bkk(new Date(r.shipped_at)).slice(0, 10)) : "-"}</div>
+    ${done ? `<div class="card ok"><b>ประเมินแล้ว</b> เมื่อ ${hx(bkk(new Date(ev.submittedAt || Date.now())))} โดย ${hx(ev.email || "")} · แก้ไขคำตอบได้ด้านล่างแล้วกดส่งอีกครั้ง</div>` : `<div class="card"><p style="margin:0">ให้คะแนน 1 (น้อย) ถึง 5 (มาก) ในแต่ละด้าน และเลือกว่าตัวอย่างใดให้ผลิตจริงต่อไป ใช้เวลาประมาณ 2 นาที</p></div>`}
+    <form id="f">${items.map(itemHtml).join("")}
+    <div class="card"><div class="muted">ความเห็นเพิ่มเติมโดยรวม</div><textarea name="note" rows="3" maxlength="2000">${hx(ev.note || "")}</textarea>
+      <div style="margin-top:10px"><div class="muted">อีเมลผู้ประเมิน *</div><input type="email" name="email" required value="${hx(ev.email || "")}" placeholder="name@company.com"></div>
+      <div style="margin-top:14px"><button type="submit" id="go">ส่งผลประเมิน</button></div><div id="msg" class="muted" style="margin-top:8px" aria-live="polite"></div></div></form>
+    <script>const F=document.getElementById('f'),M=document.getElementById('msg');F.addEventListener('submit',async e=>{e.preventDefault();const b=document.getElementById('go');const items=[...document.querySelectorAll('[data-item]')].map((el,i)=>{const sc={};['scent','appearance','skinfeel','target','brand','overall'].forEach(k=>{const r=el.querySelector('input[name="s'+i+'_'+k+'"]:checked');sc[k]=r?+r.value:0});const d=el.querySelector('input[name="d'+i+'"]:checked');return {idx:i,scores:sc,comment:el.querySelector('[name="c'+i+'"]').value,decision:d?d.value:''}});
+    const miss=items.find(x=>Object.values(x.scores).some(v=>!v));if(miss){M.innerHTML='<span class="bad">ให้คะแนนให้ครบทุกด้านของตัวอย่างที่ '+(miss.idx+1)+'</span>';return}
+    b.disabled=true;M.textContent='กำลังส่ง…';try{const r=await fetch('${hx((Deno.env.get("SUPABASE_URL") || "") + "/functions/v1/api?evalSubmit=" + token)}',{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({items,note:F.note.value,email:F.email.value})});const j=await r.json();if(!j.ok)throw new Error(j.error||'ส่งไม่สำเร็จ');M.innerHTML='<b style="color:#1a7f37">ขอบคุณครับ ระบบบันทึกผลประเมินแล้ว</b> ทีม Scent &amp; Sense จะติดต่อกลับโดยเร็ว';window.scrollTo(0,document.body.scrollHeight)}catch(err){M.innerHTML='<span class="bad">'+(err.message||err)+'</span>';b.disabled=false}});</script>`;
+  return html(body);
+}
+async function evalSubmit(token: string, body: Any): Promise<Any> {
+  token = str(token, 40); body = body || {};
+  const email = str(body.email, 160).toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error("ใส่อีเมลผู้ประเมินให้ถูกต้อง");
+  return await sql.begin(async (db: Db) => {
+    await db`select pg_advisory_xact_lock(7001)`;
+    const ex = (await db`select * from costing.samples where eval_token = ${token}`)[0];
+    if (!ex) throw new Error("ไม่พบแบบประเมิน");
+    const items = Array.isArray(ex.items) ? ex.items : [], ans = Array.isArray(body.items) ? body.items : [];
+    const evItems = items.map((it: Any, i: number) => { const a = ans.find((x: Any) => Number(x && x.idx) === i) || {}; const scores: Record<string, number> = {};
+      EVAL_FIELDS.forEach((f) => { const v = Math.round(Number((a.scores || {})[f])); scores[f] = v >= 1 && v <= 5 ? v : 0; });
+      return { code: String(it.code || ""), name: String(it.name || ""), scentId: String(it.scentId || ""), formulaCode: String(it.formulaCode || ""), scores, comment: str(a.comment, 1000), decision: EVAL_DECISIONS[a.decision] ? String(a.decision) : "" }; });
+    if (evItems.some((x: Any) => EVAL_FIELDS.some((f) => !x.scores[f]))) throw new Error("ให้คะแนนให้ครบทุกด้าน");
+    const now = new Date(), old = ex.eval || {};
+    const ev = { submittedAt: now.toISOString(), email, note: str(body.note, 2000), items: evItems, produce: evItems.some((x: Any) => x.decision === "produce"),
+      history: (Array.isArray(old.history) ? old.history : []).concat(old.submittedAt ? [{ submittedAt: old.submittedAt, email: old.email, items: old.items }] : []).slice(-10) };
+    const evalDocNo = String(ex.eval_doc_no || "") || await nextDocNo(db, "FM-RD-05", now);
+    await db`update costing.samples set status = 'evaluated', eval = ${db.json(ev)}, eval_doc_no = ${evalDocNo}, updated_at = now(), updated_by = ${"customer:" + email} where id = ${String(ex.id)}`;
+    const pr = (await db`select * from costing.projects where id = ${String(ex.project_id)}`)[0];
+    if (pr) { const key = String(ex.kind) === "mockup" ? "s5eval" : "s3eval", actual = { ...(pr.actual || {}) }; actual[key] = now.toISOString(); await db`update costing.projects set actual = ${db.json(actual)}, updated_at = now() where id = ${String(pr.id)}`; }
+    await log(db, "customer:" + email, "evalSubmit", String(ex.doc_no) + " → " + evalDocNo + (ev.produce ? " · เลือกผลิตจริง" : ""));
+    return { ok: true, docNo: evalDocNo };
+  });
+}
+/** นำเข้าทะเบียน R&D เดิม (ลูกค้า โครงการ ตัวอย่าง) จากไฟล์ Excel — เจ้าของระบบเท่านั้น ทำซ้ำได้ (upsert ตาม id) */
+async function importRd(ctx: Ctx, d: Any) {
+  return await locked(ctx, async (c) => {
+    const m = await me(c), db = c.db;
+    if (m.email !== MIGRATION_OWNER || !m.isOwner) throw new Error("FORBIDDEN");
+    d = d || {}; let nc = 0, np = 0, ns = 0, nsc = 0;
+    for (const x of (Array.isArray(d.customers) ? d.customers : [])) { if (!x || (!x.company && !x.brand)) continue; await upsertCustomer(db, x, m.email); nc++; }
+    for (const p of (Array.isArray(d.projects) ? d.projects : [])) {
+      if (!p || !p.id) continue;
+      const ex = (await db`select id from costing.projects where id = ${String(p.id)}`)[0];
+      const row = { id: String(p.id), pdr_no: str(p.pdrNo, 20), doc_no: str(p.docNo, 40), customer_code: custCode(p.customerCode), company: str(p.company, 200), brand: str(p.brand, 200), so_no: str(p.soNo, 60),
+        kind: RD_KINDS[p.kind] ? String(p.kind) : "new", title: str(p.title, 300), scent_count: Math.max(1, Number(p.scentCount) || 1), stage: RD_STAGES.indexOf(p.stage) >= 0 ? String(p.stage) : "s1",
+        owners: db.json(cleanOwners(p.owners)), brief_id: "", ra: db.json(p.ra && typeof p.ra === "object" ? p.ra : {}), actual: db.json(p.actual && typeof p.actual === "object" ? p.actual : {}), data: db.json(rdData(p.data)),
+        created_at: ts(p.createdAt) || new Date(), created_by: "import", updated_at: ts(p.updatedAt) || new Date(), updated_by: m.email };
+      if (ex) await db`update costing.projects set ${db(row, ...Object.keys(row).filter((k) => k !== "id"))} where id = ${row.id}`; else await db`insert into costing.projects ${db(row)}`;
+      np++;
+    }
+    for (const s of (Array.isArray(d.samples) ? d.samples : [])) {
+      if (!s || !s.id || !s.projectId) continue;
+      if (!(await db`select 1 from costing.projects where id = ${String(s.projectId)}`).length) continue;
+      const ex = (await db`select id from costing.samples where id = ${String(s.id)}`)[0];
+      const row = { id: String(s.id), doc_no: str(s.docNo, 40), project_id: String(s.projectId), kind: SAMPLE_KINDS[s.kind] ? String(s.kind) : "scent", items: db.json(cleanItems(s.items)),
+        requested_at: ts(s.requestedAt), shipped_at: ts(s.shippedAt), arrival_at: ts(s.arrivalAt), rd_by: str(s.rdBy, 120), sa_by: str(s.saBy, 120), note: str(s.note, 2000),
+        status: s.status === "evaluated" ? "evaluated" : s.status === "sent" ? "sent" : "draft", eval_token: null, eval_doc_no: str(s.evalDocNo, 40), eval: db.json(s.eval && typeof s.eval === "object" ? s.eval : {}),
+        created_at: ts(s.createdAt) || new Date(), created_by: "import", updated_at: new Date(), updated_by: m.email };
+      if (ex) await db`update costing.samples set ${db(row, ...Object.keys(row).filter((k) => k !== "id"))} where id = ${row.id}`; else await db`insert into costing.samples ${db(row)}`;
+      ns++;
+    }
+    for (const s of (Array.isArray(d.scents) ? d.scents : [])) {   /* กลิ่นจากทะเบียน FM-RD-02: มีอยู่แล้ว → ผูกโครงการ+รหัสสูตร, ยังไม่มี → สร้างใหม่ */
+      if (!s || !s.id) continue;
+      const pid = str(s.projectId, 40), fc = str(s.formulaCode, 40);
+      if (pid && !(await db`select 1 from costing.projects where id = ${pid}`).length) continue;
+      const ex = (await db`select id from costing.scents where id = ${String(s.id)}`)[0];
+      if (ex) { await db`update costing.scents set project_id = ${pid}, formula_code = ${fc} where id = ${String(s.id)}`; nsc++; continue; }
+      const name = str(s.name, 160); if (!name) continue;
+      await db`insert into costing.scents ${db({ id: String(s.id), code: str(s.code, 40) || ("SC-IMP-" + uuid(6).toUpperCase()), name, brief_id: "", family: str(s.family, 80), status: PF_SCENT_STATUS[s.status] ? String(s.status) : "trial",
+        owner: "import", formula_id: "", project_id: pid, formula_code: fc, created_at: ts(s.createdAt) || new Date(), updated_at: new Date(), updated_by: m.email, data: db.json(pfData(s.data)) })}`;
+      nsc++;
+    }
+    for (const q of (Array.isArray(d.docseq) ? d.docseq : [])) {   /* ตั้งตัวนับให้ต่อจากเลขเดิม */
+      if (!q || !q.prefix || !q.period) continue;
+      await db`insert into costing.docseq (prefix, period, n) values (${str(q.prefix, 20)}, ${str(q.period, 8)}, ${Math.max(0, Number(q.n) || 0)}) on conflict (prefix, period) do update set n = greatest(costing.docseq.n, excluded.n)`;
+    }
+    await log(db, m.email, "importRd", `customers ${nc} projects ${np} samples ${ns} scents ${nsc}`);
+    return { customers: nc, projects: np, samples: ns, scents: nsc };
+  });
+}
+
 /* ===== ตารางฟังก์ชันที่หน้าเว็บเรียกได้ ===== */
 const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   bootstrap, requestAccess, savePrices, resetPrices, saveExport, adminData, setUser, removeUser, declineRequest, saveAccess, createRole, updateRole, deleteRole,
   loadMyFormulas, saveMyFormulas, adminFormulas, loadPricing, savePricing, updatePrices, submitComplaint, myComplaints, adminComplaints, replyComplaint,
   loadCompliance, saveComplianceRules, saveRmMap, listDocs, getDoc, issueDoc, voidDoc, listRmDocs, getRmDocFile, uploadRmDoc, updateRmDoc, deleteRmDoc,
   listBriefs, saveBrief, deleteBrief, listScents, saveScent, deleteScent, getTypeformStatus, saveTypeformToken, syncTypeform, disconnectTypeform,
+  listCustomers, saveCustomer, listProjects, getProject, saveProject, setStage, raCheck, issueProjectDoc, listSamples, saveSample, sendSample, deleteSample, evalSummary, importRd,
   importAll, importRmFile, finishMigration,
 };
 
@@ -1006,6 +1381,14 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   const url = new URL(req.url);
   if (url.searchParams.get("tf")) return await tfWebhook(req, url);
+  /* ลิงก์ประเมินตัวอย่างของลูกค้า: GET แสดงฟอร์ม, POST บันทึกผล (ไม่ต้อง log in ใช้ token ของชุดตัวอย่าง) */
+  if (url.searchParams.get("eval")) return await evalPage(url.searchParams.get("eval") || "");
+  if (url.searchParams.get("evalSubmit")) {
+    let out: Any;
+    try { out = await evalSubmit(url.searchParams.get("evalSubmit") || "", JSON.parse((await req.text()) || "{}")); }
+    catch (err) { out = { ok: false, error: String((err && (err as Error).message) || err) }; }
+    return new Response(JSON.stringify(out), { headers: { "Content-Type": "application/json", ...CORS } });
+  }
   if (req.method !== "POST") return new Response(JSON.stringify({ ok: true, service: "costing-api" }), { headers: { "Content-Type": "application/json", ...CORS } });
   let out: Any;
   try {

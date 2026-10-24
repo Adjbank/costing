@@ -443,6 +443,7 @@ tfoot td{font-weight:700;border-top:1px solid var(--ink);background:var(--bg-sof
   <section id="msdsView" hidden style="padding-block:24px 56px"></section>
   <section id="rdView" hidden style="padding-block:24px 56px"></section>
   <section id="pdView" hidden style="padding-block:24px 56px"></section>
+  <section id="btView" hidden style="padding-block:24px 56px"></section>
   <section id="perfView" hidden style="padding-block:24px 56px"></section>
   <div id="calcView">
   <div id="calcSubTabs" style="padding-top:20px"></div>
@@ -1148,7 +1149,8 @@ const PERMS = [
   ['perfumer','Perfumer','รับบรีฟ ออกแบบกลิ่น และบันทึกกลิ่นในคลัง'],
   ['projects','โครงการ R&D (Project Coordinator)','เปิดโครงการ วางแผน มอบหมาย ส่งตัวอย่าง ย้อนขั้น/ยกเลิก'],
   ['pd','Product Development','ต้นแบบสินค้า Stability Pilot Batch BOM ในโครงการ'],
-  ['ra','RA ตรวจกฎหมาย','บันทึกผลตรวจ IFRA / อย. ก่อนมอบงานออกแบบ']
+  ['ra','RA ตรวจกฎหมาย','บันทึกผลตรวจ IFRA / อย. ก่อนมอบงานออกแบบ'],
+  ['research','Research Ingredients','ทะเบียนพืชหอม: เพิ่ม/แก้ข้อมูล รูป และบันทึกการสกัด']
 ];
 const DOMAINS = ['scentandsense.co.th','scentandsense.co'];
 const S = {me:null, roles:{}, order:[], access:{autoJoin:false, defaultRole:'costing'}, perms:{}, roleName:'',
@@ -1392,6 +1394,7 @@ function renderUserBar(){
   $('#navtabs').innerHTML = (rdCanView() ? tab('btnRd','rd','โครงการ') : '')
     + (pfCanView() ? `<button type="button" id="btnPerf" class="${pfOn?'on':''}" ${pfOn?'aria-current="page"':''}>Perfumer</button>` : tab('btnCalc','calc','คำนวณ'))
     + (pdCanView() ? tab('btnPd','pd','Product Development') : '')
+    + (btCanView() ? tab('btnBt','bt','ทะเบียนพืชหอม') : '')
     + (can('calc') ? `<button type="button" id="btnDoc" class="${v==='doc'||v==='chk'?'on':''}" ${v==='doc'||v==='chk'?'aria-current="page"':''}>เอกสารวัตถุดิบ</button>` : '')
     + (can('viewDb') ? tab('btnMsds','msds','MSDS วัตถุดิบ') : '')
     + (can('editPrices') ? tab('btnRm','rm','ฐานราคาวัตถุดิบ') : '')
@@ -1443,7 +1446,7 @@ $('#userbar').addEventListener('click', e=>{
 });
 $('#navtabs').addEventListener('click', e=>{
   const b=e.target.closest('button'); if(!b) return;
-  const view={btnCalc:'calc', btnChk:'chk', btnDoc:'doc', btnRd:'rd', btnPd:'pd', btnPerf:'perf', btnMsds:'msds', btnRm:'rm', btnAll:'all', btnPrice:'price', btnCmp:'cmp', btnAdmin:'admin'}[b.id];
+  const view={btnCalc:'calc', btnChk:'chk', btnDoc:'doc', btnRd:'rd', btnPd:'pd', btnBt:'bt', btnPerf:'perf', btnMsds:'msds', btnRm:'rm', btnAll:'all', btnPrice:'price', btnCmp:'cmp', btnAdmin:'admin'}[b.id];
   if(view) showView(view);
 });
 async function showView(v){
@@ -1458,8 +1461,9 @@ async function showView(v){
   if(v==='perf' && !pfCanView()) v='calc';
   if(v==='rd' && !rdCanView()) v='calc';
   if(v==='pd' && !pdCanView()) v='calc';
+  if(v==='bt' && !btCanView()) v='calc';
   S.view=v; S.admin = v!=='calc';                 /* S.admin = ไม่ได้อยู่หน้าคำนวณ */
-  $('#msdsView').hidden=v!=='msds'; $('#perfView').hidden=v!=='perf'; $('#rdView').hidden=v!=='rd'; $('#pdView').hidden=v!=='pd';
+  $('#msdsView').hidden=v!=='msds'; $('#perfView').hidden=v!=='perf'; $('#rdView').hidden=v!=='rd'; $('#pdView').hidden=v!=='pd'; $('#btView').hidden=v!=='bt';
   $('#adminView').hidden=v!=='admin'; $('#allView').hidden=v!=='all'; $('#priceView').hidden=v!=='price'; $('#rmView').hidden=v!=='rm'; $('#cmpView').hidden=v!=='cmp'; $('#chkView').hidden=v!=='chk'; $('#docView').hidden=v!=='doc'; $('#calcView').hidden=v!=='calc';
   renderUserBar();
   if(v==='calc') renderCalcSubTabs();
@@ -1468,6 +1472,7 @@ async function showView(v){
   if(v==='perf'){ window.scrollTo(0,0); renderPerfView(); return; }
   if(v==='rd'){ window.scrollTo(0,0); renderRdView(); return; }
   if(v==='pd'){ window.scrollTo(0,0); renderPdView(); return; }
+  if(v==='bt'){ window.scrollTo(0,0); renderBtView(); return; }
   if(v==='chk'){ window.scrollTo(0,0); renderChkView(); return; }
   if(v==='cmp'){ window.scrollTo(0,0); renderCmpView(); return; }
   if(v==='rm'){ window.scrollTo(0,0); renderRmView(); return; }
@@ -4410,6 +4415,223 @@ $('#pdView').addEventListener('submit', async e=>{
     if(btn) btn.disabled=true; errEl.textContent='';
     try{ const r=await api('savePdBase', b); const i=PD.bases.findIndex(x=>x.id===r.id); if(i>=0) PD.bases[i]=r; else PD.bases.push(r); PD.baseOpen=JSON.parse(JSON.stringify(r)); toast('บันทึกเบสแล้ว'); drawPd(); }
     catch(e2){ errEl.textContent=errText(e2); if(btn) btn.disabled=false; }
+  }
+});
+
+/* ===== Research Ingredients: ทะเบียนวัตถุดิบพืชหอม (BT-nnnn) — ย้ายจาก Artifact เดิม =====
+   ข้อมูลหลักเก็บใน data (jsonb) ราคาอ้างอิง/ต้นทุนแยกตาราง (เห็นเฉพาะผู้มีสิทธิ์ editPrices) รูปเก็บใน Storage ส่งเป็นลิงก์ชั่วคราว */
+let BT={items:null, canEdit:false, canPrice:false, prices:null, q:'', form:'', coll:'', status:'', rdType:'', stock:'', odor:'', note:'', view:'cards', shown:60, open:null, edit:false, ext:null, extForm:false, busy:false};
+const btCanView=()=>['research','perfumer','pd','ra','projects','calc','viewDb'].some(can);
+(function(){ const st=document.createElement('style'); st.textContent=`
+.bt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:12px;margin-top:12px}
+.bt-card{display:flex;flex-direction:column;text-align:left;background:var(--card,#fff);border:1px solid var(--line-strong);border-radius:12px;padding:0;overflow:hidden;cursor:pointer;font:inherit;color:inherit}
+.bt-card:hover{border-color:var(--accent,#1f2a44);box-shadow:0 2px 10px rgba(0,0,0,.08)}
+.bt-img{aspect-ratio:3/4;background:var(--input-bg,#f4f1ea);display:flex;align-items:center;justify-content:center;overflow:hidden;width:100%}
+.bt-img img{width:100%;height:100%;object-fit:cover;display:block}
+.bt-card .bt-b{padding:8px 10px 10px}.bt-card .bt-t{font-weight:600;line-height:1.25}.bt-card .bt-s{font-size:12px;opacity:.7;line-height:1.3}
+.bt-head{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}.bt-head .bt-hi{width:170px;flex:none}.bt-head .bt-hi .bt-img{border-radius:12px;border:1px solid var(--line-strong)}
+.bt-chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.bt-checks{display:flex;flex-wrap:wrap;gap:6px 14px}.bt-checks label{display:flex;gap:5px;align-items:center;font-size:13px}`; document.head.appendChild(st); })();
+const BT_FORM=['Essential oil','Absolute','Concrete','Tincture','Dried herb','Fresh plant','Accord'];
+const BT_STATUS={active:['ใช้งาน / ลงทะเบียนแล้ว','ok'], eval:['กำลังประเมิน','warn']};
+const BT_RD={extract:'สกัดเอง', upcycle:'Upcycle', accord:'Accord (Perfumer ปรุง)', buy:'ซื้อสำเร็จรูป', trial:'ทดลอง', planned:'วางแผน'};
+const BT_NOTE=['Top','Middle','Base'], BT_BASIS={native:'ถิ่นกำเนิด', cultivation:'แหล่งเพาะปลูก', production:'แหล่งผลิต'};
+const BT_ODOR=['citrus','floral','green','herbal','aromatic','spicy','woody','earthy','balsamic','fruity'];
+const BT_USES={herbal:'สมุนไพร', fine:'น้ำหอม', personal:'ผลิตภัณฑ์ดูแลตัว', aroma:'อโรมา', home:'ของใช้ในบ้าน', food:'อาหาร/เครื่องดื่ม', incense:'ธูป/เครื่องหอม', repellent:'ไล่แมลง'};
+const BT_BEN={digestive:'ระบบย่อย', calming:'ผ่อนคลาย', pain:'บรรเทาปวด', antimicrobial:'ต้านจุลชีพ', respiratory:'ระบบหายใจ', uplifting:'กระปรี้กระเปร่า', skin:'ผิวพรรณ', antioxidant:'ต้านอนุมูลอิสระ', circulation:'การไหลเวียน', focus:'สมาธิ', immune:'ภูมิคุ้มกัน', hormonal:'สมดุลฮอร์โมน', heart:'หัวใจ'};
+const BT_METHOD={sd:'กลั่นด้วยไอน้ำ (Steam)', hd:'กลั่นด้วยน้ำ (Hydro / Clevenger)', hdc:'Hydro + Cohobation', sdc:'Steam + Cohobation', sol:'สกัดด้วยตัวทำละลาย', eth:'สกัดด้วยเอทานอล', enf:'Enfleurage', co2:'CO₂', cold:'บีบเย็น', other:'อื่น ๆ'};
+const BT_RES={ok:['ได้น้ำมัน','ok'], low:['ได้น้อย','warn'], none:['ไม่ได้','bad'], hydrosol:['ได้ไฮโดรซอล','info'], fail:['ล้มเหลว','bad']};
+/* ฟิลด์: [key, ป้าย, ชนิด, กว้างเต็มแถว] */
+const BT_GROUPS=[
+  ['ชื่อและการจัดหมวด',[['nameTh','ชื่อไทย *','text'],['nameEn','ชื่ออังกฤษ *','text'],['latin','ชื่อวิทยาศาสตร์','text'],['synonymsTh','ชื่ออื่น (ไทย)','text'],['synonyms','Synonyms','text'],['family','วงศ์ (Family)','text'],['familyTh','วงศ์ (ไทย)','text'],
+    ['form','รูปแบบวัตถุดิบ','select:form'],['collection','คอลเลกชัน','text'],['status','สถานะ','select:status'],['rdType','งาน R&D','select:rd'],['rmCode','รหัส RM','text'],['cas','CAS','text'],['supplier','ผู้จำหน่าย','text']]],
+  ['กลิ่นและลักษณะ',[['odorFamilies','กลุ่มกลิ่น','multi:odor',1],['descriptors','Descriptors','text',1],['note','Note','select:note'],['intensity','ความแรง (1-5)','num'],['tenacity','ความติดทน (1-5)','num'],['notesTop','Top notes','text'],['notesMiddle','Middle notes','text'],['notesBase','Base notes','text'],
+    ['blendsWith','เข้ากับ','long',1],['constituents','สารสำคัญ','long',1],['appearanceTh','ลักษณะ (ไทย)','text'],['appearanceEn','Appearance','text']]],
+  ['แหล่งที่มาและการปลูก',[['origin','แหล่งกำเนิด','text'],['placeBasis','ฐานข้อมูลแหล่ง','select:basis'],['agroBasis','ประเทศที่ใช้อ้างอิงผลผลิต','text'],['part','ส่วนที่ใช้','text'],['harvest','ฤดูเก็บเกี่ยว','text'],['plantDensity','ความหนาแน่นปลูก','text'],['carbonCredit','คาร์บอนเครดิต','text'],
+    ['yieldRai','ผลผลิต กก.สด/ไร่/ปี','text'],['yieldNote','หมายเหตุผลผลิต','text',1]]],
+  ['การสกัดและผลผลิตน้ำมัน',[['extraction','วิธีสกัดหลัก','text'],['oilMethod','วิธีสกัด (อ้างอิง)','text'],['oilPct','% น้ำมัน','text'],['oilBasis','ฐานการคำนวณ','text'],['dryRatio','อัตราสด:แห้ง','text']]],
+  ['การใช้งานและความปลอดภัย',[['uses','การใช้งาน','multi:uses',1],['benefits','สรรพคุณ','multi:ben',1],['applications','การประยุกต์ใช้','long',1],['dilution','การเจือจาง','text'],['shelfLife','อายุการเก็บ','text'],['safety','ข้อควรระวัง','long',1],['storyTh','เรื่องเล่า (ไทย)','long',1],['storyEn','Story','long',1]]],
+  ['กฎระเบียบ (IFRA / อย.)',[['ifra','IFRA (สรุป)','long',1],['allergens','สารก่อภูมิแพ้','long',1],['fdaThai','อย. ไทย','text'],['regSource','แหล่งข้อมูลกฎระเบียบ','text'],['regFlags','ข้อสังเกตกฎระเบียบ','list',1]]],
+  ['สต็อก',[['stock','มีสต็อก','select:stock'],['stockAsOf','ข้อมูล ณ วันที่','text'],['stockSource','แหล่งข้อมูลสต็อก','text']]],
+  ['บันทึก',[['reviewNote','หมายเหตุการตรวจสอบ','long',1],['source','แหล่งที่มา','text']]]];
+const btOpt=(kind)=>({form:BT_FORM.map(x=>[x,x]), status:Object.entries(BT_STATUS).map(([k,v])=>[k,v[0]]), rd:[['','–'],...Object.entries(BT_RD)], note:[['','–'],...BT_NOTE.map(x=>[x,x])], basis:[['','–'],...Object.entries(BT_BASIS)], stock:[['no','ไม่มี'],['yes','มี']]})[kind];
+const btMulti=(kind)=>({odor:BT_ODOR.map(x=>[x,x]), uses:Object.entries(BT_USES), ben:Object.entries(BT_BEN)})[kind];
+const btName=r=>r.nameTh||r.nameEn||r.regNo, btArr=v=>Array.isArray(v)?v:(v?[v]:[]);
+async function loadBt(force){
+  if(BT.items && !force) return;
+  const r=await api('listBotanicals'); BT.items=r.items; BT.canEdit=r.canEdit; BT.canPrice=r.canPrice;
+  BT.prices=null; if(BT.canPrice){ try{ BT.prices=await api('getBotanicalPrices'); }catch(e){ BT.prices={}; } }
+}
+function renderBtView(){
+  $('#btView').innerHTML=`<div class="bh"><h2>ทะเบียนพืชหอม</h2><span class="hint">วัตถุดิบพืชหอมของแผนก Research Ingredients: น้ำมันหอมระเหย สมุนไพรแห้ง พืชสด และ Accord พร้อมข้อมูลกลิ่น แหล่งที่มา กฎระเบียบ สต็อก และบันทึกการสกัด · เลขทะเบียน BT-nnnn</span></div><div id="btBody"><div class="empty">กำลังโหลด…</div></div>`;
+  loadBt().then(drawBt).catch(e=>{ $('#btBody').innerHTML=`<div class="msg bad">${esc(errText(e))}</div>`; });
+}
+function btFiltered(){
+  const q=BT.q.trim().toLowerCase();
+  return BT.items.filter(r=>(!BT.form||r.form===BT.form)&&(!BT.coll||(BT.coll==='-'?!r.collection:r.collection===BT.coll))&&(!BT.status||r.status===BT.status)&&(!BT.rdType||r.rdType===BT.rdType)&&(!BT.stock||r.stock===BT.stock)&&(!BT.note||r.note===BT.note)&&(!BT.odor||btArr(r.odorFamilies).includes(BT.odor))
+    &&(!q||[r.regNo,r.nameTh,r.nameEn,r.latin,r.synonyms,r.synonymsTh,r.family,r.familyTh,r.rmCode,r.cas,r.descriptors,r.constituents,r.origin,r.part,btArr(r.uses).join(' '),btArr(r.benefits).join(' ')].join(' ').toLowerCase().includes(q)));
+}
+function btImg(r){ return r.imageUrl?`<img src="${esc(r.imageUrl)}" alt="${esc(btName(r))}" loading="lazy">`:'<span class="muted" style="font-size:12px">ไม่มีรูป</span>'; }
+function drawBt(){
+  if(!BT.items) return;
+  if(BT.open){ $('#btBody').innerHTML=btDetail(BT.open); return; }
+  const list=btFiltered(), sel=(id,val,opts,all)=>`<select id="${id}"><option value="">${all}</option>${opts.map(([k,l])=>`<option value="${esc(k)}" ${val===k?'selected':''}>${esc(l)}</option>`).join('')}</select>`;
+  $('#btBody').innerHTML=`<div class="search" style="flex-wrap:wrap;gap:8px">
+      <input id="btQ" type="search" autocomplete="off" placeholder="ค้นหาชื่อ ชื่อวิทยาศาสตร์ วงศ์ รหัส สารสำคัญ การใช้…" value="${esc(BT.q)}" style="flex:1;min-width:220px">
+      ${sel('btForm',BT.form,BT_FORM.map(x=>[x,x]),'ทุกรูปแบบ')}${sel('btColl',BT.coll,[['Thai Palette','Thai Palette'],['-','อื่น ๆ']],'ทุกคอลเลกชัน')}${sel('btStatus',BT.status,Object.entries(BT_STATUS).map(([k,v])=>[k,v[0]]),'ทุกสถานะ')}
+      ${sel('btRd',BT.rdType,Object.entries(BT_RD),'ทุกงาน R&D')}${sel('btStock',BT.stock,[['yes','มีสต็อก'],['no','ไม่มีสต็อก']],'สต็อกทั้งหมด')}${sel('btNote',BT.note,BT_NOTE.map(x=>[x,x]),'ทุก Note')}${sel('btOdor',BT.odor,BT_ODOR.map(x=>[x,x]),'ทุกกลุ่มกลิ่น')}
+      <div class="pf-tabs" role="tablist" style="margin:0"><button type="button" data-btview="cards" class="${BT.view==='cards'?'on':''}">การ์ด</button><button type="button" data-btview="table" class="${BT.view==='table'?'on':''}">ตาราง</button></div>
+      ${BT.canEdit?'<button class="btn primary" type="button" id="btNew">+ เพิ่มพืช</button>':''}<button class="btn" type="button" id="btRefresh">รีเฟรช</button>
+      <span class="muted" style="font-size:12.5px">${list.length} / ${BT.items.length} รายการ</span></div>
+    <div id="btMain">${BT.view==='table'?btTable(list):btCards(list)}</div>`;
+}
+function btCards(list){
+  if(!list.length) return '<div class="empty">ไม่พบรายการ</div>';
+  const part=list.slice(0,BT.shown);
+  return `<div class="bt-grid">${part.map(r=>`<button type="button" class="bt-card" data-bt-open="${esc(r.regNo)}"><div class="bt-img">${btImg(r)}</div><div class="bt-b"><div class="bt-t">${esc(btName(r))}</div><div class="bt-s">${esc(r.nameTh?r.nameEn:'')}${r.latin?`<div><i>${esc(r.latin)}</i></div>`:''}</div>
+    <div class="bt-chips"><span class="chip">${esc(r.form||'')}</span>${r.note?`<span class="chip info">${esc(r.note)}</span>`:''}${r.stock==='yes'?'<span class="chip ok">มีสต็อก</span>':''}${r.status==='eval'?'<span class="chip warn">ประเมิน</span>':''}</div><div class="bt-s mono">${esc(r.regNo)}</div></div></button>`).join('')}</div>
+    ${list.length>part.length?`<div style="text-align:center;margin-top:14px"><button class="btn" type="button" id="btMore">แสดงเพิ่ม (อีก ${list.length-part.length})</button></div>`:''}`;
+}
+function btTable(list){
+  if(!list.length) return '<div class="empty">ไม่พบรายการ</div>';
+  const part=list.slice(0,BT.shown*3);
+  return `<div class="tablebox"><table><thead><tr><th>เลขทะเบียน</th><th>ชื่อ</th><th>ชื่อวิทยาศาสตร์</th><th>รูปแบบ</th><th>Note</th><th>กลุ่มกลิ่น</th><th>แหล่ง</th><th>RM</th><th>สต็อก</th><th>R&D</th><th></th></tr></thead><tbody>
+    ${part.map(r=>`<tr><td class="mono">${esc(r.regNo)}</td><td><b>${esc(btName(r))}</b>${r.nameTh&&r.nameEn?`<div class="muted" style="font-size:12px">${esc(r.nameEn)}</div>`:''}</td><td style="font-size:12.5px"><i>${esc(r.latin||'')}</i></td><td>${esc(r.form||'')}</td><td>${esc(r.note||'')}</td><td style="font-size:12.5px">${esc(btArr(r.odorFamilies).join(', '))}</td><td style="font-size:12.5px">${esc(r.origin||'')}</td><td class="mono" style="font-size:12px">${esc(r.rmCode||'')}</td><td>${r.stock==='yes'?'<span class="chip ok">มี</span>':''}</td><td style="font-size:12.5px">${esc(BT_RD[r.rdType]||'')}</td><td><button class="btn small" type="button" data-bt-open="${esc(r.regNo)}">เปิด</button></td></tr>`).join('')}</tbody></table></div>
+    ${list.length>part.length?`<div style="text-align:center;margin-top:14px"><button class="btn" type="button" id="btMore">แสดงเพิ่ม</button></div>`:''}`;
+}
+const btRow=(l,v)=>v?`<tr><td style="white-space:nowrap;color:var(--muted,#777);vertical-align:top;padding-right:14px">${esc(l)}</td><td>${v}</td></tr>`:'';
+function btView(r, f){ const raw=r[f[0]]; const t=f[2];
+  if(t.startsWith('multi:')){ const m=Object.fromEntries(btMulti(t.slice(6))); return btArr(raw).map(x=>`<span class="chip">${esc(m[x]||x)}</span>`).join(' '); }
+  if(t==='list') return btArr(raw).map(esc).join('<br>');
+  if(t.startsWith('select:')){ const k=t.slice(7); if(k==='status') return raw?esc((BT_STATUS[raw]||[raw])[0]):''; if(k==='rd') return raw?esc(BT_RD[raw]||raw):''; if(k==='basis') return raw?esc(BT_BASIS[raw]||raw):''; if(k==='stock') return raw==='yes'?'มี':raw?'ไม่มี':''; return esc(raw||''); }
+  return raw==null||raw===''?'':esc(String(raw)).replace(/\n/g,'<br>');
+}
+function btField(r, f){
+  const [k,l,t,wide]=f, v=r[k], fw=wide?' style="grid-column:1/-1"':'';
+  if(t.startsWith('multi:')){ const cur=btArr(v); return `<div class="field"${fw}><label>${esc(l)}</label><div class="bt-checks">${btMulti(t.slice(6)).map(([x,lab])=>`<label><input type="checkbox" data-btm="${k}" value="${esc(x)}" ${cur.includes(x)?'checked':''}>${esc(lab)}</label>`).join('')}</div></div>`; }
+  if(t.startsWith('select:')) return `<div class="field"${fw}><label>${esc(l)}</label><select data-btk="${k}">${btOpt(t.slice(7)).map(([x,lab])=>`<option value="${esc(x)}" ${String(v||'')===String(x)?'selected':''}>${esc(lab)}</option>`).join('')}</select></div>`;
+  if(t==='long') return `<div class="field"${fw}><label>${esc(l)}</label><textarea data-btk="${k}" rows="2" maxlength="3500">${esc(v||'')}</textarea></div>`;
+  if(t==='list') return `<div class="field"${fw}><label>${esc(l)} (หนึ่งบรรทัดต่อหนึ่งรายการ)</label><textarea data-btk="${k}" data-btlist="1" rows="2" maxlength="3500">${esc(btArr(v).join('\n'))}</textarea></div>`;
+  return `<div class="field"${fw}><label>${esc(l)}</label><input data-btk="${k}" ${t==='num'?'type="number" step="any" min="0" max="5"':''} value="${v==null?'':esc(v)}" maxlength="400"></div>`;
+}
+function btDetail(r){
+  const ed=BT.edit&&BT.canEdit, isNew=!r.regNo;
+  const head=`<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px"><div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button class="btn small" type="button" id="btBack">← ทะเบียนพืชหอม</button><h3 style="margin:0">${isNew?'เพิ่มพืชใหม่':`<span class="mono">${esc(r.regNo)}</span> · ${esc(btName(r))}`}</h3>${r.status?pfChip(r.status,BT_STATUS):''}</div>
+      ${r.updatedAt?`<span class="muted" style="font-size:12px">แก้ล่าสุด ${fmtSeen(r.updatedAt)} ${rdPerson(r.updatedBy)}</span>`:''}</div>`;
+  const imgBox=`<div class="bt-hi"><div class="bt-img">${btImg(r)}</div>${BT.canEdit&&!isNew?`<div style="margin-top:8px"><label class="btn small" style="cursor:pointer">เปลี่ยนรูป<input id="btImgFile" type="file" accept="image/jpeg,image/png,image/webp" hidden></label></div><div class="muted" style="font-size:11.5px;margin-top:4px">${esc(r.imageSource||'')}</div>`:''}</div>`;
+  let body;
+  if(ed){
+    body=`<form id="btForm" class="card" style="margin:0 0 14px" novalidate>${BT_GROUPS.map(([g,fs])=>`<div class="pf-group"><h4>${g}</h4><div class="settings">${fs.map(f=>btField(r,f)).join('')}</div></div>`).join('')}
+      <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button class="btn primary" type="submit">บันทึก</button><button class="btn" type="button" id="btCancel">ยกเลิก</button><span class="muted" id="btErr" role="alert" style="color:var(--bad)"></span></div></form>`;
+  } else {
+    body=BT_GROUPS.map(([g,fs])=>{ const rows=fs.map(f=>btRow(f[1].replace(' *',''), btView(r,f))).join(''); return rows?`<div class="card" style="margin:0 0 12px"><h4 style="margin:0 0 6px">${g}</h4><table style="font-size:13.5px"><tbody>${rows}</tbody></table></div>`:''; }).join('');
+    body+=btExtras(r);
+  }
+  return `${head}<div class="bt-head">${imgBox}<div style="flex:1;min-width:280px"><h2 style="margin:0">${esc(btName(r))}</h2><div class="muted"><i>${esc(r.latin||'')}</i>${r.nameTh&&r.nameEn?' · '+esc(r.nameEn):''}</div>
+      <div class="bt-chips">${r.form?`<span class="chip">${esc(r.form)}</span>`:''}${r.collection?`<span class="chip info">${esc(r.collection)}</span>`:''}${r.note?`<span class="chip info">Note ${esc(r.note)}</span>`:''}${r.stock==='yes'?'<span class="chip ok">มีสต็อก</span>':''}${r.rdType?`<span class="chip warn">${esc(BT_RD[r.rdType]||r.rdType)}</span>`:''}</div>
+      ${!ed&&BT.canEdit?`<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn primary" type="button" id="btEdit">แก้ไขข้อมูล</button>${isAdminRole()?'<button class="btn small" type="button" id="btDelete" style="color:var(--bad)">ลบรายการ</button>':''}</div>`:''}</div></div>
+    <div style="margin-top:14px">${body}</div>`;
+}
+const btTbl=(head,rows)=>rows.length?`<div class="tablebox"><table style="font-size:12.5px"><thead><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`:'';
+function btExtras(r){
+  let h='';
+  const ifra=btArr(r.ifraItems); if(ifra.length) h+=`<div class="card" style="margin:0 0 12px"><h4 style="margin:0 0 6px">สารที่มีข้อกำหนด IFRA ในพืชนี้ (${ifra.length})</h4>${btTbl(['สาร','มาตรฐาน','ประเภท','Cat 4','Cat 5A','Cat 9','Cat 12'],ifra.map(x=>`<tr><td>${esc(x.name||'')}</td><td class="mono">${esc(x.std||'')}</td><td>${esc(x.type||'')}</td><td>${esc(x.c4??'')}</td><td>${esc(x.c5A??'')}</td><td>${esc(x.c9??'')}</td><td>${esc(x.c12??'')}</td></tr>`))}<div class="muted" style="font-size:12px;margin-top:4px">ค่าจำกัดเป็นต่อสารเดี่ยวในผลิตภัณฑ์สำเร็จ ตาม IFRA 51st ไม่ใช่ต่อน้ำมัน · ตรวจกับเมนู "เอกสารวัตถุดิบ → ตรวจ IFRA / อย." ก่อนใช้จริง</div></div>`;
+  const lots=btArr(r.stockLots); if(lots.length) h+=`<div class="card" style="margin:0 0 12px"><h4 style="margin:0 0 6px">สต็อกในคลัง${r.stockAsOf?` · ณ ${esc(r.stockAsOf)}`:''}</h4>${btTbl(['รหัส RM','รายการ','คงเหลือ','หน่วย','ค้างรับ'],lots.map(x=>`<tr><td class="mono">${esc(x.rmCode||'')}</td><td>${esc(x.name||'')}</td><td class="num">${x.qty!=null?fmt(x.qty,1):''}</td><td>${esc(x.unit||'')}</td><td class="num">${x.onOrder?fmt(x.onOrder,0):''}</td></tr>`))}${r.stockSource?`<div class="muted" style="font-size:12px;margin-top:4px">${esc(r.stockSource)}</div>`:''}</div>`;
+  const items=btArr(r.rdItems); if(items.length) h+=`<div class="card" style="margin:0 0 12px"><h4 style="margin:0 0 6px">ข้อมูลการสกัด R&D (ตารางผลผลิต)</h4>${btTbl(['รายการ','วิธี','เครื่อง','%Yield','mL/กก.','กก. วัตถุดิบ/กก. น้ำมัน','ผู้ขาย (กก.)','หมายเหตุ'],items.map(x=>`<tr><td>${esc(x.label||'')}</td><td>${esc(x.method||'')}</td><td>${esc(x.equipment||'')}</td><td class="num">${x.yieldPct!=null?fmt(x.yieldPct,2):''}</td><td class="num">${x.yieldMlKg!=null?fmt(x.yieldMlKg,1):''}</td><td class="num">${x.kgPerKgOil!=null?fmt(x.kgPerKgOil,1):''}</td><td>${esc(x.supplierKg||'')}</td><td>${esc(x.note||'')}</td></tr>`))}</div>`;
+  const lg=btArr(r.rdLog); if(lg.length) h+=`<div class="card" style="margin:0 0 12px"><h4 style="margin:0 0 6px">บันทึกการทดลองสกัดที่นำเข้าจากไฟล์เดิม (${lg.length})</h4>${btTbl(['วันที่','รายการ','วิธี','ปริมาณเข้า','ได้','%Yield','อ้างอิง','หมายเหตุ'],lg.map(x=>`<tr><td>${esc(x.date||'')}</td><td>${esc(x.label||'')}</td><td>${esc(x.method||'')}</td><td>${esc(x.input||'')}</td><td>${esc(x.output||'')}</td><td class="num">${x.yieldPct!=null?fmt(x.yieldPct,2):''}</td><td>${esc(x.ref||'')}</td><td>${esc(x.note||'')}</td></tr>`))}</div>`;
+  h+=btExtBlock(r);
+  if(BT.canPrice) h+=btPriceBlock(r);
+  return h;
+}
+function btExtBlock(r){
+  const ex=BT.ext&&BT.ext.regNo===r.regNo?BT.ext.list:null;
+  const f=BT.extForm?`<form id="btExtForm" class="card" style="margin:8px 0" novalidate><div class="settings">
+      <div class="field"><label>วันที่</label><input data-bx="date" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+      <div class="field"><label>วิธีสกัด</label><select data-bx="method">${Object.entries(BT_METHOD).map(([k,l])=>`<option value="${k}">${esc(l)}</option>`).join('')}</select></div>
+      <div class="field"><label>เครื่อง / อุปกรณ์</label><input data-bx="equip" maxlength="120"></div><div class="field"><label>วัตถุดิบที่ใช้</label><input data-bx="material" maxlength="200" placeholder="เช่น ใบสด / ช่อดอกแห้ง"></div>
+      <div class="field"><label>สภาพ</label><input data-bx="state" maxlength="60" placeholder="สด / แห้ง / หมัก"></div><div class="field"><label>Lot</label><input data-bx="lot" maxlength="80"></div>
+      <div class="field"><label>ปริมาณวัตถุดิบ (g)</label><input data-bx="inputG" type="number" step="any" min="0"></div><div class="field"><label>ได้ (g)</label><input data-bx="outputG" type="number" step="any" min="0"></div>
+      <div class="field"><label>ตัวทำละลาย</label><input data-bx="solvent" maxlength="120"></div><div class="field"><label>ปริมาณตัวทำละลาย</label><input data-bx="solventQty" maxlength="60"></div>
+      <div class="field"><label>ระยะเวลา (นาที)</label><input data-bx="durationMin" type="number" step="any" min="0"></div>
+      <div class="field"><label>ผล</label><select data-bx="result">${Object.entries(BT_RES).map(([k,v])=>`<option value="${k}">${v[0]}</option>`).join('')}</select></div>
+      <div class="field"><label>ผู้ทดลอง</label><input data-bx="operator" maxlength="120" value="${esc(shortName(S.me.email))}"></div>
+      <div class="field" style="grid-column:1/-1"><label>กลิ่นที่ได้</label><input data-bx="odor" maxlength="600"></div><div class="field" style="grid-column:1/-1"><label>บันทึกเพิ่มเติม</label><textarea data-bx="notes" rows="2" maxlength="2000"></textarea></div></div>
+    <div class="row" style="gap:8px;align-items:center"><button class="btn primary small" type="submit">บันทึกการสกัด</button><button class="btn small" type="button" id="btExtCancel">ยกเลิก</button><span class="muted" id="btExtErr" role="alert" style="color:var(--bad)"></span></div></form>`:'';
+  return `<div class="card" style="margin:0 0 12px"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><h4 style="margin:0">บันทึกการสกัดของทีม${ex?` · ${ex.length}`:''}</h4>${BT.canEdit&&!BT.extForm?'<button class="btn small" type="button" id="btExtNew">+ บันทึกการสกัด</button>':''}</div>${f}
+    ${ex===null?'<div class="muted" style="font-size:12.5px;margin-top:6px">กำลังโหลด…</div>':ex.length?btTbl(['วันที่','วิธี','วัตถุดิบ','เข้า (g)','ได้ (g)','%Yield','ผล','ผู้ทดลอง','หมายเหตุ',''],ex.map(x=>`<tr><td>${esc(x.date||'')}</td><td>${esc(BT_METHOD[x.method]||x.method)}</td><td>${esc([x.material,x.state].filter(Boolean).join(' · '))}${x.lot?`<div class="muted">Lot ${esc(x.lot)}</div>`:''}</td><td class="num">${x.inputG!=null?fmt(x.inputG,1):''}</td><td class="num">${x.outputG!=null?fmt(x.outputG,2):''}</td><td class="num"><b>${x.yieldPct!=null?fmt(x.yieldPct,2):''}</b></td><td>${pfChip(x.result,BT_RES)}</td><td>${esc(x.operator||'')}</td><td style="font-size:12px">${esc([x.odor,x.notes].filter(Boolean).join(' · '))}</td><td>${BT.canEdit&&(x.createdBy===S.me.email||isAdminRole())?`<button class="x" type="button" data-bt-extdel="${esc(x.id)}" aria-label="ลบ">×</button>`:''}</td></tr>`)):'<div class="muted" style="font-size:12.5px;margin-top:6px">ยังไม่มีบันทึกการสกัดในระบบ</div>'}</div>`;
+}
+function btPriceBlock(r){
+  const p=(BT.prices&&BT.prices[r.regNo])||{}, rr=btArr(p.retailRef);
+  const F=[['freshThb','ราคาสด ฿/กก.'],['dryThb','ราคาแห้ง ฿/กก.'],['oilThb','ราคาน้ำมัน ฿/กก.'],['stockCost','ต้นทุนสต็อก ฿/กก.'],['rdCost','ต้นทุนสกัดเอง ฿/กก.'],['priceAsOf','ข้อมูลราคา ณ'],['priceNote','หมายเหตุราคา'],['rdCostSource','ที่มาต้นทุนสกัด']];
+  return `<div class="card" style="margin:0 0 12px"><h4 style="margin:0 0 4px">ราคาอ้างอิงและต้นทุน <span class="chip warn">เฉพาะผู้มีสิทธิ์แก้ฐานราคา</span></h4><div class="muted" style="font-size:12px;margin-bottom:6px">ตัวเลขส่วนใหญ่เป็นค่าประมาณจากความรู้ทั่วไป (ตุลาคม 2026) ยังต้องตรวจกับผู้จำหน่าย</div>
+    <form id="btPriceForm" novalidate><div class="settings">${F.map(([k,l])=>`<div class="field"><label>${l}</label><input data-bp="${k}" value="${p[k]==null?'':esc(p[k])}" maxlength="300" ${BT.canEdit||BT.canPrice?'':'disabled'}></div>`).join('')}</div>
+    ${rr.length?`<div style="margin-top:8px">${btTbl(['ผลิตภัณฑ์ (doTERRA ไทย)','ml','ราคาปลีก','ราคาสมาชิก'],rr.map(x=>`<tr><td>${esc(x.product||'')}</td><td class="num">${esc(x.ml??'')}</td><td class="num">${x.retail!=null?fmt(x.retail,0):''}</td><td class="num">${x.member!=null?fmt(x.member,0):''}</td></tr>`))}${p.retailSrc?`<div class="muted" style="font-size:12px">${esc(p.retailSrc)}</div>`:''}</div>`:''}
+    <div class="row" style="gap:8px;margin-top:8px;align-items:center"><button class="btn small primary" type="submit">บันทึกราคา</button><span class="muted" id="btPriceErr" role="alert" style="color:var(--bad)"></span></div></form></div>`;
+}
+async function btOpen(regNo, edit){
+  const r=BT.items.find(x=>x.regNo===regNo); if(!r) return;
+  BT.open=JSON.parse(JSON.stringify(r)); BT.edit=!!edit; BT.extForm=false; BT.ext={regNo, list:null}; drawBt(); window.scrollTo(0,0);
+  try{ const list=await api('listBotanicalExtractions', regNo); if(BT.open&&BT.open.regNo===regNo){ BT.ext={regNo, list}; if(!BT.edit) drawBt(); } }catch(e){ if(BT.ext) BT.ext.list=[]; if(!BT.edit) drawBt(); }
+}
+function btCollect(r){
+  const box=$('#btForm'); if(!box) return r;
+  box.querySelectorAll('[data-btk]').forEach(i=>{ const k=i.dataset.btk; let v=i.value.trim(); if(i.dataset.btlist) v=v?v.split('\n').map(x=>x.trim()).filter(Boolean):[]; else if(i.type==='number') v=v===''?null:Number(v); r[k]=v; });
+  ['odorFamilies','uses','benefits'].forEach(k=>{ r[k]=[...box.querySelectorAll(`[data-btm="${k}"]:checked`)].map(i=>i.value); });
+  return r;
+}
+/* ย่อรูปก่อนอัปโหลด (ด้านยาวสุด 1100 px, JPEG) */
+function btResize(file){
+  return new Promise((res,rej)=>{ const img=new Image(), u=URL.createObjectURL(file); img.onload=()=>{ const s=Math.min(1,1100/Math.max(img.width,img.height)), c=document.createElement('canvas'); c.width=Math.round(img.width*s); c.height=Math.round(img.height*s); const g=c.getContext('2d'); g.fillStyle='#fff'; g.fillRect(0,0,c.width,c.height); g.drawImage(img,0,0,c.width,c.height); URL.revokeObjectURL(u); c.toBlob(b=>{ if(!b) return rej(new Error('ย่อรูปไม่สำเร็จ')); const fr=new FileReader(); fr.onload=()=>res(String(fr.result).split(',')[1]); fr.onerror=()=>rej(new Error('อ่านรูปไม่สำเร็จ')); fr.readAsDataURL(b); },'image/jpeg',0.86); }; img.onerror=()=>{ URL.revokeObjectURL(u); rej(new Error('เปิดไฟล์รูปไม่ได้')); }; img.src=u; });
+}
+function btUpsert(r){ const i=BT.items.findIndex(x=>x.regNo===r.regNo); if(i>=0) BT.items[i]=r; else BT.items.push(r); BT.items.sort((a,b)=>a.regNo.localeCompare(b.regNo)); }
+$('#btView').addEventListener('input', e=>{ if(e.target.id==='btQ'){ BT.q=e.target.value; BT.shown=60; const m=$('#btMain'); if(m){ const list=btFiltered(); m.innerHTML=BT.view==='table'?btTable(list):btCards(list); } } });
+$('#btView').addEventListener('change', async e=>{
+  const t=e.target, map={btForm:'form', btColl:'coll', btStatus:'status', btRd:'rdType', btStock:'stock', btNote:'note', btOdor:'odor'};
+  if(map[t.id]){ BT[map[t.id]]=t.value; BT.shown=60; drawBt(); return; }
+  if(t.id==='btImgFile' && t.files && t.files[0]){
+    const r=BT.open; t.disabled=true; toast('กำลังอัปโหลดรูป…');
+    try{ const b64=await btResize(t.files[0]); const o=await api('uploadBotanicalImage', r.regNo, b64); r.imageUrl=o.imageUrl; r.hasImage=true; const it=BT.items.find(x=>x.regNo===r.regNo); if(it){ it.imageUrl=o.imageUrl; it.hasImage=true; } toast('อัปโหลดรูปแล้ว'); drawBt(); }
+    catch(err){ toast(errText(err)); t.disabled=false; }
+  }
+});
+$('#btView').addEventListener('click', async e=>{
+  const t=e.target.closest('button'); if(!t) return;
+  if(t.dataset.btview){ BT.view=t.dataset.btview; BT.shown=60; drawBt(); return; }
+  if(t.id==='btRefresh'){ t.disabled=true; try{ await loadBt(true); }catch(err){ toast(errText(err)); } drawBt(); return; }
+  if(t.id==='btMore'){ BT.shown+=60; drawBt(); return; }
+  if(t.dataset.btOpen){ btOpen(t.dataset.btOpen, false); return; }
+  if(t.id==='btNew'){ BT.open={regNo:'', nameTh:'', nameEn:'', form:'Dried herb', status:'active', stock:'no', odorFamilies:[], uses:[], benefits:[]}; BT.edit=true; BT.ext=null; drawBt(); window.scrollTo(0,0); return; }
+  if(t.id==='btBack'){ BT.open=null; BT.edit=false; BT.extForm=false; drawBt(); window.scrollTo(0,0); return; }
+  if(t.id==='btEdit'){ BT.edit=true; drawBt(); return; }
+  if(t.id==='btCancel'){ if(!BT.open.regNo){ BT.open=null; } else { const r=BT.items.find(x=>x.regNo===BT.open.regNo); BT.open=JSON.parse(JSON.stringify(r)); } BT.edit=false; drawBt(); return; }
+  if(t.id==='btDelete'){ const r=BT.open; if(!confirm(`ลบ ${r.regNo} · ${btName(r)} พร้อมราคาและบันทึกการสกัด? ย้อนกลับไม่ได้`)) return; t.disabled=true; try{ await api('deleteBotanical', r.regNo); BT.items=BT.items.filter(x=>x.regNo!==r.regNo); BT.open=null; toast('ลบแล้ว'); drawBt(); }catch(err){ toast(errText(err)); t.disabled=false; } return; }
+  if(t.id==='btExtNew'){ BT.extForm=true; drawBt(); return; }
+  if(t.id==='btExtCancel'){ BT.extForm=false; drawBt(); return; }
+  if(t.dataset.btExtdel){ if(!confirm('ลบบันทึกการสกัดนี้?')) return; t.disabled=true; try{ await api('deleteBotanicalExtraction', t.dataset.btExtdel); BT.ext.list=BT.ext.list.filter(x=>x.id!==t.dataset.btExtdel); const it=BT.items.find(x=>x.regNo===BT.open.regNo); if(it){ it.extCount=BT.ext.list.length; it.lastExtraction=BT.ext.list.length?BT.ext.list[0].date:''; } drawBt(); toast('ลบแล้ว'); }catch(err){ toast(errText(err)); t.disabled=false; } return; }
+});
+$('#btView').addEventListener('submit', async e=>{
+  e.preventDefault(); const f=e.target, btn=f.querySelector('button[type=submit]');
+  if(f.id==='btForm'){
+    const r=btCollect(BT.open), err=$('#btErr');
+    if(!String(r.nameTh||'').trim() && !String(r.nameEn||'').trim()){ err.textContent='ใส่ชื่อพืช (ไทยหรืออังกฤษ)'; return; }
+    btn.disabled=true; err.textContent='';
+    try{ const { imageUrl, hasImage, updatedAt, updatedBy, ...rec }=r; const o=await api('saveBotanical', rec); btUpsert(o); BT.open=JSON.parse(JSON.stringify(o)); BT.edit=false; BT.ext=null; toast(`บันทึก ${o.regNo} แล้ว`); btOpen(o.regNo,false); }
+    catch(e2){ err.textContent=errText(e2); btn.disabled=false; }
+    return;
+  }
+  if(f.id==='btExtForm'){
+    const d={}; f.querySelectorAll('[data-bx]').forEach(i=>{ d[i.dataset.bx]=i.value.trim(); }); const err=$('#btExtErr');
+    if(!d.date){ err.textContent='ใส่วันที่'; return; }
+    btn.disabled=true; err.textContent='';
+    try{ const x=await api('saveBotanicalExtraction', BT.open.regNo, d); BT.ext.list.unshift(x); const it=BT.items.find(y=>y.regNo===BT.open.regNo); if(it){ it.extCount=BT.ext.list.length; it.lastExtraction=x.date; if(!it.rdType) it.rdType='extract'; } BT.extForm=false; toast('บันทึกการสกัดแล้ว'+(x.yieldPct!=null?` · Yield ${fmt(x.yieldPct,2)}%`:'')); drawBt(); }
+    catch(e2){ err.textContent=errText(e2); btn.disabled=false; }
+    return;
+  }
+  if(f.id==='btPriceForm'){
+    const regNo=BT.open.regNo, cur={...((BT.prices&&BT.prices[regNo])||{})}, err=$('#btPriceErr'); f.querySelectorAll('[data-bp]').forEach(i=>{ const v=i.value.trim(); if(v!==''||cur[i.dataset.bp]!=null) cur[i.dataset.bp]=i.dataset.bp==='stockCost'||i.dataset.bp==='rdCost'?(v===''?null:(isFinite(toNum(v))&&/^[0-9.,\s]+$/.test(v)?toNum(v):v)):v; });
+    btn.disabled=true; err.textContent='';
+    try{ const o=await api('saveBotanicalPrice', regNo, cur); BT.prices[regNo]=o; toast('บันทึกราคาแล้ว'); btn.disabled=false; }
+    catch(e2){ err.textContent=errText(e2); btn.disabled=false; }
   }
 });
 

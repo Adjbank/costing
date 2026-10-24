@@ -1,5 +1,5 @@
 /**
- * ระบบต้นทุนหัวน้ำหอม · Scent & Sense — Supabase Edge Function "api"
+ * แผนกวิจัยและพัฒนา · Scent & Sense — Supabase Edge Function "api"
  * พอร์ตจาก Google Apps Script (Code.gs): หน้าเว็บเรียก POST {fn, args, idToken} เหมือนเดิมทุกอย่าง
  * - ตรวจ Google ID token กับ Google ทุกครั้ง (อีเมลต้องเป็นโดเมนบริษัท) แล้วเรียกฟังก์ชันในตาราง API ด้านล่าง
  * - ข้อมูลอยู่ใน schema "costing" (RLS เปิด ไม่มี policy) เข้าถึงผ่านฟังก์ชันนี้ด้วยสิทธิ์ของเซิร์ฟเวอร์เท่านั้น
@@ -73,7 +73,7 @@ async function appUrl(db: Db) { return (await getSetting(db, "publicUrl")) || DE
 async function sendMail(db: Db, to: string, subject: string, text: string) {
   try {
     const key = await getSetting(db, "resendKey"); if (!key || !to) return;
-    const from = (await getSetting(db, "mailFrom")) || "Scent & Sense Costing <noreply@scentandsense.co.th>";
+    const from = (await getSetting(db, "mailFrom")) || "Scent & Sense R&D <noreply@scentandsense.co.th>";
     await fetch("https://api.resend.com/emails", { method: "POST", headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
       body: JSON.stringify({ from, to: [to], subject, text }), signal: AbortSignal.timeout(8000) });
   } catch (_e) { /* ignore */ }
@@ -167,8 +167,8 @@ async function requestAccess(ctx: Ctx) {
     if (!m.active) throw new Error("บัญชีนี้ถูกระงับ ติดต่อผู้ดูแลระบบ");
     await c.db`insert into costing.requests (email, at) values (${m.email}, now()) on conflict (email) do update set at = now()`;
     await log(c.db, m.email, "requestAccess");
-    await sendMail(c.db, m.owner, "[ระบบต้นทุนหัวน้ำหอม] คำขอสิทธิ์ใช้งานจาก " + m.email,
-      m.email + ' ขอสิทธิ์ใช้งานระบบคำนวณต้นทุนหัวน้ำหอม\n\nอนุมัติได้ที่หน้า "จัดการผู้ใช้และบทบาท":\n' + await appUrl(c.db));
+    await sendMail(c.db, m.owner, "[แผนกวิจัยและพัฒนา] คำขอสิทธิ์ใช้งานจาก " + m.email,
+      m.email + ' ขอสิทธิ์ใช้งานระบบของแผนกวิจัยและพัฒนา\n\nอนุมัติได้ที่หน้า "จัดการผู้ใช้และบทบาท":\n' + await appUrl(c.db));
     return "OK";
   });
 }
@@ -291,8 +291,8 @@ async function setUser(ctx: Ctx, email: string, role: string, active: boolean, n
       on conflict (email) do update set role = excluded.role, active = excluded.active`;
     await db`delete from costing.requests where email = ${email}`;
     await log(db, m.email, "setUser", email + " → " + role + (active === false ? " (ระงับ)" : ""));
-    if (notify && active !== false) await sendMail(db, email, "[ระบบต้นทุนหัวน้ำหอม] คุณได้รับสิทธิ์ใช้งานแล้ว",
-      'คุณได้รับสิทธิ์ใช้งานระบบคำนวณต้นทุนหัวน้ำหอม ในบทบาท "' + rr.roles[role].name + '"\n\nเปิดด้วยบัญชี Google ของบริษัท:\n' + await appUrl(db));
+    if (notify && active !== false) await sendMail(db, email, "[แผนกวิจัยและพัฒนา] คุณได้รับสิทธิ์ใช้งานแล้ว",
+      'คุณได้รับสิทธิ์ใช้งานระบบของแผนกวิจัยและพัฒนา ในบทบาท "' + rr.roles[role].name + '"\n\nเปิดด้วยบัญชี Google ของบริษัท:\n' + await appUrl(db));
     return await adminData_(c, m);
   });
 }
@@ -461,7 +461,7 @@ async function submitComplaint(ctx: Ctx, subject: string, detail: string) {
     const id = "c" + uuid(12);
     await db`insert into costing.complaints (id, email, subject, detail, status, reply, replied_by, created_at, updated_at) values (${id}, ${m.email}, ${subject}, ${detail}, 'new', '', '', now(), now())`;
     await log(db, m.email, "submitComplaint", id + " · " + subject.slice(0, 60));
-    await sendMail(db, m.owner, "[ระบบต้นทุนหัวน้ำหอม] เรื่องร้องเรียนใหม่จาก " + m.email,
+    await sendMail(db, m.owner, "[แผนกวิจัยและพัฒนา] เรื่องร้องเรียนใหม่จาก " + m.email,
       "หัวข้อ: " + subject + "\n\n" + detail + '\n\nตอบกลับและเปลี่ยนสถานะได้ที่ปุ่ม "เรื่องร้องเรียน":\n' + await appUrl(db));
     return (await db`select * from costing.complaints where lower(email) = ${m.email} order by created_at desc`).map(cmpOut);
   });
@@ -478,7 +478,7 @@ async function replyComplaint(ctx: Ctx, id: string, status: string, reply: strin
     if (before.status === status && before.reply === reply) return (await db`select * from costing.complaints order by created_at desc`).map(cmpOut);
     await db`update costing.complaints set status = ${status}, reply = ${reply}, replied_by = ${m.email}, updated_at = now() where id = ${before.id}`;
     await log(db, m.email, "replyComplaint", before.id + " · " + before.status + "→" + status);
-    await sendMail(db, before.email, "[ระบบต้นทุนหัวน้ำหอม] อัปเดตเรื่องร้องเรียน: " + before.subject.slice(0, 80),
+    await sendMail(db, before.email, "[แผนกวิจัยและพัฒนา] อัปเดตเรื่องร้องเรียน: " + before.subject.slice(0, 80),
       "เรื่อง: " + before.subject + "\nสถานะ: " + CMP_LABEL[status] + (reply ? "\n\nข้อความจากผู้ดูแลระบบ:\n" + reply : "") + '\n\nดูรายละเอียดได้ที่ปุ่ม "เรื่องร้องเรียน":\n' + await appUrl(db));
     return (await db`select * from costing.complaints order by created_at desc`).map(cmpOut);
   });

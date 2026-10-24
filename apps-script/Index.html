@@ -46,7 +46,7 @@
 </style>
 </head>
 <body>
-<title>ระบบต้นทุนหัวน้ำหอม</title>
+<title>แผนกวิจัยและพัฒนา</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700&display=swap">
@@ -376,7 +376,7 @@ tfoot td{font-weight:700;border-top:1px solid var(--ink);background:var(--bg-sof
 <div class="gate" id="gate">
   <div class="gate-card" id="gateCard" aria-live="polite">
     <img class="gate-logo" data-logo="h" alt="Scent &amp; Sense" width="155" height="60">
-    <div class="eyebrow">ระบบต้นทุนหัวน้ำหอม</div>
+    <div class="eyebrow">แผนกวิจัยและพัฒนา</div>
     <div class="spin" role="status" aria-label="กำลังตรวจสอบสิทธิ์"></div>
     <p>กำลังตรวจสอบสิทธิ์การใช้งาน…</p>
   </div>
@@ -385,7 +385,7 @@ tfoot td{font-weight:700;border-top:1px solid var(--ink);background:var(--bg-sof
 <div id="app" hidden>
 <header class="mast">
   <div class="wrap">
-    <div class="brand"><img class="brand-logo" data-logo="h" alt="Scent &amp; Sense" width="100" height="39"><span class="brand-sub">ระบบต้นทุนหัวน้ำหอม</span></div>
+    <div class="brand"><img class="brand-logo" data-logo="h" alt="Scent &amp; Sense" width="100" height="39"><span class="brand-sub">แผนกวิจัยและพัฒนา</span></div>
     <nav class="navtabs" id="navtabs" aria-label="เมนูหลัก"></nav>
     <div class="topright" id="userbar"></div>
   </div>
@@ -402,7 +402,7 @@ tfoot td{font-weight:700;border-top:1px solid var(--ink);background:var(--bg-sof
   <section id="msdsView" hidden style="padding-block:24px 56px"></section>
   <section id="perfView" hidden style="padding-block:24px 56px"></section>
   <div id="calcView">
-  <div class="pagehead"><h1>คำนวณต้นทุนหัวน้ำหอม</h1><p>Scent &amp; Sense ✦ ทีมต้นทุนสินค้า · Fragrance Oil Costing · ราคาวัตถุดิบ บาท/กรัม จากไฟล์ Summary RM</p></div>
+  <div class="pagehead"><h1>คำนวณต้นทุนหัวน้ำหอม</h1><p>Scent &amp; Sense ✦ ทีมวิจัยและพัฒนา · Fragrance Oil Costing · ราคาวัตถุดิบ บาท/กรัม จากไฟล์ Summary RM</p></div>
   <div class="dbcard" id="dbcard"></div>
   <div class="steps" id="stepsBar" aria-label="ขั้นตอน">
     <span><b>1</b>ใส่ไฟล์สูตร</span><span><b>2</b>ตรวจรายการ &amp; แก้ราคาที่ขาด</span><span><b>3</b>สรุปต้นทุน &amp; ส่งออก Excel</span>
@@ -471,7 +471,7 @@ tfoot td{font-weight:700;border-top:1px solid var(--ink);background:var(--bg-sof
 <div class="overlay" id="shareOverlay" hidden>
   <div class="share-card" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
     <div class="top">
-      <div><div class="eyebrow" style="color:var(--accent)">Scent &amp; Sense ✦ ทีมต้นทุนสินค้า</div><h2 id="shareTitle">แชร์ระบบต้นทุนให้ทีม</h2></div>
+      <div><div class="eyebrow" style="color:var(--accent)">Scent &amp; Sense ✦ ทีมวิจัยและพัฒนา</div><h2 id="shareTitle">แชร์ระบบแผนกวิจัยและพัฒนาให้ทีม</h2></div>
       <button class="x" type="button" id="shareClose" aria-label="ปิด">×</button>
     </div>
     <div>
@@ -879,7 +879,7 @@ function exportTemplate(){
   [['RM-008-012-0537',40],['RM-008-010-0532',30],['RM-002-001-0192',20],['RM-002-001-0907',10]].forEach(([c,a])=>{ const e=DB.byCode.get(c); aoa.push(['FO-ตัวอย่าง Citrus', c, e?e.name:'', a]); });
   const wb=XLSX.utils.book_new(); const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:26},{wch:18},{wch:46},{wch:10}];
   XLSX.utils.book_append_sheet(wb, ws, 'สูตร');
-  const how=XLSX.utils.aoa_to_sheet([['วิธีกรอก'],['1. หนึ่งแถวต่อวัตถุดิบหนึ่งตัว'],['2. คอลัมน์ "สินค้า" ใช้แยกหลายสูตรในไฟล์เดียว (หรือแยกสินค้าละ 1 ชีต แล้วลบคอลัมน์นี้ออก)'],['3. ใส่เป็น % (รวม 100) หรือเปลี่ยนหัวคอลัมน์เป็น "กรัม" แล้วใส่น้ำหนักจริงก็ได้'],['4. ถ้าไม่มีรหัส RM ให้ใส่ชื่อวัตถุดิบให้ตรงกับฐานราคา'],['5. บันทึกแล้วลากไฟล์ไปวางในระบบคำนวณต้นทุนหัวน้ำหอม']]);
+  const how=XLSX.utils.aoa_to_sheet([['วิธีกรอก'],['1. หนึ่งแถวต่อวัตถุดิบหนึ่งตัว'],['2. คอลัมน์ "สินค้า" ใช้แยกหลายสูตรในไฟล์เดียว (หรือแยกสินค้าละ 1 ชีต แล้วลบคอลัมน์นี้ออก)'],['3. ใส่เป็น % (รวม 100) หรือเปลี่ยนหัวคอลัมน์เป็น "กรัม" แล้วใส่น้ำหนักจริงก็ได้'],['4. ถ้าไม่มีรหัส RM ให้ใส่ชื่อวัตถุดิบให้ตรงกับฐานราคา'],['5. บันทึกแล้วลากไฟล์ไปวางในระบบของแผนกวิจัยและพัฒนา']]);
   how['!cols']=[{wch:90}]; XLSX.utils.book_append_sheet(wb, how, 'วิธีใช้');
   saveFile('แบบฟอร์มสูตรหัวน้ำหอม.xlsx', XLSX.write(wb,{type:'array',bookType:'xlsx'}));
 }
@@ -1181,7 +1181,7 @@ function whoBlock(){ return `<div class="who">${ava(S.me&&S.me.email,'lg')}<div>
 function showGate(kind, info){
   S.gate=kind; S.inApp=false;
   $('#app').hidden=true; $('#gate').hidden=false;
-  const head = `<img class="gate-logo" src="${LOGO.h}" alt="Scent &amp; Sense" width="155" height="60"><div class="eyebrow">ระบบต้นทุนหัวน้ำหอม</div>`;
+  const head = `<img class="gate-logo" src="${LOGO.h}" alt="Scent &amp; Sense" width="155" height="60"><div class="eyebrow">แผนกวิจัยและพัฒนา</div>`;
   const domains = '@'+DOMAINS.join(' หรือ @');
   let body='';
   if(kind==='loading') body = `<div class="spin" role="status" aria-label="กำลังตรวจสอบสิทธิ์"></div><p>กำลังตรวจสอบบัญชี Google ของคุณ…</p>`;
@@ -1191,7 +1191,7 @@ function showGate(kind, info){
   else if(kind==='domain') body = `<h1>อีเมลนี้ใช้ไม่ได้</h1><p>บัญชี <b>${esc(info||'')}</b> ไม่ใช่อีเมลบริษัท ${HTTP?'เลือกบัญชีอื่น':'ออกจากระบบ Google หรือสลับบัญชี แล้วเข้า'}ด้วย ${esc(domains)}</p>${HTTP?'<button class="btn primary" type="button" id="btnSwitch">ใช้บัญชีอื่น</button>':''}`;
   else if(kind==='noAccess') body = `${whoBlock()}<h1>ยังไม่มีสิทธิ์ใช้งาน</h1><p>กดส่งคำขอ ระบบจะแจ้งผู้ดูแลทางอีเมล เมื่ออนุมัติแล้วคุณจะได้รับอีเมลแจ้ง แล้วเปิดลิงก์นี้อีกครั้ง</p>
       <button class="btn primary" type="button" id="btnRequest" ${S.requested?'disabled':''}>${S.requested?'ส่งคำขอแล้ว · รอผู้ดูแลอนุมัติ':'ส่งคำขอสิทธิ์ใช้งาน'}</button><div class="gate-err" id="gateErr"></div>`;
-  else if(kind==='suspended') body = `${whoBlock()}<h1>บัญชีถูกระงับ</h1><p>บัญชีนี้ถูกระงับการใช้งานระบบต้นทุน ติดต่อผู้ดูแลระบบหากต้องการเปิดใช้อีกครั้ง</p>`;
+  else if(kind==='suspended') body = `${whoBlock()}<h1>บัญชีถูกระงับ</h1><p>บัญชีนี้ถูกระงับการใช้งานระบบของแผนกวิจัยและพัฒนา ติดต่อผู้ดูแลระบบหากต้องการเปิดใช้อีกครั้ง</p>`;
   else if(kind==='error') body = `<h1>เปิดระบบไม่สำเร็จ</h1><p>${esc(info||'')}</p><button class="btn primary" type="button" id="btnRetry">ลองอีกครั้ง</button>`;
   $('#gateCard').innerHTML = head + body + '<div class="gate-foot">Scent &amp; Sense Laboratory Co., Ltd.</div>';
   if(kind==='signin') renderGsi(info);
@@ -1307,7 +1307,7 @@ function openShare(){
   const url=S.appUrl || '(ลิงก์ Web app จากเมนู Deploy)';
   const role = S.access.autoJoin && S.roles[S.access.defaultRole] ? S.roles[S.access.defaultRole].name : null;
   $('#shareUrl').value=url;
-  $('#shareMsg').value=`ระบบคำนวณต้นทุนหัวน้ำหอม (Scent & Sense)\n${url}\n\nเปิดลิงก์ด้วยบัญชี Google ของบริษัท (@scentandsense.co.th หรือ @scentandsense.co)`;
+  $('#shareMsg').value=`แผนกวิจัยและพัฒนา (Scent & Sense)\n${url}\n\nเปิดลิงก์ด้วยบัญชี Google ของบริษัท (@scentandsense.co.th หรือ @scentandsense.co)`;
   $('#shareNote').textContent = role
     ? `บัญชี Google ของบริษัทเปิดลิงก์แล้วเข้าใช้ได้ทันทีในบทบาท "${role}" อีเมลอื่นเข้าไม่ได้`
     : 'บัญชี Google ของบริษัทเปิดลิงก์แล้วกด "ส่งคำขอสิทธิ์ใช้งาน" ผู้ดูแลจะได้รับอีเมลแจ้ง อีเมลอื่นเข้าไม่ได้';

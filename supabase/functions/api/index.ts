@@ -27,7 +27,8 @@ const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SE
 
 // deno-lint-ignore no-explicit-any
 type Db = any;
-type Ctx = { email: string; db: Db };
+/** via: "session" = รหัสผ่าน (ปกติ), "google" = ยืนยันตัวตนด้วย Google เพื่อตั้งรหัสผ่าน, "none" = ก่อนเข้าสู่ระบบ · sid = แฮชของโทเคนเซสชัน */
+type Ctx = { email: string; db: Db; via?: string; sid?: string };
 // deno-lint-ignore no-explicit-any
 type Any = any;
 
@@ -59,7 +60,7 @@ async function log(db: Db, email: string, action: string, detail = "") {
 async function locked<T>(ctx: Ctx, fn: (c: Ctx) => Promise<T>): Promise<T> {
   return await sql.begin(async (tx: Db) => {
     await tx`select pg_advisory_xact_lock(7001)`;
-    return await fn({ email: ctx.email, db: tx });
+    return await fn({ email: ctx.email, db: tx, via: ctx.via, sid: ctx.sid });
   }) as T;
 }
 function normEmail(e: unknown) {
@@ -98,6 +99,114 @@ async function verifyIdToken(token: unknown): Promise<string> {
   tokCache.set(token, { email, exp: Date.now() + Math.max(1, Math.min(300, Number(p.exp) - now - 30)) * 1000 });
   if (tokCache.size > 500) tokCache.clear();
   return email;
+}
+
+/* ===== เข้าสู่ระบบด้วยรหัสผ่าน =====
+   - รหัสผ่านเก็บเป็น PBKDF2-SHA256 (210,000 รอบ, salt 16 ไบต์) ไม่เก็บตัวรหัส
+   - ตั้ง/รีเซ็ตรหัสครั้งแรก ต้องยืนยันตัวตนด้วย Google (อีเมลโดเมนบริษัท) · เปลี่ยนรหัสขณะเข้าระบบอยู่ ต้องใส่รหัสเดิม
+   - ใส่ผิด 5 ครั้งติดกัน ล็อก 15 นาที · เซสชัน 12 ชั่วโมง (จดจำ 30 วัน) เก็บแฮชของโทเคนในตาราง sessions */
+const PW_ITER = 210000, PW_FAIL_MAX = 5, PW_LOCK_MIN = 15, SESSION_HOURS = 12, SESSION_REMEMBER_DAYS = 30;
+const te = new TextEncoder();
+const b64u = (u8: Uint8Array) => encodeBase64(u8).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const hex = (buf: ArrayBuffer) => [...new Uint8Array(buf)].map((x) => x.toString(16).padStart(2, "0")).join("");
+async function pbkdf2(pw: string, salt: Uint8Array, iter: number) {
+  const key = await crypto.subtle.importKey("raw", te.encode(pw), "PBKDF2", false, ["deriveBits"]);
+  return new Uint8Array(await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations: iter }, key, 256));
+}
+async function hashPassword(pw: string) { const salt = crypto.getRandomValues(new Uint8Array(16)); return `pbkdf2$${PW_ITER}$${encodeBase64(salt)}$${encodeBase64(await pbkdf2(pw, salt, PW_ITER))}`; }
+async function checkPassword(pw: string, stored: string) {
+  const p = String(stored || "").split("$");
+  if (p.length !== 4 || p[0] !== "pbkdf2") { await pbkdf2(pw, new Uint8Array(16), PW_ITER); return false; }   /* ใช้เวลาเท่ากันแม้ไม่มีบัญชี */
+  const want = decodeBase64(p[3]), got = await pbkdf2(pw, decodeBase64(p[2]), Number(p[1]) || PW_ITER);
+  let diff = want.length ^ got.length; for (let i = 0; i < Math.min(want.length, got.length); i++) diff |= want[i] ^ got[i];
+  return diff === 0;
+}
+function pwPolicy(pw: unknown, email: string) {
+  const s = String(pw || "");
+  if (s.length < 8) throw new Error("รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร");
+  if (s.length > 128) throw new Error("รหัสผ่านยาวเกินไป");
+  if (!/[A-Za-z฀-๿]/.test(s) || !/[0-9]/.test(s)) throw new Error("รหัสผ่านต้องมีทั้งตัวอักษรและตัวเลข");
+  if (s.toLowerCase().includes(email.split("@")[0].toLowerCase())) throw new Error("รหัสผ่านต้องไม่มีชื่ออีเมลอยู่ในนั้น");
+  return s;
+}
+const sha256hex = async (s: string) => hex(await crypto.subtle.digest("SHA-256", te.encode(s)));
+async function newSession(db: Db, email: string, via: string, remember: boolean) {
+  const token = b64u(crypto.getRandomValues(new Uint8Array(32)));
+  const expires = new Date(Date.now() + (remember ? SESSION_REMEMBER_DAYS * 86400000 : SESSION_HOURS * 3600000));
+  await db`insert into costing.sessions (id, email, created_at, expires_at, last_seen, via) values (${await sha256hex(token)}, ${email}, now(), ${expires}, now(), ${via})`;
+  await db`delete from costing.sessions where expires_at < now()`;   /* เก็บกวาดเซสชันหมดอายุ */
+  return { session: token, expiresAt: expires.toISOString(), email };
+}
+const sesCache = new Map<string, { email: string; exp: number }>();
+async function sessionEmail(token: unknown): Promise<{ email: string; sid: string }> {
+  if (!token || typeof token !== "string" || token.length < 20 || token.length > 100) throw new Error("AUTH_EXPIRED");
+  const sid = await sha256hex(token), hit = sesCache.get(sid);
+  if (hit && hit.exp > Date.now()) return { email: hit.email, sid };
+  const r = (await sql`select email, expires_at, last_seen from costing.sessions where id = ${sid}`)[0];
+  if (!r || new Date(r.expires_at).getTime() <= Date.now()) throw new Error("AUTH_EXPIRED");
+  if (!r.last_seen || Date.now() - new Date(r.last_seen).getTime() > 600000) await sql`update costing.sessions set last_seen = now() where id = ${sid}`;
+  sesCache.set(sid, { email: String(r.email), exp: Math.min(Date.now() + 60000, new Date(r.expires_at).getTime()) });
+  if (sesCache.size > 1000) sesCache.clear();
+  return { email: String(r.email), sid };
+}
+/** เข้าสู่ระบบด้วยอีเมล + รหัสผ่าน (เรียกได้โดยไม่ต้องมีเซสชัน) */
+async function pwLogin(ctx: Ctx, emailIn: string, password: string, remember: boolean) {
+  const bad = "อีเมลหรือรหัสผ่านไม่ถูกต้อง";
+  let email = ""; try { email = normEmail(emailIn); } catch (_e) { await checkPassword(String(password || ""), ""); throw new Error(bad); }
+  /* ความผิดพลาดคืนค่าออกมาแทนการ throw ในทรานแซกชัน เพื่อให้ตัวนับครั้งที่ผิดถูกบันทึกจริง (throw = rollback) */
+  const r: Any = await locked(ctx, async (c) => {
+    const db = c.db, cr = (await db`select * from costing.credentials where email = ${email}`)[0];
+    if (cr && cr.locked_until && new Date(cr.locked_until).getTime() > Date.now()) {
+      return { err: `ใส่รหัสผิดหลายครั้ง บัญชีถูกล็อกชั่วคราว ลองใหม่หลัง ${bkk(new Date(cr.locked_until)).slice(11)} น. หรือตั้งรหัสใหม่ด้วย Google` };
+    }
+    const ok = await checkPassword(String(password || ""), cr ? String(cr.hash) : "");
+    if (!cr) return { err: bad + " (ถ้ายังไม่เคยตั้งรหัสผ่าน กด \"ตั้งรหัสผ่านครั้งแรก\")" };
+    if (!ok) {
+      const failed = Number(cr.failed || 0) + 1, lock = failed >= PW_FAIL_MAX;
+      await db`update costing.credentials set failed = ${lock ? 0 : failed}, locked_until = ${lock ? new Date(Date.now() + PW_LOCK_MIN * 60000) : null} where email = ${email}`;
+      await log(db, email, "pwLoginFail", lock ? "ล็อก " + PW_LOCK_MIN + " นาที" : "ครั้งที่ " + failed);
+      return { err: lock ? `ใส่รหัสผิด ${PW_FAIL_MAX} ครั้ง บัญชีถูกล็อก ${PW_LOCK_MIN} นาที` : bad };
+    }
+    await db`update costing.credentials set failed = 0, locked_until = null where email = ${email}`;
+    await log(db, email, "pwLogin", remember ? "จดจำ " + SESSION_REMEMBER_DAYS + " วัน" : "");
+    return await newSession(db, email, "password", !!remember);
+  });
+  if (r.err) throw new Error(r.err);
+  return r;
+}
+/** ตั้ง/เปลี่ยนรหัสผ่านของตัวเอง: ผ่าน Google (ครั้งแรก / ลืมรหัส) ไม่ต้องใช้รหัสเดิม · ผ่านเซสชันต้องใส่รหัสเดิม · ยกเลิกเซสชันเดิมทั้งหมดแล้วออกเซสชันใหม่ */
+async function setMyPassword(ctx: Ctx, newPw: string, oldPw: string, remember: boolean) {
+  return await locked(ctx, async (c) => {
+    const db = c.db, email = normEmail(c.email);
+    const pw = pwPolicy(newPw, email);
+    const cr = (await db`select * from costing.credentials where email = ${email}`)[0];
+    if (c.via !== "google") {
+      if (!cr || !(await checkPassword(String(oldPw || ""), String(cr.hash)))) throw new Error("รหัสผ่านเดิมไม่ถูกต้อง");
+      if (oldPw === pw) throw new Error("รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสเดิม");
+    }
+    const h = await hashPassword(pw);
+    await db`insert into costing.credentials (email, hash, set_at, set_via, failed, locked_until) values (${email}, ${h}, now(), ${c.via || ""}, 0, null)
+      on conflict (email) do update set hash = excluded.hash, set_at = excluded.set_at, set_via = excluded.set_via, failed = 0, locked_until = null`;
+    await db`delete from costing.sessions where email = ${email}`; sesCache.clear();
+    await log(db, email, "setMyPassword", c.via === "google" ? (cr ? "ตั้งใหม่ด้วย Google (ลืมรหัส)" : "ตั้งครั้งแรกด้วย Google") : "เปลี่ยนรหัส");
+    return await newSession(db, email, "password", !!remember);
+  });
+}
+async function pwLogout(ctx: Ctx) {
+  if (ctx.sid) { await ctx.db`delete from costing.sessions where id = ${ctx.sid}`; sesCache.delete(ctx.sid); }
+  return { ok: true };
+}
+/** ผู้ดูแลรีเซ็ตรหัสผ่านของผู้ใช้: ลบรหัสและออกจากระบบทุกเครื่อง ผู้ใช้ต้องตั้งใหม่ด้วย Google */
+async function resetUserPassword(ctx: Ctx, email: string) {
+  return await locked(ctx, async (c) => {
+    const m = await need(c, "manageUsers"), db = c.db;
+    email = normEmail(email);
+    if (email === m.owner && m.email !== m.owner) throw new Error("รีเซ็ตรหัสของเจ้าของระบบไม่ได้");
+    await db`delete from costing.credentials where email = ${email}`;
+    await db`delete from costing.sessions where email = ${email}`; sesCache.clear();
+    await log(db, m.email, "resetUserPassword", email);
+    return await adminData_(c, m);
+  });
 }
 
 /* ===== บทบาทและตัวตน ===== */
@@ -271,8 +380,9 @@ async function adminData_(ctx: Ctx, m: Me) {
   const users = await db`select email, role, active, added_by, added_at from costing.users order by added_at, email`;
   const reqs = await db`select email, at from costing.requests order by at`;
   const vis = await db`select email, first_seen, last_seen from costing.visitors order by first_seen`;
-  return { owner: m.owner, me: m.email,
-    users: users.map((r: Any) => ({ email: String(r.email).toLowerCase(), role: String(r.role), active: r.active !== false, addedBy: String(r.added_by || ""), addedAt: iso(r.added_at) })),
+  const pw = new Set((await db`select email from costing.credentials`).map((r: Any) => String(r.email).toLowerCase()));
+  return { owner: m.owner, me: m.email, withPassword: [...pw],
+    users: users.map((r: Any) => ({ email: String(r.email).toLowerCase(), role: String(r.role), active: r.active !== false, addedBy: String(r.added_by || ""), addedAt: iso(r.added_at), hasPassword: pw.has(String(r.email).toLowerCase()) })),
     requests: reqs.map((r: Any) => ({ email: String(r.email).toLowerCase(), at: iso(r.at) })),
     visitors: vis.map((r: Any) => ({ email: String(r.email).toLowerCase(), firstSeen: iso(r.first_seen), lastSeen: iso(r.last_seen) })),
     roles: rr.roles, order: rr.order,
@@ -292,7 +402,7 @@ async function setUser(ctx: Ctx, email: string, role: string, active: boolean, n
     await db`delete from costing.requests where email = ${email}`;
     await log(db, m.email, "setUser", email + " → " + role + (active === false ? " (ระงับ)" : ""));
     if (notify && active !== false) await sendMail(db, email, "[แผนกวิจัยและพัฒนา] คุณได้รับสิทธิ์ใช้งานแล้ว",
-      'คุณได้รับสิทธิ์ใช้งานระบบของแผนกวิจัยและพัฒนา ในบทบาท "' + rr.roles[role].name + '"\n\nเปิดด้วยบัญชี Google ของบริษัท:\n' + await appUrl(db));
+      'คุณได้รับสิทธิ์ใช้งานระบบของแผนกวิจัยและพัฒนา ในบทบาท "' + rr.roles[role].name + '"\n\nเปิดลิงก์แล้วกด "ตั้งรหัสผ่านครั้งแรก" (ยืนยันตัวตนด้วยบัญชี Google ของบริษัท) จากนั้นเข้าสู่ระบบด้วยอีเมลและรหัสผ่าน:\n' + await appUrl(db));
     return await adminData_(c, m);
   });
 }
@@ -1372,6 +1482,7 @@ const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   loadMyFormulas, saveMyFormulas, adminFormulas, loadPricing, savePricing, updatePrices, submitComplaint, myComplaints, adminComplaints, replyComplaint,
   loadCompliance, saveComplianceRules, saveRmMap, listDocs, getDoc, issueDoc, voidDoc, listRmDocs, getRmDocFile, uploadRmDoc, updateRmDoc, deleteRmDoc,
   listBriefs, saveBrief, deleteBrief, listScents, saveScent, deleteScent, getTypeformStatus, saveTypeformToken, syncTypeform, disconnectTypeform,
+  pwLogin, setMyPassword, pwLogout, resetUserPassword,
   listCustomers, saveCustomer, listProjects, getProject, saveProject, setStage, raCheck, issueProjectDoc, listSamples, saveSample, sendSample, deleteSample, evalSummary, importRd,
   importAll, importRmFile, finishMigration,
 };
@@ -1394,8 +1505,13 @@ Deno.serve(async (req: Request) => {
   try {
     const reqBody = JSON.parse((await req.text()) || "{}");
     if (!Object.prototype.hasOwnProperty.call(API, reqBody.fn)) throw new Error("UNKNOWN_FUNCTION");
-    const email = await verifyIdToken(reqBody.idToken);
-    out = { ok: true, result: await API[reqBody.fn]({ email, db: sql }, ...(Array.isArray(reqBody.args) ? reqBody.args : [])) };
+    /* เข้าสู่ระบบด้วยรหัสผ่านเท่านั้น: ทุกฟังก์ชันใช้เซสชัน ยกเว้น pwLogin (ก่อนเข้าระบบ) และ setMyPassword ที่ยืนยันตัวตนด้วย Google ได้ (ตั้งครั้งแรก / ลืมรหัส) */
+    let ctx: Ctx;
+    if (reqBody.fn === "pwLogin") ctx = { email: "", db: sql, via: "none" };
+    else if (reqBody.session) { const s = await sessionEmail(reqBody.session); ctx = { email: s.email, db: sql, via: "session", sid: s.sid }; }
+    else if (reqBody.fn === "setMyPassword" && reqBody.idToken) ctx = { email: await verifyIdToken(reqBody.idToken), db: sql, via: "google" };
+    else throw new Error(reqBody.idToken ? "AUTH_PASSWORD_REQUIRED" : "AUTH_REQUIRED");
+    out = { ok: true, result: await API[reqBody.fn](ctx, ...(Array.isArray(reqBody.args) ? reqBody.args : [])) };
   } catch (err) {
     out = { ok: false, error: String((err && (err as Error).message) || err) };
   }

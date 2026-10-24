@@ -1476,6 +1476,127 @@ async function importRd(ctx: Ctx, d: Any) {
   });
 }
 
+/* ===== Product Development: สูตรพื้นฐาน (เบส) ของแต่ละประเภทสินค้า และสูตรผลิตภัณฑ์ที่นำกลิ่นจาก Perfumer มาผสมเบส ===== */
+const PD_STATUS: Record<string, number> = { draft: 1, testing: 1, approved: 1, retired: 1 }, PD_MODES: Record<string, number> = { standard: 1, modified: 1 };
+/** ส่วนประกอบหนึ่งแถว: รหัส RM (ราคาดึงจากฐานราคาตอนแสดงผล) · price = ราคาที่บันทึกไว้กับเบส · override = ราคาที่ผู้ใช้กำหนดเองในสูตร · frag = ช่องน้ำหอม */
+function pdLines(v: Any) {
+  if (!Array.isArray(v)) return [];
+  return v.slice(0, 80).map((x: Any) => ({ code: str(x && x.code, 40), name: str(x && x.name, 200), fn: str(x && x.fn, 120), pct: numOrNull(x && x.pct), price: numOrNull(x && x.price), override: numOrNull(x && x.override), frag: !!(x && x.frag), note: str(x && x.note, 200) }))
+    .filter((x: Any) => x.name || x.code || x.frag);
+}
+function pdBaseData(b: Any) {
+  return { targetPrice: numOrNull(b.targetPrice), shelfLife: str(b.shelfLife, 120), stability: str(b.stability, 200), benchmark: str(b.benchmark, 200), note: str(b.note, 2000),
+    fragranceAdjustable: !!b.fragranceAdjustable, lines: pdLines(b.lines), source: b.source && typeof b.source === "object" ? b.source : {} };
+}
+const baseOut = (r: Any) => ({ id: String(r.id), category: String(r.category), name: String(r.name), active: !!r.active, sort: Number(r.sort) || 0, ...pdBaseData(r.data || {}),
+  createdAt: iso(r.created_at), updatedAt: iso(r.updated_at), updatedBy: String(r.updated_by || "") });
+async function listPdBases(ctx: Ctx) {
+  await needAny(ctx, RD_VIEW);
+  return (await ctx.db`select * from costing.pd_bases order by sort, category, name`).map(baseOut);
+}
+async function savePdBase(ctx: Ctx, b: Any) {
+  return await locked(ctx, async (c) => {
+    const m = await need(c, "pd"), db = c.db; b = b || {};
+    const category = str(b.category, 80), name = str(b.name, 200);
+    if (!category || !name) throw new Error("ใส่ประเภทสินค้าและชื่อเบส");
+    const data = pdBaseData(b);
+    if (!data.lines.length) throw new Error("ใส่ส่วนประกอบอย่างน้อย 1 รายการ");
+    if (JSON.stringify(data).length > RD_DATA_MAX) throw new Error("ข้อมูลใหญ่เกินไป");
+    const id = str(b.id, 60) || "base-" + uuid(10), now = new Date();
+    const ex = (await db`select * from costing.pd_bases where id = ${id}`)[0];
+    const row = { id, category, name, active: b.active === undefined ? true : !!b.active, sort: Number(b.sort) || (ex ? Number(ex.sort) : 0), data: db.json(data), updated_at: now, updated_by: m.email };
+    if (ex) await db`update costing.pd_bases set ${db(row, "category", "name", "active", "sort", "data", "updated_at", "updated_by")} where id = ${id}`;
+    else await db`insert into costing.pd_bases ${db({ ...row, created_at: now, created_by: m.email })}`;
+    await log(db, m.email, ex ? "savePdBase" : "newPdBase", category + " · " + name);
+    return baseOut((await db`select * from costing.pd_bases where id = ${id}`)[0]);
+  });
+}
+async function deletePdBase(ctx: Ctx, id: string) {
+  return await locked(ctx, async (c) => {
+    const m = await need(c, "pd"), db = c.db;
+    const ex = (await db`select * from costing.pd_bases where id = ${String(id || "")}`)[0];
+    if (!ex) throw new Error("ไม่พบเบสนี้");
+    const used = Number((await db`select count(*)::int as n from costing.pd_formulas where base_id = ${String(ex.id)}`)[0].n);
+    if (used > 0) throw new Error(`มีสูตรผลิตภัณฑ์ ${used} สูตรอ้างอิงเบสนี้ ให้ปิดใช้งานแทนการลบ`);
+    await db`delete from costing.pd_bases where id = ${String(ex.id)}`;
+    await log(db, m.email, "deletePdBase", String(ex.category) + " · " + String(ex.name));
+    return { ok: true };
+  });
+}
+function pdFormulaData(f: Any) {
+  return { category: str(f.category, 80), baseName: str(f.baseName, 200), mode: PD_MODES[f.mode] ? String(f.mode) : "standard", customer: str(f.customer, 200), brand: str(f.brand, 200),
+    fragranceFormulaId: str(f.fragranceFormulaId, 60), fragranceName: str(f.fragranceName, 200), fragranceCode: str(f.fragranceCode, 60), fragrancePrice: numOrNull(f.fragrancePrice),
+    batchG: numOrNull(f.batchG), targetPrice: numOrNull(f.targetPrice), note: str(f.note, 3000), lines: pdLines(f.lines), approvedBy: str(f.approvedBy, 120), approvedAt: str(f.approvedAt, 40) };
+}
+const fmOut = (r: Any) => ({ id: String(r.id), code: String(r.code || ""), projectId: String(r.project_id || ""), name: String(r.name), baseId: String(r.base_id || ""), status: String(r.status), ...pdFormulaData(r.data || {}),
+  createdAt: iso(r.created_at), createdBy: String(r.created_by || ""), updatedAt: iso(r.updated_at), updatedBy: String(r.updated_by || "") });
+/** รหัสสูตรผลิตภัณฑ์ PDyymmNNN (นับต่อเดือน ชุดเดียวกับ PDR) */
+async function nextPdCode(db: Db, at: Date) {
+  const p = bkkParts(at), period = p.yyyy + p.mm;
+  const r = await db`insert into costing.docseq (prefix, period, n) values ('PD', ${period}, 1) on conflict (prefix, period) do update set n = costing.docseq.n + 1 returning n`;
+  return "PD" + p.yyyy.slice(2) + p.mm + String(Number(r[0].n)).padStart(3, "0");
+}
+async function listPdFormulas(ctx: Ctx, projectId?: string) {
+  await needAny(ctx, RD_VIEW); const db = ctx.db;
+  const rows = projectId ? await db`select * from costing.pd_formulas where project_id = ${String(projectId)} order by updated_at desc` : await db`select * from costing.pd_formulas order by updated_at desc limit 1000`;
+  return rows.map(fmOut);
+}
+async function savePdFormula(ctx: Ctx, f: Any) {
+  return await locked(ctx, async (c) => {
+    const m = await need(c, "pd"), db = c.db; f = f || {};
+    const name = str(f.name, 200); if (!name) throw new Error("ใส่ชื่อสูตรผลิตภัณฑ์");
+    const data = pdFormulaData(f);
+    if (!data.lines.length) throw new Error("ใส่ส่วนประกอบอย่างน้อย 1 รายการ");
+    if (JSON.stringify(data).length > RD_DATA_MAX) throw new Error("ข้อมูลใหญ่เกินไป");
+    const projectId = str(f.projectId, 40);
+    if (projectId && !(await db`select 1 from costing.projects where id = ${projectId}`).length) throw new Error("ไม่พบโครงการนี้");
+    const baseId = str(f.baseId, 60);
+    if (baseId && !(await db`select 1 from costing.pd_bases where id = ${baseId}`).length) throw new Error("ไม่พบเบสนี้");
+    const status = PD_STATUS[f.status] ? String(f.status) : "draft";
+    const ex = f.id ? (await db`select * from costing.pd_formulas where id = ${String(f.id)}`)[0] : null;
+    if (f.id && !ex) throw new Error("ไม่พบสูตรนี้ (อาจถูกลบไปแล้ว)");
+    const now = new Date();
+    if (status === "approved") { if (!(ex && ex.status === "approved")) { data.approvedBy = m.email; data.approvedAt = now.toISOString(); } }
+    else { data.approvedBy = ""; data.approvedAt = ""; }
+    const id = ex ? String(ex.id) : "pdf-" + uuid(10), code = ex ? String(ex.code) : await nextPdCode(db, now);
+    const row = { id, code, project_id: projectId, name, base_id: baseId, status, data: db.json(data), updated_at: now, updated_by: m.email };
+    if (ex) await db`update costing.pd_formulas set ${db(row, "project_id", "name", "base_id", "status", "data", "updated_at", "updated_by")} where id = ${id}`;
+    else await db`insert into costing.pd_formulas ${db({ ...row, created_at: now, created_by: m.email })}`;
+    await log(db, m.email, ex ? "savePdFormula" : "newPdFormula", code + " · " + name + " · " + status);
+    return fmOut((await db`select * from costing.pd_formulas where id = ${id}`)[0]);
+  });
+}
+async function deletePdFormula(ctx: Ctx, id: string) {
+  return await locked(ctx, async (c) => {
+    const m = await need(c, "pd"), db = c.db;
+    const ex = (await db`select * from costing.pd_formulas where id = ${String(id || "")}`)[0];
+    if (!ex) throw new Error("ไม่พบสูตรนี้");
+    if (ex.status === "approved" && !isAdmin(m)) throw new Error("สูตรที่อนุมัติแล้วลบได้เฉพาะผู้ดูแล ให้เปลี่ยนสถานะเป็นเลิกใช้แทน");
+    await db`delete from costing.pd_formulas where id = ${String(ex.id)}`;
+    await log(db, m.email, "deletePdFormula", String(ex.code) + " · " + String(ex.name));
+    return { ok: true };
+  });
+}
+/** นำเข้าทะเบียนเบสจากไฟล์ Formula Base.xlsx (เจ้าของระบบเท่านั้น · upsert ตาม id ทำซ้ำได้) */
+async function importPdBases(ctx: Ctx, d: Any) {
+  return await locked(ctx, async (c) => {
+    const m = await me(c), db = c.db;
+    if (m.email !== MIGRATION_OWNER || !m.isOwner) throw new Error("FORBIDDEN");
+    const list = Array.isArray(d && d.bases) ? d.bases : []; let n = 0;
+    for (let i = 0; i < list.length; i++) {
+      const b = list[i]; if (!b || !b.id || !b.name || !b.category) continue;
+      const data = pdBaseData(b); if (!data.lines.length) continue;
+      const row = { id: str(b.id, 60), category: str(b.category, 80), name: str(b.name, 200), active: true, sort: (i + 1) * 10, data: db.json(data), updated_at: new Date(), updated_by: m.email };
+      const ex = (await db`select id from costing.pd_bases where id = ${row.id}`)[0];
+      if (ex) await db`update costing.pd_bases set ${db(row, "category", "name", "sort", "data", "updated_at", "updated_by")} where id = ${row.id}`;
+      else await db`insert into costing.pd_bases ${db({ ...row, created_at: new Date(), created_by: "import" })}`;
+      n++;
+    }
+    await log(db, m.email, "importPdBases", `bases ${n}`);
+    return { bases: n };
+  });
+}
+
 /* ===== ตารางฟังก์ชันที่หน้าเว็บเรียกได้ ===== */
 const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   bootstrap, requestAccess, savePrices, resetPrices, saveExport, adminData, setUser, removeUser, declineRequest, saveAccess, createRole, updateRole, deleteRole,
@@ -1484,6 +1605,7 @@ const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   listBriefs, saveBrief, deleteBrief, listScents, saveScent, deleteScent, getTypeformStatus, saveTypeformToken, syncTypeform, disconnectTypeform,
   pwLogin, setMyPassword, pwLogout, resetUserPassword,
   listCustomers, saveCustomer, listProjects, getProject, saveProject, setStage, raCheck, issueProjectDoc, listSamples, saveSample, sendSample, deleteSample, evalSummary, importRd,
+  listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases,
   importAll, importRmFile, finishMigration,
 };
 

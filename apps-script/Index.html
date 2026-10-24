@@ -114,6 +114,12 @@ button,input,select,textarea{font:inherit;color:inherit}
 .pw-form label.pw-check{flex-direction:row;align-items:center;gap:8px;font-weight:400;font-size:12.5px;color:var(--ink-muted)}
 .pw-check input{width:16px;height:16px;accent-color:var(--accent)}
 .pw-hint{font-size:12px;color:var(--ink-muted);line-height:1.5}
+.doc-pills{display:flex;gap:4px;flex-wrap:wrap}
+.doc-pill{border:1px dashed var(--line-strong);background:transparent;color:var(--ink-muted);border-radius:999px;padding:3px 9px;font:inherit;font-size:11.5px;cursor:pointer;white-space:nowrap}
+.doc-pill:disabled{cursor:default;opacity:.6}
+.doc-pill.on{border:1px solid var(--primary);background:var(--primary);color:var(--primary-ink);font-weight:600}
+.doc-pill:not(.on):not(:disabled):hover{border-color:var(--accent);color:var(--accent)}
+select.doc-new{border:1px solid var(--line-strong);border-radius:8px;padding:5px 8px;background:var(--input-bg);font:inherit;font-size:12.5px}
 /* ฟอร์มออกเอกสาร: ช่องกรอกสูงเท่ากัน ป้ายบรรทัดเดียว เรียงตรงแนวเดียวกัน */
 #docForm .settings{grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px 16px;align-items:end}
 #docForm .field{display:flex;flex-direction:column;justify-content:flex-end;min-width:0}
@@ -1383,7 +1389,7 @@ function renderUserBar(){
   /* หน้า "คำนวณ" รวมอยู่ในแท็บ Perfumer (แท็บย่อย "คำนวณต้นทุน") สำหรับผู้ที่เห็น Perfumer */
   const pfOn=v==='perf'||v==='calc';
   $('#navtabs').innerHTML = (pfCanView() ? `<button type="button" id="btnPerf" class="${pfOn?'on':''}" ${pfOn?'aria-current="page"':''}>Perfumer</button>` : tab('btnCalc','calc','คำนวณ'))
-    + (can('calc') ? tab('btnChk','chk','ตรวจ IFRA / อย.') + tab('btnDoc','doc','เอกสาร MSDS / IFRA') : '')
+    + (can('calc') ? `<button type="button" id="btnDoc" class="${v==='doc'||v==='chk'?'on':''}" ${v==='doc'||v==='chk'?'aria-current="page"':''}>เอกสารวัตถุดิบ</button>` : '')
     + (rdCanView() ? tab('btnRd','rd','โครงการ') : '')
     + (can('viewDb') ? tab('btnMsds','msds','MSDS วัตถุดิบ') : '')
     + (can('editPrices') ? tab('btnRm','rm','ฐานราคาวัตถุดิบ') : '')
@@ -1983,7 +1989,7 @@ function chkEval(p){
 const fmtLvl=n=>n==null ? '–' : (n>=0.01 ? fmt(n,3) : n.toPrecision(2));
 function renderChkView(){
   CHK=null; chkPending=null;                                  /* โหลดใหม่ทุกครั้งที่เปิดหน้า (กันค้างข้ามผู้ใช้) */
-  $('#chkView').innerHTML = `<div class="bh"><h2>ตรวจตามข้อกำหนด IFRA และ อย.ไทย</h2><span class="hint">คัดกรองเบื้องต้นจากข้อมูลที่อัปโหลดไว้ในระบบ</span></div>
+  $('#chkView').innerHTML = `${docSubTabs('chk')}<div class="bh"><h2>ตรวจตามข้อกำหนด IFRA และ อย.ไทย</h2><span class="hint">คัดกรองเบื้องต้นจากข้อมูลที่อัปโหลดไว้ในระบบ</span></div>
     <div class="note-box" style="margin-bottom:14px"><b>โปรดทราบ:</b> ผลนี้เป็นการคำนวณเทียบกับตารางข้อกำหนดและองค์ประกอบวัตถุดิบที่ทีมอัปโหลดเอง ระบบไม่มีข้อมูลข้อกำหนดติดมา และไม่ใช่ใบรับรองจาก IFRA หรือ อย. ก่อนจำหน่ายจริงควรยืนยันกับเอกสารฉบับล่าสุดและ Certificate ของวัตถุดิบทุกครั้ง</div>
     <div id="chkBody"><div class="empty">กำลังโหลดข้อมูลข้อกำหนด…</div></div>`;
   loadChk().then(()=>{ if(S.view==='chk') drawChk(); }).catch(e=>{ if($('#chkBody')) $('#chkBody').innerHTML=`<div class="msg bad">${esc(errText(e))}</div>`; });
@@ -2208,6 +2214,7 @@ function docIfraMax(p){
 function docDefaults(type, f){
   const p=f.p, m=metaOf(p), base={product:(m.sampleName||p.name)+(/fragrance oil/i.test(m.sampleName||p.name)?'':' Fragrance Oil'), customer:m.customer, brand:m.brand, sampleCode:m.sampleCode, address:'', date:new Date().toISOString().slice(0,10)};
   if(type==='IFRA') return Object.assign(base, {amendment:'51st Amendment to the IFRA Standards (July 2023)', cats:[{cls:'9', level:''},{cls:'7B', level:''}], maxByCat:docIfraMax(p)});
+  if(DOC_GEN[type]) return docGenDefaults(type, base, f);
   return Object.assign(base, {application:'For blending into various finished products', hazards:['H226','H315','H319'], comp:docComposition(p), coverage:docLevels(p).coverage,
     props:{appearance:'Clear liquid', odour:'Characteristic odour', flash:'60 °C', density:'Not available', solubility:'Insoluble', shelf:'2 years'}, transport:'UN1266'});
 }
@@ -2242,9 +2249,106 @@ const PICTO={flame:'<path d="M50 22c6 10 2 16-2 22 8-2 16 4 16 14 0 11-8 18-14 1
   gas:'<rect x="28" y="40" width="44" height="18" rx="9" fill="#000" transform="rotate(-20 50 49)"/><path d="M66 36l6-3" stroke="#000" stroke-width="5"/>',
   expl:'<circle cx="50" cy="66" r="8" fill="#000"/><path d="M50 22v20M34 30l8 16M66 30l-8 16M26 46l14 8M74 46l-14 8" stroke="#000" stroke-width="5" stroke-linecap="round"/>'};
 const picto=k=>`<svg viewBox="0 0 100 100" width="64" height="64" aria-hidden="true"><path d="M50 4 96 50 50 96 4 50z" fill="#fff" stroke="#d11" stroke-width="6"/>${PICTO[k]||''}</svg>`;
+/* --- เอกสารวัตถุดิบ 5 ประเภท: STAB · PACK · SDS (MSDS) · IFRA · SPEC ---
+   SDS และ IFRA มีฟอร์มเฉพาะ (ด้านบน) ส่วน STAB / PACK / SPEC ใช้โครงเดียวกัน: ช่องข้อมูล (fields) + ตารางผล (cols/rows) + หน้าพิมพ์ภาษาอังกฤษ */
+const DOC_META={STAB:{t:'Stability Test Report', th:'รายงานทดสอบความคงตัว', s:'Stability'}, PACK:{t:'Packaging Compatibility Test Report', th:'รายงานความเข้ากันได้กับบรรจุภัณฑ์', s:'Packaging'},
+  SDS:{t:'Safety Data Sheet (MSDS)', th:'เอกสารข้อมูลความปลอดภัย', s:'MSDS'}, IFRA:{t:'IFRA Certificate of Conformity', th:'ใบรับรองตามมาตรฐาน IFRA', s:'IFRA'}, SPEC:{t:'Specification Report', th:'รายงานข้อกำหนดผลิตภัณฑ์', s:'Spec'}};
+const DOC_ORDER=['STAB','PACK','SDS','IFRA','SPEC'];
+const RES_OPTS=[['Pass','ผ่าน','Pass'],['Fail','ไม่ผ่าน','Fail'],['Observe','เฝ้าระวัง','Observe']];
+/* field: k=คีย์, l=ชื่อในฟอร์ม, e=ชื่อในเอกสาร, t=text|date|long|select, o=[ค่า, ไทย, อังกฤษ], w=กว้างเต็มแถว */
+const DOC_GEN={
+  STAB:{fields:[{k:'productType',l:'ประเภทผลิตภัณฑ์ / เบส',e:'Product type / base',ph:'เช่น EDP 30 ml, Body lotion'},{k:'dosage',l:'% หัวน้ำหอมในผลิตภัณฑ์',e:'Fragrance dosage',ph:'เช่น 15%'},{k:'batch',l:'เลขล็อต (Batch No.)',e:'Batch / lot no.'},
+      {k:'mode',l:'ประเภทการทดสอบ',e:'Test basis',t:'select',o:[['test','เบสใหม่ ทดสอบจริง','Tested on this formulation'],['standard','เบสเดิม อ้างอิงเอกสารมาตรฐานของเบส','Standard base – based on the base standard stability data']]},
+      {k:'startDate',l:'วันเริ่มทดสอบ',e:'Test start date',t:'date'},{k:'endDate',l:'วันสิ้นสุดการทดสอบ',e:'Test end date',t:'date'},
+      {k:'method',l:'วิธีทดสอบ / มาตรฐานอ้างอิง',e:'Method / reference',t:'long',w:1}],
+    cols:[{k:'cond',l:'สภาวะ (Condition)',e:'Storage condition',w:1},{k:'dur',l:'ระยะเวลา',e:'Duration'},{k:'app',l:'ลักษณะ',e:'Appearance'},{k:'color',l:'สี',e:'Colour'},{k:'odour',l:'กลิ่น',e:'Odour'},{k:'ph',l:'pH',e:'pH'},{k:'visc',l:'ความหนืด',e:'Viscosity'},{k:'sep',l:'การแยกชั้น',e:'Separation'},{k:'res',l:'ผล',e:'Result',t:'select',o:RES_OPTS}],
+    concl:[{k:'conclusion',l:'สรุปผล',e:'Conclusion',t:'select',o:[['pass','ผ่าน คงตัวตลอดการทดสอบ','PASS – The product remained stable under all test conditions.'],['cond','ผ่านแบบมีเงื่อนไข','CONDITIONAL PASS – Stable with the remarks below.'],['fail','ไม่ผ่าน','FAIL – The product is not stable under the test conditions.']]},
+      {k:'shelf',l:'อายุการเก็บที่ประเมิน',e:'Estimated shelf life',ph:'เช่น 24 months'},{k:'remarks',l:'หมายเหตุ / ข้อสังเกต',e:'Remarks',t:'long',w:1},{k:'testedBy',l:'ผู้ทดสอบ',e:'Tested by'},{k:'approvedBy',l:'ผู้อนุมัติ',e:'Approved by'}]},
+  PACK:{fields:[{k:'productType',l:'ประเภทผลิตภัณฑ์',e:'Product type',ph:'เช่น EDP, Reed diffuser'},{k:'dosage',l:'% หัวน้ำหอมในผลิตภัณฑ์',e:'Fragrance dosage'},{k:'batch',l:'เลขล็อตผลิตภัณฑ์',e:'Product batch no.'},
+      {k:'container',l:'ภาชนะ',e:'Container',ph:'เช่น ขวดสเปรย์ 30 ml'},{k:'containerMat',l:'วัสดุภาชนะ',e:'Container material',ph:'Glass / PET / HDPE / PP / Aluminium'},{k:'closure',l:'ฝา / หัวปั๊ม / หัวสเปรย์',e:'Closure / pump / sprayer'},{k:'closureMat',l:'วัสดุฝา / หัวปั๊ม',e:'Closure material'},
+      {k:'liner',l:'ซีล / ปะเก็น / หลอดดูด',e:'Liner / gasket / dip tube'},{k:'supplier',l:'ผู้จำหน่ายบรรจุภัณฑ์',e:'Packaging supplier'},{k:'pkgLot',l:'เลขล็อตบรรจุภัณฑ์',e:'Packaging lot no.'},
+      {k:'startDate',l:'วันเริ่มทดสอบ',e:'Test start date',t:'date'},{k:'endDate',l:'วันสิ้นสุดการทดสอบ',e:'Test end date',t:'date'},{k:'method',l:'วิธีทดสอบ',e:'Method',t:'long',w:1}],
+    cols:[{k:'cond',l:'สภาวะ (Condition)',e:'Storage condition',w:1},{k:'dur',l:'ระยะเวลา',e:'Duration'},{k:'wloss',l:'น้ำหนักหาย %',e:'Weight loss (%)'},{k:'leak',l:'การรั่วซึม',e:'Leakage'},{k:'pkgchg',l:'บรรจุภัณฑ์เปลี่ยน',e:'Packaging change'},{k:'prodchg',l:'ผลิตภัณฑ์เปลี่ยน',e:'Product change'},{k:'func',l:'หัวปั๊ม/สเปรย์',e:'Pump / spray function'},{k:'label',l:'ฉลาก/งานพิมพ์',e:'Print / label'},{k:'res',l:'ผล',e:'Result',t:'select',o:RES_OPTS}],
+    concl:[{k:'conclusion',l:'สรุปผล',e:'Conclusion',t:'select',o:[['ok','เข้ากันได้','COMPATIBLE – No significant interaction between product and packaging.'],['cond','เข้ากันได้แบบมีเงื่อนไข','CONDITIONALLY COMPATIBLE – See remarks.'],['no','ไม่เข้ากัน','NOT COMPATIBLE – Packaging change required.']]},
+      {k:'remarks',l:'หมายเหตุ / ข้อแนะนำ',e:'Remarks',t:'long',w:1},{k:'testedBy',l:'ผู้ทดสอบ',e:'Tested by'},{k:'approvedBy',l:'ผู้อนุมัติ',e:'Approved by'}]},
+  SPEC:{fields:[{k:'formulaCode',l:'รหัสสูตร (Formula Code)',e:'Formula code'},{k:'description',l:'คำอธิบายผลิตภัณฑ์',e:'Description'},{k:'application',l:'การใช้งาน',e:'Application',w:1},{k:'dosage',l:'อัตราการใช้ที่แนะนำ',e:'Recommended dosage'}],
+    cols:[{k:'param',l:'รายการ (Parameter)',e:'Parameter',w:1},{k:'spec',l:'ข้อกำหนด (Specification)',e:'Specification',w:1},{k:'method',l:'วิธีทดสอบ',e:'Test method'},{k:'result',l:'ผลล็อตนี้',e:'Typical result'}],
+    concl:[{k:'storage',l:'การเก็บรักษา',e:'Storage conditions',t:'long',w:1},{k:'shelf',l:'อายุการเก็บ',e:'Shelf life'},{k:'packaging',l:'บรรจุภัณฑ์จัดส่ง',e:'Packaging'},{k:'regulatory',l:'ข้อมูลกฎระเบียบ',e:'Regulatory information',t:'long',w:1},{k:'approvedBy',l:'ผู้อนุมัติ',e:'Approved by'}]}};
+const STAB_ROWS=()=>[['4 °C ± 2 °C (Refrigerator)','12 weeks'],['25 °C ± 2 °C / 60% RH (Room temperature)','12 weeks'],['45 °C ± 2 °C (Oven)','12 weeks'],['Daylight / UV exposure','4 weeks'],['Freeze–thaw cycling (−10 °C ↔ 25 °C, 24 h each)','3 cycles']];
+function docGenDefaults(type, base, f){
+  const blank=G=>Object.fromEntries(G.cols.map(c=>[c.k,'']));
+  if(type==='STAB') return Object.assign(base, {productType:'', dosage:'', batch:'', mode:'test', startDate:'', endDate:'', method:'Accelerated and real-time stability test adapted from ISO/TR 18811:2018 (Guidelines on the stability testing of cosmetic products). Samples evaluated against a reference stored at 4 °C at each interval.',
+    rows:STAB_ROWS().map(([cond,dur])=>Object.assign(blank(DOC_GEN.STAB), {cond, dur, app:'No change', color:'No change', odour:'No change', sep:'No separation', res:'Pass'})), conclusion:'pass', shelf:'24 months', remarks:'', testedBy:'', approvedBy:''});
+  if(type==='PACK') return Object.assign(base, {productType:'', dosage:'', batch:'', container:'', containerMat:'', closure:'', closureMat:'', liner:'', supplier:'', pkgLot:'', startDate:'', endDate:'',
+    method:'Product filled in the final packaging and stored under the conditions below alongside a glass control sample. Weight loss, leakage, packaging and product changes, and pump/spray function evaluated at each interval.',
+    rows:STAB_ROWS().slice(0,3).concat([['Upside-down storage, 25 °C','4 weeks']]).map(([cond,dur])=>Object.assign(blank(DOC_GEN.PACK), {cond, dur, leak:'No leakage', pkgchg:'No change', prodchg:'No change', func:'Normal', label:'No change', res:'Pass'})),
+    conclusion:'ok', remarks:'', testedBy:'', approvedBy:''});
+  const m=f?metaOf(f.p):{};
+  return Object.assign(base, {formulaCode:m.sampleCode||'', description:'Fragrance oil (perfume compound)', application:'For blending into finished products', dosage:'',
+    rows:[['Appearance','Clear liquid','Visual'],['Colour','Colourless to pale yellow','Visual, against reference standard'],['Odour','Conforms to reference standard','Olfactory evaluation'],['Specific gravity @ 20 °C','','Densitometer'],['Refractive index @ 20 °C','','Refractometer'],['Flash point','','Closed cup'],['Solubility','','Visual, in ethanol']].map(([param,spec,method])=>({param, spec, method, result:''})),
+    storage:'Store in a cool, dry place away from direct sunlight and sources of heat, in tightly closed original containers. Avoid contact with air and moisture.', shelf:'24 months from date of manufacture', packaging:'',
+    regulatory:'Complies with IFRA Standards (51st Amendment) at the use levels stated in the corresponding IFRA Certificate of Conformity. Safety information: see the Safety Data Sheet (MSDS).', approvedBy:''});
+}
+function docGenField(f, v, inp){
+  const st=`${inp}${f.w?'':''}`, val=esc(v==null?'':v);
+  let i;
+  if(f.t==='select') i=`<select data-d="${f.k}" style="${st}">${f.o.map(([x,l])=>`<option value="${esc(x)}" ${String(v)===x?'selected':''}>${esc(l)}</option>`).join('')}</select>`;
+  else if(f.t==='long') i=`<textarea data-d="${f.k}" rows="2" maxlength="2000" style="${st};resize:vertical">${val}</textarea>`;
+  else i=`<input data-d="${f.k}" type="${f.t==='date'?'date':'text'}" value="${val}" maxlength="300" placeholder="${esc(f.ph||'')}">`;
+  return `<div class="field"${f.w?' style="grid-column:1/-1"':''}><label>${esc(f.l)}</label>${i}</div>`;
+}
+function docGenBody(type, d, inp){
+  const G=DOC_GEN[type], tableTitle=type==='SPEC'?'ข้อกำหนดทางกายภาพและเคมี':type==='PACK'?'ผลการทดสอบตามสภาวะ':'ผลการทดสอบตามสภาวะ (ประเมินเทียบตัวอย่างอ้างอิง)';
+  const cell=(c,r,i)=>c.t==='select'?`<select data-grow="${i}" data-gcol="${c.k}" style="${inp};width:auto">${c.o.map(([x,l])=>`<option value="${esc(x)}" ${r[c.k]===x?'selected':''}>${esc(l)}</option>`).join('')}</select>`
+    :`<input data-grow="${i}" data-gcol="${c.k}" value="${esc(r[c.k]||'')}" maxlength="200" style="${inp};${c.w?'min-width:190px':'min-width:86px'}">`;
+  const hint=type==='STAB'&&d.mode==='standard'?'<div class="msg ok" style="margin:8px 0">เบสเดิม: ใช้ผลจากเอกสาร Stability มาตรฐานของเบส ใส่ชื่อเบสในช่อง "ประเภทผลิตภัณฑ์ / เบส" และสรุปผลตามเอกสารมาตรฐาน</div>':'';
+  return `<div class="settings" style="margin-top:4px">${G.fields.map(f=>docGenField(f, d[f.k], inp)).join('')}</div>${hint}
+    <h3 style="font-size:14px;margin-top:16px">${tableTitle}</h3>
+    <div class="tablebox" style="margin-top:6px"><table><thead><tr>${G.cols.map(c=>`<th>${esc(c.l)}</th>`).join('')}<th></th></tr></thead><tbody>
+      ${d.rows.map((r,i)=>`<tr data-i="${i}">${G.cols.map(c=>`<td>${cell(c,r,i)}</td>`).join('')}<td><button class="x" type="button" data-growdel="${i}" aria-label="ลบแถว">×</button></td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="row" style="margin-top:8px"><button class="btn small" type="button" id="docRowAdd">เพิ่มแถว</button></div>
+    <h3 style="font-size:14px;margin-top:16px">${type==='SPEC'?'การเก็บรักษาและกฎระเบียบ':'สรุปผลและผู้รับผิดชอบ'}</h3>
+    <div class="settings" style="margin-top:4px">${G.concl.map(f=>docGenField(f, d[f.k], inp)).join('')}</div>`;
+}
+function docGenCollect(type, box){
+  const d=DOCF.d, G=DOC_GEN[type];
+  d.rows=[...box.querySelectorAll('tbody tr[data-i]')].map(tr=>Object.fromEntries(G.cols.map(c=>{ const el=tr.querySelector(`[data-gcol="${c.k}"]`); return [c.k, el?el.value.trim():'']; })));   /* แถวว่างยังอยู่ระหว่างแก้ไข ตัดทิ้งตอนตรวจก่อนพิมพ์/ออก */
+}
+function docGenValidate(type, d, draft){
+  const G=DOC_GEN[type]; d.rows=d.rows.filter(r=>G.cols.some(c=>c.t!=='select' && r[c.k]));
+  if(!d.rows.length) return type==='SPEC'?'ใส่ข้อกำหนดอย่างน้อย 1 รายการ':'ใส่ผลการทดสอบอย่างน้อย 1 สภาวะ';
+  if(draft) return null;   /* ฉบับร่าง: ดูหน้าตาได้แม้ยังกรอกไม่ครบ ตรวจครบถ้วนตอนออกเอกสารจริง */
+  if(type!=='SPEC' && d.mode!=='standard' && !d.startDate) return 'ใส่วันเริ่มทดสอบ';
+  if(type==='SPEC' && d.rows.some(r=>!r.spec)) return 'ใส่ข้อกำหนด (Specification) ให้ครบทุกรายการ หรือลบแถวที่ไม่ใช้';
+  return null;
+}
+function docGenHtml(type, d, meta){
+  const M=DOC_META[type], G=DOC_GEN[type], no=meta.docNo||'DRAFT', all=[...G.fields, ...G.concl];
+  const val=f=>{ const v=d[f.k]; if(f.t==='select'){ const o=f.o.find(x=>x[0]===v); return o?o[2]:v; } if(f.t==='date') return v?docDate(v):''; return v; };
+  const kv=fs=>`<table class="dkv">${fs.filter(f=>val(f)).map(f=>`<tr><td>${esc(f.e)}</td><td>${esc(val(f))}</td></tr>`).join('')}</table>`;
+  const F=keys=>keys.map(k=>all.find(f=>f.k===k)).filter(Boolean);
+  const sec=(n,t)=>`<div class="dsec">${n}. ${t}</div>`;
+  const ident=`<table class="dkv"><tr><td>Product name</td><td><b>${esc(d.product)}</b></td></tr>${d.customer?`<tr><td>Customer</td><td>${esc(d.customer)}</td></tr>`:''}${d.brand?`<tr><td>Brand</td><td>${esc(d.brand)}</td></tr>`:''}${d.sampleCode?`<tr><td>Sample code</td><td>${esc(d.sampleCode)}</td></tr>`:''}<tr><td>Manufacturer</td><td>${esc(COMPANY.name)}<br>${esc(COMPANY.address)}</td></tr></table>`;
+  const table=`<table class="dt"><thead><tr>${G.cols.map(c=>`<th>${esc(c.e)}</th>`).join('')}</tr></thead><tbody>${d.rows.map(r=>`<tr>${G.cols.map(c=>`<td${c.w?'':' style="text-align:center"'}>${esc(r[c.k]||'-')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+  const sign=(who)=>`<table class="dt" style="margin-top:26px"><tbody><tr>${who.map(([l,n])=>`<td style="width:${100/who.length}%;height:70px;vertical-align:bottom;text-align:center">${esc(n||'')}<br><span class="dsmall">${l}</span></td>`).join('')}</tr></tbody></table>`;
+  let body='';
+  if(type==='STAB') body=`${sec(1,'Product Information')}${ident}${sec(2,'Test Details')}${kv(F(['productType','dosage','batch','mode','startDate','endDate','method']))}${sec(3,'Results')}${table}
+    <p class="dsmall">Evaluation scale: “No change” = identical to the reference sample stored at 4 °C.</p>${sec(4,'Conclusion')}${kv(F(['conclusion','shelf','remarks']))}${sign([['Tested by',d.testedBy],['Approved by',d.approvedBy]])}`;
+  else if(type==='PACK') body=`${sec(1,'Product Information')}${ident}${kv(F(['productType','dosage','batch']))}${sec(2,'Packaging Components')}${kv(F(['container','containerMat','closure','closureMat','liner','supplier','pkgLot']))}
+    ${sec(3,'Test Conditions')}${kv(F(['startDate','endDate','method']))}${sec(4,'Results')}${table}${sec(5,'Conclusion')}${kv(F(['conclusion','remarks']))}${sign([['Tested by',d.testedBy],['Approved by',d.approvedBy]])}`;
+  else body=`${sec(1,'Product Information')}${ident}${kv(F(['formulaCode','description','application','dosage']))}${sec(2,'Physical and Chemical Specification')}${table}
+    ${sec(3,'Storage and Shelf Life')}${kv(F(['storage','shelf','packaging']))}${sec(4,'Regulatory Information')}${kv(F(['regulatory']))}${sign([['Quality Control',''],['Approved by',d.approvedBy]])}`;
+  return `${docHead(esc(M.t).toUpperCase(), `Document No. ${esc(no)}${meta.rev?` · Rev ${meta.rev}`:''} · Date ${docDate(d.date)}`)}${body}
+    <p class="dsmall" style="margin-top:22px">This report relates only to the sample(s) tested under the stated conditions. ${type==='SPEC'?'Specifications apply to each production batch; results outside the specification require Quality Control review before release.':'Results may not apply to other formulations, packaging components or storage conditions.'}</p>
+    <p class="dsmall dfoot">${esc(M.t)} No. ${esc(no)}${meta.rev?` · Rev ${meta.rev}`:''} · Issued by ${esc(shortName(meta.issuedBy||S.me.email))}</p>`;
+}
+/* แท็บย่อยของหมวด "เอกสารวัตถุดิบ": ออกเอกสาร (#docView) · ตรวจ IFRA / อย. (#chkView) */
+function docSubTabs(active){ return `<div class="pf-tabs" role="tablist" style="margin-bottom:14px"><button type="button" data-dtab="doc" class="${active==='doc'?'on':''}">ออกเอกสาร</button><button type="button" data-dtab="chk" class="${active==='chk'?'on':''}">ตรวจ IFRA / อย.</button></div>`; }
+['#docView','#chkView'].forEach(id=>$(id).addEventListener('click', e=>{ const b=e.target.closest('button[data-dtab]'); if(!b||b.dataset.dtab===S.view) return; showView(b.dataset.dtab); }));
 /* --- หน้าเอกสาร --- */
 function renderDocView(){
-  $('#docView').innerHTML = `<div class="bh"><h2>เอกสาร MSDS / IFRA และทะเบียนสูตร</h2><span class="hint">ออกเอกสารต่อสูตร เลขที่เอกสารรันอัตโนมัติ · พิมพ์หรือบันทึกเป็น PDF จากเบราว์เซอร์</span></div>
+  $('#docView').innerHTML = `${docSubTabs('doc')}<div class="bh"><h2>เอกสารวัตถุดิบและทะเบียนสูตร</h2><span class="hint">ออกเอกสาร 5 ประเภทต่อสูตร: Stability · Packaging Compatibility · MSDS · IFRA · Specification · เลขที่เอกสารรันอัตโนมัติ · พิมพ์หรือบันทึกเป็น PDF จากเบราว์เซอร์</span></div>
     ${DATA_PRIORITY_HELP}
     <div id="docBody"><div class="empty">กำลังโหลดทะเบียน…</div></div>`;
   DOCF=null;
@@ -2254,19 +2358,22 @@ function drawDocs(){
   const box=$('#docBody'); if(!box || !DOCS) return;
   const fs=docFormulas(), q=docQ.trim().toLowerCase(), canIssue=can('export');
   const byF=new Map(); DOCS.forEach(d=>{ if(d.status!=='issued') return; const k=d.formulaId; if(!byF.has(k)) byF.set(k,{}); const o=byF.get(k); if(!o[d.type]) o[d.type]=d; });
-  const rows=fs.map(f=>{ const m=metaOf(f.p), dd=byF.get(f.id)||{}; return {f, m, sds:dd.SDS, ifra:dd.IFRA}; })
-    .filter(r=>!q || r.f.p.name.toLowerCase().includes(q) || Object.values(r.m).some(v=>v.toLowerCase().includes(q)) || r.f.owner.includes(q) || (r.sds&&r.sds.docNo.toLowerCase().includes(q)) || (r.ifra&&r.ifra.docNo.toLowerCase().includes(q)))
+  const rows=fs.map(f=>{ const m=metaOf(f.p), dd=byF.get(f.id)||{}; return {f, m, dd}; })
+    .filter(r=>!q || r.f.p.name.toLowerCase().includes(q) || Object.values(r.m).some(v=>v.toLowerCase().includes(q)) || r.f.owner.includes(q) || Object.values(r.dd).some(x=>x.docNo.toLowerCase().includes(q)))
     .sort((a,b)=>(a.m.customer||'').localeCompare(b.m.customer||'','th') || a.f.p.name.localeCompare(b.f.p.name,'th'));
-  const dash='<span class="muted">–</span>', docCell=d=>d?`<div class="mono">${esc(d.docNo)}</div><div class="muted" style="font-size:11.5px">${fmtSeen(d.issuedAt)}</div>`:dash;
-  const stat=(k,v)=>`<div class="card" style="padding:12px 18px;min-width:150px"><div class="muted" style="font-size:12.5px">${k}</div><div style="font-family:var(--f-display);font-size:28px;font-weight:700;line-height:1.2">${v}</div></div>`;
+  const dash='<span class="muted">–</span>';
+  /* ป้ายเอกสาร 5 ประเภทต่อสูตร: มีแล้ว = กดเพื่อพิมพ์ฉบับล่าสุด · ยังไม่มี = กดเพื่อออก (ถ้ามีสิทธิ์) */
+  const pills=r=>DOC_ORDER.map(k=>{ const x=r.dd[k]; return x?`<button class="doc-pill on" type="button" data-docopen="${esc(x.id)}" title="${esc(DOC_META[k].t)} ${esc(x.docNo)} · ${fmtSeen(x.issuedAt)} · กดเพื่อพิมพ์">${DOC_META[k].s}</button>`
+    : `<button class="doc-pill" type="button" ${canIssue?`data-docnew="${k}"`:'disabled'} title="${esc(DOC_META[k].t)} · ยังไม่ออก${canIssue?' · กดเพื่อออก':''}">${DOC_META[k].s}</button>`; }).join('');
+  const stat=(k,v)=>`<div class="card" style="padding:12px 18px;min-width:130px"><div class="muted" style="font-size:12.5px">${k}</div><div style="font-family:var(--f-display);font-size:28px;font-weight:700;line-height:1.2">${v}</div></div>`;
   const issued=DOCS.filter(d=>d.status==='issued');
-  box.innerHTML = `<div class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:16px">${stat('สูตรในทะเบียน', fs.length)}${stat('มี SDS แล้ว', fs.filter(f=>byF.get(f.id)&&byF.get(f.id).SDS).length)}${stat('มี IFRA แล้ว', fs.filter(f=>byF.get(f.id)&&byF.get(f.id).IFRA).length)}${stat('เอกสารที่ออกทั้งหมด', issued.length)}</div>
+  box.innerHTML = `<div class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:16px">${stat('สูตรในทะเบียน', fs.length)}${DOC_ORDER.map(k=>stat('มี '+DOC_META[k].s+' แล้ว', fs.filter(f=>byF.get(f.id)&&byF.get(f.id)[k]).length)).join('')}${stat('เอกสารที่ออกทั้งหมด', issued.length)}</div>
     <div class="search"><input id="docQ" type="search" autocomplete="off" placeholder="ค้นหาชื่อสูตร ลูกค้า แบรนด์ รหัสตัวอย่าง หรือเลขที่เอกสาร…" value="${esc(docQ)}">
       <button class="btn small" type="button" id="docRefresh">รีเฟรช</button><button class="btn small" type="button" id="docXls">ดาวน์โหลดทะเบียน Excel</button></div>
-    <div class="tablebox"><table><thead><tr><th>ชื่อสูตร / ผลิตภัณฑ์</th><th>ลูกค้า</th><th>แบรนด์</th><th>รหัสตัวอย่าง</th>${isAdminRole()?'<th>เจ้าของสูตร</th>':''}<th>SDS ล่าสุด</th><th>IFRA ล่าสุด</th><th></th></tr></thead><tbody>
+    <div class="tablebox"><table><thead><tr><th>ชื่อสูตร / ผลิตภัณฑ์</th><th>ลูกค้า</th><th>แบรนด์</th><th>รหัสตัวอย่าง</th>${isAdminRole()?'<th>เจ้าของสูตร</th>':''}<th>เอกสาร <span class="muted" style="font-weight:400;font-size:11.5px">(สีเข้ม = ออกแล้ว กดเพื่อพิมพ์)</span></th>${canIssue?'<th>ออกฉบับใหม่</th>':''}</tr></thead><tbody>
       ${rows.map(r=>`<tr data-fid="${esc(r.f.id)}"><td><b>${esc(r.m.sampleName||r.f.p.name)}</b>${r.m.sampleName&&r.m.sampleName!==r.f.p.name?`<div class="muted" style="font-size:12px">${esc(r.f.p.name)}</div>`:''}</td><td>${esc(r.m.customer)||dash}</td><td>${esc(r.m.brand)||dash}</td><td class="mono">${esc(r.m.sampleCode)||dash}</td>${isAdminRole()?`<td class="muted" style="font-size:12.5px">${esc(shortName(r.f.owner))}</td>`:''}
-        <td>${docCell(r.sds)}</td><td>${docCell(r.ifra)}</td>
-        <td><div class="adm-actions">${canIssue?`<button class="btn small primary" type="button" data-docnew="SDS">ออก SDS</button><button class="btn small primary" type="button" data-docnew="IFRA">ออก IFRA</button>`:''}${r.sds?`<button class="btn small" type="button" data-docopen="${esc(r.sds.id)}">พิมพ์ SDS</button>`:''}${r.ifra?`<button class="btn small" type="button" data-docopen="${esc(r.ifra.id)}">พิมพ์ IFRA</button>`:''}</div></td></tr>`).join('')
+        <td><div class="doc-pills">${pills(r)}</div></td>
+        ${canIssue?`<td><select class="doc-new" aria-label="ออกเอกสารฉบับใหม่"><option value="">ออกเอกสาร…</option>${DOC_ORDER.map((k,i)=>`<option value="${k}">${i+1}. ${esc(DOC_META[k].t)}</option>`).join('')}</select></td>`:''}</tr>`).join('')
       || `<tr><td colspan="9" class="empty">${fs.length?'ไม่พบสูตรที่ตรงกับคำค้น':'ยังไม่มีสูตรในทะเบียน นำเข้าสูตรที่ Perfumer › คำนวณต้นทุนก่อน'}</td></tr>`}
     </tbody></table></div>
     <div id="docForm"></div>
@@ -2285,7 +2392,7 @@ function openDocForm(type, fid){
 function drawDocForm(){
   const box=$('#docForm'); if(!box) return; if(!DOCF){ box.innerHTML=''; return; }
   const {type, f, d}=DOCF, inp='border:1px solid var(--line-strong);border-radius:7px;padding:6px 9px;background:var(--input-bg);width:100%';
-  const head=`<div class="row" style="justify-content:space-between;align-items:flex-start"><div><h3 style="font-size:18px">${type==='SDS'?'ออก Safety Data Sheet (SDS / MSDS)':'ออก IFRA Certificate of Conformity'}</h3><div class="muted" style="font-size:13px">สูตร: ${esc(f.p.name)} · ${f.p.lines.length} รายการ</div></div><button class="btn small" type="button" id="docClose">ปิด</button></div>
+  const head=`<div class="row" style="justify-content:space-between;align-items:flex-start"><div><h3 style="font-size:18px">ออก ${esc(DOC_META[type].t)} <span class="muted" style="font-weight:400;font-size:14px">· ${esc(DOC_META[type].th)}</span></h3><div class="muted" style="font-size:13px">สูตร: ${esc(f.p.name)} · ${f.p.lines.length} รายการ</div></div><button class="btn small" type="button" id="docClose">ปิด</button></div>
     <div class="settings" style="margin-top:12px">
       <div class="field" style="grid-column:1/-1"><label>ชื่อผลิตภัณฑ์ (Product Name)</label><input data-d="product" value="${esc(d.product)}" maxlength="200"></div>
       <div class="field"><label>ลูกค้า (Customer)</label><input data-d="customer" value="${esc(d.customer)}" maxlength="200"></div>
@@ -2294,7 +2401,8 @@ function drawDocForm(){
       ${type==='IFRA'?`<div class="field" style="grid-column:1/-1"><label>ที่อยู่ลูกค้า (Customer Address)</label><input data-d="address" value="${esc(d.address)}" maxlength="300" placeholder="เช่น 58, 60, 62, 64, 66 Soi Saranakhom 10, Saranakhom Road, Si Kan, Don Mueang, Bangkok 10210, Thailand"></div>`:''}
     </div>`;
   let body='';
-  if(type==='IFRA'){
+  if(DOC_GEN[type]) body=docGenBody(type, d, inp);
+  else if(type==='IFRA'){
     const mx=d.maxByCat||{}, hasRules=CHK && CHK.rules.some(r=>r.source==='IFRA'), cov=docLevels(f.p).coverage;
     body=`<div class="field" style="margin-bottom:12px"><label>IFRA Amendment ที่อ้างอิง</label><input data-d="amendment" value="${esc(d.amendment)}" maxlength="120" style="${inp}"></div>
       ${helpBox('คำแนะนำการเลือกหมวดและระดับ IFRA', `<ul>
@@ -2422,23 +2530,25 @@ function sdsHtml(d, meta){
     ${sec(16,'Other Information')}${li(['This document is prepared for safety and operational purposes only.','It does not constitute a product quality guarantee.','Information is based on SDS data for key fragrance ingredients and international standards.',`Preparation date: ${docDate(d.date)}`,`Document No. ${esc(no)}${meta.rev?` · Rev ${meta.rev}`:''} · Prepared by ${esc(shortName(meta.issuedBy||S.me.email))}`])}<hr>`;
 }
 function showDoc(type, d, meta){
-  const html = type==='IFRA' ? ifraHtml(d, meta) : sdsHtml(d, meta);
+  const html = DOC_GEN[type] ? docGenHtml(type, d, meta) : type==='IFRA' ? ifraHtml(d, meta) : sdsHtml(d, meta);
   $('#docPrint').innerHTML = html + (meta.docNo ? '' : '<div class="ddraft">DRAFT</div>');
-  $('#docTitle').textContent = (type==='IFRA'?'IFRA Certificate':'Safety Data Sheet')+' · '+(meta.docNo||'ฉบับร่าง');
+  $('#docTitle').textContent = (DOC_META[type]?DOC_META[type].t:type)+' · '+(meta.docNo||'ฉบับร่าง');
   $('#docOverlay').hidden=false; document.body.classList.add('doc-open'); $('#docPrint').scrollTop=0;
 }
 function closeDoc(){ $('#docOverlay').hidden=true; document.body.classList.remove('doc-open'); }
 function collectDocForm(){
   const {type, d}=DOCF, box=$('#docForm');
   box.querySelectorAll('[data-d]').forEach(i=>{ d[i.dataset.d]=i.value.trim(); });
-  if(type==='IFRA'){ d.cats=[...box.querySelectorAll('tbody tr[data-i]')].map(tr=>({cls:tr.querySelector('[data-cat=cls]').value, level:tr.querySelector('[data-cat=level]').value.trim()})); }
+  if(DOC_GEN[type]) docGenCollect(type, box);
+  else if(type==='IFRA'){ d.cats=[...box.querySelectorAll('tbody tr[data-i]')].map(tr=>({cls:tr.querySelector('[data-cat=cls]').value, level:tr.querySelector('[data-cat=level]').value.trim()})); }
   else { d.hazards=[...box.querySelectorAll('[data-h]:checked')].map(i=>i.dataset.h);
     d.comp=[...box.querySelectorAll('tbody tr[data-i]')].map(tr=>({name:tr.querySelector('[data-comp=name]').value.trim(), cas:tr.querySelector('[data-comp=cas]').value.trim(), ec:tr.querySelector('[data-comp=ec]').value.trim()||'-', range:tr.querySelector('[data-comp=range]').value.trim()})).filter(r=>r.name);
     box.querySelectorAll('[data-prop]').forEach(i=>{ d.props[i.dataset.prop]=i.value.trim(); }); }
 }
-function validateDoc(){
+function validateDoc(draft){
   const {type, d}=DOCF;
   if(!d.product) return 'ใส่ชื่อผลิตภัณฑ์';
+  if(DOC_GEN[type]) return docGenValidate(type, d, draft);
   if(type==='IFRA'){
     if(!d.cats.length) return 'เพิ่มหมวดการใช้งานอย่างน้อย 1 หมวด';
     for(const c of d.cats){ const v=toNum(c.level); if(!(v>=0 && v<=100)) return `ใส่ระดับที่แนะนำของหมวด ${c.cls} (0–100)`; const m=(d.maxByCat||{})[c.cls]; if(m!=null && v>m+1e-9) return `หมวด ${c.cls}: ระดับ ${fmt(v,2)}% เกินค่าสูงสุดตามข้อกำหนด ${fmt(m,2)}%`; }
@@ -2448,8 +2558,8 @@ function validateDoc(){
 function docRegistryXlsx(){
   if(typeof XLSX==='undefined'){ toast('โหลดตัวเขียน Excel ไม่สำเร็จ'); return; }
   const byF=new Map(); DOCS.forEach(d=>{ if(d.status!=='issued') return; const o=byF.get(d.formulaId)||{}; if(!o[d.type]) o[d.type]=d; byF.set(d.formulaId,o); });
-  const a1=[['ชื่อสูตร','ชื่อผลิตภัณฑ์ (Sample Name)','ลูกค้า','แบรนด์','รหัสตัวอย่าง','เจ้าของสูตร','จำนวนรายการ','SDS เลขที่','SDS ออกเมื่อ','IFRA เลขที่','IFRA ออกเมื่อ']];
-  docFormulas().forEach(f=>{ const m=metaOf(f.p), o=byF.get(f.id)||{}; a1.push([f.p.name, m.sampleName, m.customer, m.brand, m.sampleCode, f.owner, f.p.lines.length, o.SDS?o.SDS.docNo:'', o.SDS?o.SDS.issuedAt:'', o.IFRA?o.IFRA.docNo:'', o.IFRA?o.IFRA.issuedAt:'']); });
+  const a1=[['ชื่อสูตร','ชื่อผลิตภัณฑ์ (Sample Name)','ลูกค้า','แบรนด์','รหัสตัวอย่าง','เจ้าของสูตร','จำนวนรายการ', ...DOC_ORDER.flatMap(k=>[DOC_META[k].s+' เลขที่', DOC_META[k].s+' ออกเมื่อ'])]];
+  docFormulas().forEach(f=>{ const m=metaOf(f.p), o=byF.get(f.id)||{}; a1.push([f.p.name, m.sampleName, m.customer, m.brand, m.sampleCode, f.owner, f.p.lines.length, ...DOC_ORDER.flatMap(k=>[o[k]?o[k].docNo:'', o[k]?o[k].issuedAt:''])]); });
   const a2=[['เลขที่','ประเภท','ผลิตภัณฑ์','ลูกค้า','แบรนด์','เจ้าของสูตร','ออกเมื่อ','ออกโดย','สถานะ']].concat(DOCS.map(d=>[d.docNo,d.type,d.product,d.customer,d.brand,d.owner,d.issuedAt,d.issuedBy,d.status]));
   const wb=XLSX.utils.book_new(); const w1=XLSX.utils.aoa_to_sheet(a1); w1['!cols']=a1[0].map(()=>({wch:22})); const w2=XLSX.utils.aoa_to_sheet(a2); w2['!cols']=a2[0].map(()=>({wch:22}));
   XLSX.utils.book_append_sheet(wb,w1,'ทะเบียนสูตร'); XLSX.utils.book_append_sheet(wb,w2,'ประวัติเอกสาร');
@@ -2459,7 +2569,10 @@ function docRegistryXlsx(){
 const docv=$('#docView');
 docv.addEventListener('input', e=>{ if(e.target.id==='docQ'){ docQ=e.target.value; const keep=DOCF; drawDocs(); DOCF=keep; drawDocForm(); } });
 docv.addEventListener('change', e=>{
-  const t=e.target; if(!DOCF) return;
+  const t=e.target;
+  if(t.classList.contains('doc-new')){ const k=t.value; t.value=''; if(k) openDocForm(k, t.closest('tr').dataset.fid); return; }
+  if(!DOCF) return;
+  if(t.dataset.d==='mode'){ collectDocForm(); drawDocForm(); return; }
   if(t.dataset.cat==='cls'){ collectDocForm(); drawDocForm(); }
   if(t.dataset.h || t.dataset.prop==='flash'){ collectDocForm(); drawDocForm(); }
   if(t.id==='docPreset' && t.value!==''){ collectDocForm(); IFRA_PRESETS[+t.value][1].forEach(k=>{ if(!DOCF.d.cats.some(c=>c.cls===k)) DOCF.d.cats.push({cls:k, level:''}); }); drawDocForm(); }
@@ -2477,10 +2590,12 @@ docv.addEventListener('click', async e=>{
   if(t.id==='docCatAdd'){ collectDocForm(); DOCF.d.cats.push({cls:'4', level:''}); drawDocForm(); return; }
   if(t.dataset.catdel!=null){ collectDocForm(); DOCF.d.cats.splice(+t.dataset.catdel,1); drawDocForm(); return; }
   if(t.id==='docCatFill'){ collectDocForm(); DOCF.d.cats.forEach(c=>{ const m=DOCF.d.maxByCat[c.cls]; c.level = m==null ? c.level : String(Math.floor(m*100)/100); }); drawDocForm(); return; }
+  if(t.id==='docRowAdd'){ collectDocForm(); DOCF.d.rows.push(Object.fromEntries(DOC_GEN[DOCF.type].cols.map(c=>[c.k, c.t==='select'?c.o[0][0]:'']))); drawDocForm(); return; }
+  if(t.dataset.growdel!=null){ collectDocForm(); DOCF.d.rows.splice(+t.dataset.growdel,1); drawDocForm(); return; }
   if(t.id==='docCompAdd'){ collectDocForm(); DOCF.d.comp.push({name:'', cas:'', ec:'-', range:'0.1-1'}); drawDocForm(); return; }
   if(t.dataset.compdel!=null){ collectDocForm(); DOCF.d.comp.splice(+t.dataset.compdel,1); drawDocForm(); return; }
   if(t.id==='docCompReset'){ collectDocForm(); DOCF.d.comp=docComposition(DOCF.f.p); DOCF.d.coverage=docLevels(DOCF.f.p).coverage; drawDocForm(); return; }
-  if(t.id==='docPreview'){ collectDocForm(); const err=validateDoc(); if(err){ toast(err); return; } showDoc(DOCF.type, DOCF.d, {}); return; }
+  if(t.id==='docPreview'){ collectDocForm(); const err=validateDoc(true); if(err){ toast(err); return; } showDoc(DOCF.type, DOCF.d, {}); return; }
   if(t.id==='docIssue'){
     collectDocForm(); const err=validateDoc(); if(err){ toast(err); return; }
     if(t.dataset.confirm!=='1'){ t.dataset.confirm='1'; t.textContent='กดอีกครั้งเพื่อยืนยันออกเอกสาร'; setTimeout(()=>{ if(t.isConnected){ t.dataset.confirm=''; t.textContent='ออกเอกสารและพิมพ์'; } },4000); return; }

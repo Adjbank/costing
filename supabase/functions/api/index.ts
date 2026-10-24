@@ -1768,6 +1768,99 @@ async function importBotanicalImage(ctx: Ctx, name: string, b64: string) {
   return { name, bytes: bytes.length };
 }
 
+/* ===== คลังวัตถุดิบและบรรจุภัณฑ์ของแผนก R&D (RM = วัตถุดิบ · PM = บรรจุภัณฑ์) =====
+   คงเหลือ = ผลรวมรายการเคลื่อนไหว (รับเข้า +, เบิก −, ปรับยอด ±) · ต้นทุนต่อหน่วยเห็นเฉพาะผู้มีสิทธิ์ editPrices */
+const STK_VIEW = RD_VIEW, STK_EDIT = ["research", "pd", "perfumer"], STK_KINDS: Record<string, number> = { rm: 1, pm: 1 }, STK_TX: Record<string, number> = { in: 1, out: 1, adjust: 1 };
+const stkItemOut = (r: Any, canPrice: boolean) => ({ id: String(r.id), code: String(r.code), name: String(r.name), kind: String(r.kind), unit: String(r.unit || ""), supplier: String(r.supplier || ""), location: String(r.location || ""),
+  minQty: r.min_qty === null || r.min_qty === undefined ? null : Number(r.min_qty), unitCost: canPrice && r.unit_cost !== null && r.unit_cost !== undefined ? Number(r.unit_cost) : null, note: String(r.note || ""), active: !!r.active,
+  balance: Math.round(Number(r.bal || 0) * 10000) / 10000, lastAt: iso(r.last_at), updatedAt: iso(r.updated_at), updatedBy: String(r.updated_by || "") });
+const stkTxOut = (r: Any) => ({ id: String(r.id), itemId: String(r.item_id), code: String(r.code || ""), name: String(r.name || ""), unit: String(r.unit || ""), kind: String(r.kind), qty: Number(r.qty), ref: String(r.ref || ""), lot: String(r.lot || ""), expiry: String(r.expiry || ""),
+  note: String(r.note || ""), at: iso(r.at), by: String(r.created_by || "") });
+async function stkBalance(db: Db, id: string) { return Number((await db`select coalesce(sum(qty), 0) as b from costing.rdstock_tx where item_id = ${id}`)[0].b); }
+async function stkOne(db: Db, id: string, canPrice: boolean) {
+  const r = (await db`select i.*, coalesce(sum(t.qty), 0) as bal, max(t.at) as last_at from costing.rdstock_items i left join costing.rdstock_tx t on t.item_id = i.id where i.id = ${id} group by i.id`)[0];
+  return r ? stkItemOut(r, canPrice) : null;
+}
+async function listRdStock(ctx: Ctx) {
+  const m = await needAny(ctx, STK_VIEW), db = ctx.db, canPrice = hasPerm(m, "editPrices");
+  const rows = await db`select i.*, coalesce(sum(t.qty), 0) as bal, max(t.at) as last_at from costing.rdstock_items i left join costing.rdstock_tx t on t.item_id = i.id group by i.id order by i.kind, i.code`;
+  return { items: rows.map((r: Any) => stkItemOut(r, canPrice)), canEdit: STK_EDIT.some((p) => hasPerm(m, p)), canPrice };
+}
+async function listRdStockTx(ctx: Ctx, itemId?: string, limit?: number) {
+  await needAny(ctx, STK_VIEW); const n = Math.min(Math.max(Number(limit) || 200, 1), 1000);
+  const rows = itemId
+    ? await ctx.db`select t.*, i.code, i.name, i.unit from costing.rdstock_tx t join costing.rdstock_items i on i.id = t.item_id where t.item_id = ${String(itemId)} order by t.at desc, t.created_at desc limit ${n}`
+    : await ctx.db`select t.*, i.code, i.name, i.unit from costing.rdstock_tx t join costing.rdstock_items i on i.id = t.item_id order by t.at desc, t.created_at desc limit ${n}`;
+  return rows.map(stkTxOut);
+}
+function stkTxRow(db: Db, itemId: string, delta: number, kind: string, t: Any, email: string) {
+  const at = t && t.date && !isNaN(new Date(String(t.date)).getTime()) ? new Date(String(t.date)) : new Date();
+  return db`insert into costing.rdstock_tx (id, item_id, kind, qty, ref, lot, expiry, note, at, created_at, created_by) values (${"t" + uuid(12)}, ${itemId}, ${kind}, ${delta}, ${str(t && t.ref, 80)}, ${str(t && t.lot, 40)}, ${str(t && t.expiry, 10)}, ${str(t && t.note, 300)}, ${at}, now(), ${email})`;
+}
+async function saveRdStockItem(ctx: Ctx, it: Any) {
+  return await locked(ctx, async (c) => {
+    const m = await needAny(c, STK_EDIT), db = c.db, canPrice = hasPerm(m, "editPrices"); it = it || {};
+    const code = str(it.code, 40), name = str(it.name, 200), kind = STK_KINDS[it.kind] ? String(it.kind) : "";
+    if (!code || !name) throw new Error("ใส่รหัสและชื่อรายการ"); if (!kind) throw new Error("เลือกประเภท: วัตถุดิบ (RM) หรือบรรจุภัณฑ์ (PM)");
+    const minQ = numOrNull(it.minQty), cost = numOrNull(it.unitCost), openQ = numOrNull(it.openingQty);
+    if ((minQ !== null && minQ < 0) || (cost !== null && cost < 0) || (openQ !== null && openQ < 0)) throw new Error("ตัวเลขต้องไม่ติดลบ");
+    const ex = it.id ? (await db`select * from costing.rdstock_items where id = ${String(it.id)}`)[0] : null; if (it.id && !ex) throw new Error("ไม่พบรายการนี้");
+    const dup = (await db`select id from costing.rdstock_items where upper(code) = ${code.toUpperCase()}`)[0]; if (dup && (!ex || String(dup.id) !== String(ex.id))) throw new Error("รหัส " + code + " มีอยู่แล้วในคลัง");
+    const id = ex ? String(ex.id) : "stk-" + uuid(10), now = new Date();
+    const row: Any = { code, name, kind, unit: str(it.unit, 20), supplier: str(it.supplier, 200), location: str(it.location, 80), min_qty: minQ, note: str(it.note, 500), active: it.active === undefined ? true : !!it.active, updated_at: now, updated_by: m.email };
+    if (canPrice) row.unit_cost = cost;   /* คนที่ไม่มีสิทธิ์ราคา แก้รายการได้แต่ไม่แตะต้นทุน */
+    if (ex) await db`update costing.rdstock_items set ${db(row, ...Object.keys(row))} where id = ${id}`;
+    else { await db`insert into costing.rdstock_items ${db({ id, ...row, unit_cost: canPrice ? cost : null, created_at: now, created_by: m.email })}`; if (openQ && openQ > 0) await stkTxRow(db, id, openQ, "in", { ref: "ยกมา", note: "ยอดยกมาตอนสร้างรายการ" }, m.email); }
+    await log(db, m.email, ex ? "saveRdStockItem" : "newRdStockItem", code + " · " + name);
+    return (await stkOne(db, id, canPrice))!;
+  });
+}
+async function deleteRdStockItem(ctx: Ctx, id: string) {
+  return await locked(ctx, async (c) => {
+    const m = await need(c, "manageUsers"), db = c.db;
+    const ex = (await db`select * from costing.rdstock_items where id = ${String(id || "")}`)[0]; if (!ex) throw new Error("ไม่พบรายการนี้");
+    if ((await db`select 1 from costing.rdstock_tx where item_id = ${String(ex.id)} limit 1`).length) throw new Error("รายการนี้มีความเคลื่อนไหวแล้ว ให้ปิดใช้งานแทนการลบ");
+    await db`delete from costing.rdstock_items where id = ${String(ex.id)}`; await log(db, m.email, "deleteRdStockItem", String(ex.code));
+    return { ok: true };
+  });
+}
+/** รับเข้า (in) · เบิกใช้ (out) · ปรับยอดตามนับจริง (adjust: countTo) · เบิกเกินคงเหลือไม่ได้ */
+async function addRdStockTx(ctx: Ctx, itemId: string, t: Any) {
+  return await locked(ctx, async (c) => {
+    const m = await needAny(c, STK_EDIT), db = c.db, canPrice = hasPerm(m, "editPrices"); t = t || {};
+    const it = (await db`select * from costing.rdstock_items where id = ${String(itemId || "")}`)[0]; if (!it) throw new Error("ไม่พบรายการนี้");
+    const kind = STK_TX[t.kind] ? String(t.kind) : ""; if (!kind) throw new Error("ประเภทรายการไม่ถูกต้อง");
+    const bal = await stkBalance(db, String(it.id)); let delta = 0;
+    if (kind === "adjust") { const to = numOrNull(t.countTo); if (to === null || to < 0) throw new Error("ใส่จำนวนที่นับได้จริง"); delta = Math.round((to - bal) * 10000) / 10000; if (delta === 0) throw new Error("ยอดนับตรงกับคงเหลือในระบบ ไม่ต้องปรับ"); }
+    else { const q = numOrNull(t.qty); if (q === null || !(q > 0)) throw new Error("ใส่จำนวนมากกว่า 0"); delta = kind === "in" ? q : -q; if (kind === "out" && q > bal + 1e-9) throw new Error(`คงเหลือไม่พอ (มี ${Math.round(bal * 10000) / 10000} ${it.unit || ""})`); }
+    if (kind === "out" && !str(t.ref, 80) && !str(t.note, 300)) throw new Error("ระบุเลขโครงการ/สูตร หรือหมายเหตุการเบิก");
+    await stkTxRow(db, String(it.id), delta, kind, t, m.email);
+    await log(db, m.email, "rdStock." + kind, String(it.code) + " " + (delta > 0 ? "+" : "") + delta + " " + str(t.ref, 40));
+    return await stkOne(db, String(it.id), canPrice);
+  });
+}
+/** นำเข้ารายการ + ยอดคงเหลือจาก Excel: อิงรหัส (ซ้ำ = แก้ข้อมูล, มียอดนับ = ปรับยอดให้ตรง) */
+async function importRdStock(ctx: Ctx, rows: Any) {
+  return await locked(ctx, async (c) => {
+    const m = await needAny(c, STK_EDIT), db = c.db, canPrice = hasPerm(m, "editPrices");
+    if (!Array.isArray(rows) || !rows.length) throw new Error("ไม่พบแถวข้อมูล"); if (rows.length > 600) throw new Error("นำเข้าได้ครั้งละไม่เกิน 600 แถว");
+    const out = { created: 0, updated: 0, adjusted: 0, skipped: 0, errors: [] as string[] };
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i] || {}, code = str(r.code, 40), name = str(r.name, 200), kind = STK_KINDS[String(r.kind || "").toLowerCase()] ? String(r.kind).toLowerCase() : "";
+      if (!code || !name || !kind) { out.skipped++; if (out.errors.length < 10) out.errors.push(`แถว ${i + 1}: ต้องมีรหัส ชื่อ และประเภท RM/PM`); continue; }
+      const qty = numOrNull(r.qty), minQ = numOrNull(r.minQty), cost = numOrNull(r.unitCost); if ((qty !== null && qty < 0) || (minQ !== null && minQ < 0) || (cost !== null && cost < 0)) { out.skipped++; if (out.errors.length < 10) out.errors.push(`แถว ${i + 1} (${code}): ตัวเลขติดลบ`); continue; }
+      const ex = (await db`select * from costing.rdstock_items where upper(code) = ${code.toUpperCase()}`)[0], now = new Date();
+      const fields: Any = { name, kind, unit: str(r.unit, 20), supplier: str(r.supplier, 200), location: str(r.location, 80), min_qty: minQ, note: str(r.note, 500), updated_at: now, updated_by: m.email };
+      let id: string;
+      if (ex) { id = String(ex.id); if (canPrice && cost !== null) fields.unit_cost = cost; await db`update costing.rdstock_items set ${db(fields, ...Object.keys(fields))} where id = ${id}`; out.updated++; }
+      else { id = "stk-" + uuid(10); await db`insert into costing.rdstock_items ${db({ id, code, ...fields, unit_cost: canPrice ? cost : null, active: true, created_at: now, created_by: m.email })}`; out.created++; }
+      if (qty !== null) { const bal = await stkBalance(db, id), d = Math.round((qty - bal) * 10000) / 10000; if (d !== 0) { await stkTxRow(db, id, d, ex ? "adjust" : "in", { ref: ex ? "นำเข้าจากไฟล์" : "ยกมา", note: ex ? `ปรับยอดจาก ${bal} เป็น ${qty} (นำเข้า Excel)` : "ยอดยกมาจากไฟล์นำเข้า" }, m.email); if (ex) out.adjusted++; } }
+    }
+    await log(db, m.email, "importRdStock", `created ${out.created} updated ${out.updated} adjusted ${out.adjusted} skipped ${out.skipped}`);
+    return out;
+  });
+}
+
 /* ===== ตารางฟังก์ชันที่หน้าเว็บเรียกได้ ===== */
 const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   bootstrap, requestAccess, savePrices, resetPrices, saveExport, adminData, setUser, removeUser, declineRequest, saveAccess, createRole, updateRole, deleteRole,
@@ -1777,6 +1870,7 @@ const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   pwLogin, setMyPassword, pwLogout, resetUserPassword,
   listCustomers, saveCustomer, listProjects, getProject, saveProject, setStage, raCheck, issueProjectDoc, listSamples, saveSample, sendSample, deleteSample, evalSummary, importRd,
   listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases,
+  listRdStock, listRdStockTx, saveRdStockItem, deleteRdStockItem, addRdStockTx, importRdStock,
   listBotanicals, getBotanicalPrices, saveBotanicalPrice, saveBotanical, deleteBotanical, uploadBotanicalImage, listBotanicalExtractions, saveBotanicalExtraction, deleteBotanicalExtraction, importBotanicals, importBotanicalImage,
   importAll, importRmFile, finishMigration,
 };

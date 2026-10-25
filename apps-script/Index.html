@@ -1516,7 +1516,7 @@ function calcBudgetHtml(p,c){
     </dl></div>`;
 }
 /* ===== กระบวนการออกแบบ: โปรเจค · ตัวเลือกวัตถุดิบ · Feedback / Version ===== */
-function calcNewProduct(){ const p={id:newId(),name:'งานออกแบบ '+(state.products.length+1),unit:'pct',src:'ออกแบบในระบบ',...defaults(),ver:1,fb:[],versions:[],lines:[{code:'',nameIn:'',amt:''}]}; state.products.push(p); state.activeId=p.id; return p; }
+function calcNewProduct(){ const p={id:newId(),name:'งานออกแบบ '+(state.products.length+1),unit:'pct',src:'ออกแบบในระบบ',...defaults(),ver:1,lines:[{code:'',nameIn:'',amt:''}]}; state.products.push(p); state.activeId=p.id; return p; }
 function renderDesignPanel(){
   const el=$('#designPanel'); if(!el) return; const p=active();
   if(!p){ el.innerHTML=`<div class="empty" style="padding:22px 16px">ยังไม่มีงานออกแบบ · กด "+ งานออกแบบใหม่" หรือเลือก PDR / บรีฟด้านล่างเพื่อเริ่ม</div>${calcDesignHtml({design:{},link:{},meta:{},name:''})}`; return; }
@@ -1535,22 +1535,41 @@ function calcAddLine(p, code, name){
   toast(`เพิ่ม ${name} ใน "${p.name}" แล้ว · ใส่ % ในตาราง`);
   const ins=document.querySelectorAll('#editor input.amt'); const i=blank>=0?blank:p.lines.length-1; if(ins[i]) ins[i].focus();
 }
-/* Feedback และ Version */
-const verStamp=()=>new Date().toISOString();
+/* Feedback และ Version: เก็บบนเซิร์ฟเวอร์ (ตาราง formula_versions / formula_feedback) ทีมเห็นร่วมกัน */
+const FH={};  /* formulaId → {versions, feedback, loading, err} */
 function verLabel(iso){ try{ return new Date(iso).toLocaleString('th-TH',{day:'numeric',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }
+const fhCanWrite=()=>can('calc')||can('perfumer');
+async function fhLoad(p, force){
+  if(!p||p.sample) return; const h=FH[p.id]; if(h&&(h.loading||(h.versions&&!force))) return;
+  FH[p.id]={loading:true, versions:h&&h.versions||null, feedback:h&&h.feedback||null};
+  try{ await fhMigrate(p); const d=await api('listFormulaHistory', p.id); FH[p.id]={versions:d.versions||[], feedback:d.feedback||[]}; }
+  catch(e){ FH[p.id]={versions:[], feedback:[], err:errText(e)}; }
+  if(active()&&active().id===p.id) renderVersionPanel(); renderOverview();
+}
+/* ย้ายประวัติที่เคยเก็บในสูตร (p.fb / p.versions) ขึ้นเซิร์ฟเวอร์ครั้งเดียว แล้วลบออกจากสูตร */
+async function fhMigrate(p){
+  const fb=Array.isArray(p.fb)?p.fb:[], vs=Array.isArray(p.versions)?p.versions:[]; if(!fb.length&&!vs.length) return;
+  for(const v of vs){ for(const f of (v.fb||[])) if(f&&f.text) await api('addFormulaFeedback', p.id, {ver:v.v, kind:f.kind||'note', text:f.text}); await api('snapshotFormulaVersion', p.id, {ver:v.v, name:v.name||p.name, lines:v.lines||[], design:v.design||{}, total:v.total}); }
+  for(const f of fb) if(f&&f.text) await api('addFormulaFeedback', p.id, {ver:p.ver||1, kind:f.kind||'note', text:f.text});
+  delete p.fb; delete p.versions; save();
+}
 function renderVersionPanel(){
   const el=$('#versionPanel'); if(!el) return; const p=active();
   if(!p){ el.innerHTML=''; return; }
-  const c=compute(p), ver=p.ver||1, fb=Array.isArray(p.fb)?p.fb:[], vs=Array.isArray(p.versions)?p.versions:[];
+  if(p.sample){ el.innerHTML='<div class="muted" style="font-size:13px;margin-top:10px">สูตรตัวอย่างไม่มีประวัติเวอร์ชัน · เริ่มงานออกแบบใหม่ในขั้นตอนที่ 1</div>'; return; }
+  const h=FH[p.id]; if(!h||(!h.versions&&!h.err)){ fhLoad(p); el.innerHTML='<div class="muted" style="font-size:13px;margin-top:10px">กำลังโหลดประวัติ…</div>'; return; }
+  const c=compute(p), ver=p.ver||1, fbAll=h.feedback||[], fb=fbAll.filter(f=>Number(f.ver)===ver), vs=h.versions||[], w=fhCanWrite();
   const L=p.link||{}, X=L.projectId&&typeof calcProj==='function'?calcProj(L.projectId):null;
+  const kindTxt={approve:'ลูกค้าอนุมัติ',revise:'ขอแก้ไข',reject:'ไม่ผ่าน',note:'บันทึก'}, kindCls={approve:'ok',revise:'warn',reject:'bad',note:'info'};
   el.innerHTML=`<div class="ver-wrap">
-    <div class="card ver-cur"><div class="ver-h"><div><span class="vbadge big">v${ver}</span> <b>${esc(p.name)}</b>${X?` <span class="muted">· ${esc(X.pdrNo||'')} ${esc(X.brand||X.company||'')}</span>`:''}</div><span class="muted" style="font-size:12.5px">${p.lines.filter(l=>l.code||l.nameIn).length} วัตถุดิบ · ${c.complete?'':'≥ '}${fmt(c.total,0)} บาท/กก.</span></div>
+    ${h.err?`<div class="msg bad">${esc(h.err)}</div>`:''}
+    <div class="card ver-cur"><div class="ver-h"><div><span class="vbadge big">v${ver}</span> <b>${esc(p.name)}</b>${X?` <span class="muted">· ${esc(X.pdrNo||'')} ${esc(X.brand||X.company||'')}</span>`:''}</div><span class="muted" style="font-size:12.5px">${p.lines.filter(l=>l.code||l.nameIn).length} วัตถุดิบ · ${c.complete?'':'≥ '}${fmt(c.total,0)} บาท/กก.${h.loading?' · กำลังซิงก์…':''}</span></div>
       <h4>Feedback จากลูกค้า (Version นี้)</h4>
-      <div class="fb-list">${fb.length?fb.map((f,i)=>`<div class="fb-item"><div class="fb-meta">${esc(verLabel(f.at))}${f.by?' · '+esc(shortName(f.by)):''}${f.kind?` · <span class="chip ${f.kind==='approve'?'ok':f.kind==='reject'?'bad':'warn'}">${{approve:'ลูกค้าอนุมัติ',revise:'ขอแก้ไข',reject:'ไม่ผ่าน',note:'บันทึก'}[f.kind]||esc(f.kind)}</span>`:''}<button type="button" class="x" data-fbdel="${i}" aria-label="ลบ">×</button></div><div class="fb-text">${esc(f.text)}</div></div>`).join(''):'<div class="muted" style="font-size:13px">ยังไม่มี Feedback · บันทึกสิ่งที่ลูกค้าตอบกลับหลังทดลองกลิ่น เช่น อยากให้หวานน้อยลง ติดทนขึ้น</div>'}</div>
-      <div class="fb-form"><select id="fbKind" aria-label="ประเภท"><option value="note">บันทึก</option><option value="revise">ขอแก้ไข</option><option value="approve">ลูกค้าอนุมัติ</option><option value="reject">ไม่ผ่าน</option></select><textarea id="fbText" rows="2" placeholder="รายละเอียด Feedback จากลูกค้า…"></textarea><button class="btn small" type="button" id="fbAdd">บันทึก Feedback</button></div>
-      <div class="ver-act"><button class="btn primary" type="button" id="verNext">สร้าง Version ถัดไป (v${ver+1})</button><span class="muted" style="font-size:12.5px">เก็บสูตรและ Feedback ของ v${ver} ไว้ในประวัติ แล้วแก้สูตรต่อเป็น v${ver+1}</span></div>
+      <div class="fb-list">${fb.length?fb.map(f=>`<div class="fb-item"><div class="fb-meta">${esc(verLabel(f.at))}${f.by?' · '+esc(shortName(f.by)):''} · <span class="chip ${kindCls[f.kind]||'info'}">${kindTxt[f.kind]||esc(f.kind)}</span>${w?`<button type="button" class="x" data-fbdel="${esc(f.id)}" aria-label="ลบ">×</button>`:''}</div><div class="fb-text">${esc(f.text)}</div></div>`).join(''):'<div class="muted" style="font-size:13px">ยังไม่มี Feedback · บันทึกสิ่งที่ลูกค้าตอบกลับหลังทดลองกลิ่น เช่น อยากให้หวานน้อยลง ติดทนขึ้น</div>'}</div>
+      ${w?`<div class="fb-form"><select id="fbKind" aria-label="ประเภท"><option value="note">บันทึก</option><option value="revise">ขอแก้ไข</option><option value="approve">ลูกค้าอนุมัติ</option><option value="reject">ไม่ผ่าน</option></select><textarea id="fbText" rows="2" placeholder="รายละเอียด Feedback จากลูกค้า…"></textarea><button class="btn small" type="button" id="fbAdd">บันทึก Feedback</button></div>`:''}
+      ${can('calc')?`<div class="ver-act"><button class="btn primary" type="button" id="verNext">สร้าง Version ถัดไป (v${ver+1})</button><span class="muted" style="font-size:12.5px">เก็บสูตรและ Feedback ของ v${ver} ไว้ในประวัติบนเซิร์ฟเวอร์ แล้วแก้สูตรต่อเป็น v${ver+1}</span></div>`:''}
     </div>
-    ${vs.length?`<div class="card ver-hist"><h4>ประวัติ Version</h4>${vs.slice().reverse().map(v=>`<div class="ver-row"><div class="ver-rh"><span class="vbadge">v${v.v}</span><span class="muted">${esc(verLabel(v.at))} · ${(v.lines||[]).filter(l=>l.code||l.nameIn).length} วัตถุดิบ · ${v.total!=null?fmt(v.total,0)+' บาท/กก.':''}</span><span class="ver-btns"><button class="btn small" type="button" data-vcopy="${v.v}">คัดลอกเป็นงานใหม่</button><button class="btn small" type="button" data-vrestore="${v.v}">ใช้สูตรนี้ใน v${ver}</button></span></div>${(v.fb||[]).length?`<ul class="ver-fb">${v.fb.map(f=>`<li>${f.kind&&f.kind!=='note'?`<b>${{approve:'อนุมัติ',revise:'ขอแก้ไข',reject:'ไม่ผ่าน'}[f.kind]||f.kind}:</b> `:''}${esc(f.text)}</li>`).join('')}</ul>`:''}</div>`).join('')}</div>`:''}
+    ${vs.length?`<div class="card ver-hist"><h4>ประวัติ Version <small class="muted" style="font-weight:400">· เก็บบนเซิร์ฟเวอร์ ทีมเห็นร่วมกัน</small></h4>${vs.slice().reverse().map(v=>`<div class="ver-row"><div class="ver-rh"><span class="vbadge">v${v.v}</span><span class="muted">${esc(verLabel(v.at))}${v.by?' · '+esc(shortName(v.by)):''} · ${(v.lines||[]).filter(l=>l.code||l.nameIn).length} วัตถุดิบ · ${v.total!=null?fmt(v.total,0)+' บาท/กก.':''}</span>${can('calc')?`<span class="ver-btns"><button class="btn small" type="button" data-vcopy="${esc(v.id)}">คัดลอกเป็นงานใหม่</button><button class="btn small" type="button" data-vrestore="${esc(v.id)}">ใช้สูตรนี้ใน v${ver}</button></span>`:''}</div>${(v.fb||[]).length?`<ul class="ver-fb">${v.fb.map(f=>`<li>${f.kind&&f.kind!=='note'?`<b>${kindTxt[f.kind]||esc(f.kind)}:</b> `:''}${esc(f.text)}</li>`).join('')}</ul>`:''}</div>`).join('')}</div>`:''}
   </div>`;
 }
 function renderEditor(){
@@ -1646,7 +1665,7 @@ function renderOverview(){
   const showMeta=state.products.some(hasMeta);
   t.innerHTML = `<thead><tr><th>งานออกแบบ</th><th>Ver.</th><th>PDR</th>${showMeta?'<th>ลูกค้า</th><th>แบรนด์</th><th>รหัสตัวอย่าง</th>':''}<th class="num">รายการ</th><th class="num">ต้นทุน RM บาท/กก.</th><th class="num">ต้นทุนรวม บาท/กก.</th><th>ราคาวัตถุดิบ</th></tr></thead>
   <tbody>${state.products.map(p=>{ const c=compute(p), h=health(c), m=metaOf(p); return `<tr>
-    <td><button type="button" class="btn link" data-open="${p.id}" style="text-align:left;color:var(--ink)">${esc(p.name)}</button>${p.sample?'<span class="sample-tag">ตัวอย่าง</span>':''}</td><td><span class="vbadge sm">v${p.ver||1}</span>${(p.fb||[]).length?` <span class="muted" title="Feedback">💬${p.fb.length}</span>`:''}</td><td class="mono" style="font-size:12px">${(()=>{ const L=p.link||{}; const X=L.projectId&&typeof calcProj==='function'?calcProj(L.projectId):null; return X?esc(X.pdrNo||''):'<span class="muted">–</span>'; })()}</td>
+    <td><button type="button" class="btn link" data-open="${p.id}" style="text-align:left;color:var(--ink)">${esc(p.name)}</button>${p.sample?'<span class="sample-tag">ตัวอย่าง</span>':''}</td><td><span class="vbadge sm">v${p.ver||1}</span>${(()=>{ const h=FH[p.id]; const n=h&&h.feedback?h.feedback.length:0; return n?` <span class="muted" title="Feedback">💬${n}</span>`:''; })()}</td><td class="mono" style="font-size:12px">${(()=>{ const L=p.link||{}; const X=L.projectId&&typeof calcProj==='function'?calcProj(L.projectId):null; return X?esc(X.pdrNo||''):'<span class="muted">–</span>'; })()}</td>
     ${showMeta?`<td>${esc(m.customer)||'<span class="muted">–</span>'}</td><td>${esc(m.brand)||'<span class="muted">–</span>'}</td><td class="mono">${esc(m.sampleCode)||'<span class="muted">–</span>'}</td>`:''}
     <td class="num">${p.lines.length}</td><td class="num">${c.complete?'':'≥ '}${fmt(c.rm,2)}</td><td class="num"><b>${c.complete?'':'≥ '}${fmt(c.total,2)}</b></td>
     <td>${c.complete && h==='ok' ? '<span class="chip ok">ครบ</span>' : (c.complete?'<span class="chip warn">ครบ · มีเตือน</span>':`<span class="chip warn">ขาด ${c.missing} รายการ</span>`)}</td></tr>`; }).join('')}</tbody>`;
@@ -1718,18 +1737,20 @@ $('#designPanel').addEventListener('change',e=>{
 });
 $('#btnNewDesign').addEventListener('click',()=>{ calcNewProduct(); save(); renderWork(); $('#designPanel').scrollIntoView({behavior:'smooth',block:'start'}); });
 $('#editor').addEventListener('input',e=>{ if(e.target.id==='rmPick'){ const l=$('#rmPickList'); if(l) l.innerHTML=rmPickHtml(e.target.value); } });
-$('#versionPanel').addEventListener('click',e=>{
-  const p=active(); if(!p) return; const t=e.target.closest('button'); if(!t) return;
-  if(t.id==='fbAdd'){ const tx=$('#fbText').value.trim(); if(!tx){ toast('พิมพ์รายละเอียด Feedback ก่อน'); return; } p.fb=Array.isArray(p.fb)?p.fb:[]; p.fb.push({at:verStamp(), by:S.me&&S.me.email||'', kind:$('#fbKind').value, text:tx.slice(0,2000)}); p.sample=false; save(); renderWork(); return; }
-  if(t.dataset.fbdel!=null){ p.fb.splice(+t.dataset.fbdel,1); save(); renderWork(); return; }
-  if(t.id==='verNext'){ if(t.dataset.confirm!=='1'){ t.dataset.confirm='1'; t.textContent='กดอีกครั้งเพื่อยืนยัน'; setTimeout(()=>{ if(t.isConnected){ t.dataset.confirm=''; t.textContent=`สร้าง Version ถัดไป (v${(p.ver||1)+1})`; } },4000); return; }
-    const c=compute(p); p.versions=Array.isArray(p.versions)?p.versions:[]; p.versions.push({v:p.ver||1, at:verStamp(), name:p.name, lines:JSON.parse(JSON.stringify(p.lines)), design:JSON.parse(JSON.stringify(p.design||{})), total:c.complete?c.total:null, fb:p.fb||[]});
-    if(p.versions.length>20) p.versions=p.versions.slice(-20);
-    p.ver=(p.ver||1)+1; p.fb=[]; p.sample=false; save(); renderWork(); toast(`เริ่ม v${p.ver} แล้ว · สูตร v${p.ver-1} เก็บไว้ในประวัติ`); $('#s2').scrollIntoView({behavior:'smooth'}); return; }
-  const vc=t.dataset.vcopy, vr=t.dataset.vrestore;
-  if(vc||vr){ const v=(p.versions||[]).find(x=>String(x.v)===String(vc||vr)); if(!v) return;
-    if(vc){ const q={id:newId(), name:`${p.name} (จาก v${v.v})`, unit:p.unit, src:`คัดลอกจาก ${p.name} v${v.v}`, ...defaults(), batchKg:p.batchKg, lossPct:p.lossPct, overhead:p.overhead, meta:Object.assign({},p.meta), link:Object.assign({},p.link), design:JSON.parse(JSON.stringify(v.design||p.design||{})), ver:1, fb:[], versions:[], lines:JSON.parse(JSON.stringify(v.lines||[]))}; state.products.push(q); state.activeId=q.id; save(); renderWork(); toast('สร้างงานใหม่จาก v'+v.v+' แล้ว'); }
-    else { if(t.dataset.confirm!=='1'){ t.dataset.confirm='1'; t.textContent='กดอีกครั้ง: แทนที่สูตรปัจจุบัน'; setTimeout(()=>{ if(t.isConnected){ t.dataset.confirm=''; t.textContent=`ใช้สูตรนี้ใน v${p.ver||1}`; } },4000); return; } p.lines=JSON.parse(JSON.stringify(v.lines||[])); p.sample=false; save(); renderWork(); toast(`นำสูตร v${v.v} มาใช้ใน v${p.ver||1} แล้ว`); } }
+$('#versionPanel').addEventListener('click',async e=>{
+  const p=active(); if(!p||p.sample) return; const t=e.target.closest('button'); if(!t) return; const h=FH[p.id]||(FH[p.id]={versions:[],feedback:[]});
+  const busy=on=>{ t.disabled=on; };
+  try{
+    if(t.id==='fbAdd'){ const tx=$('#fbText').value.trim(); if(!tx){ toast('พิมพ์รายละเอียด Feedback ก่อน'); return; } busy(true); h.feedback=await api('addFormulaFeedback', p.id, {ver:p.ver||1, kind:$('#fbKind').value, text:tx.slice(0,2000)}); renderVersionPanel(); renderOverview(); toast('บันทึก Feedback แล้ว'); return; }
+    if(t.dataset.fbdel){ busy(true); h.feedback=await api('deleteFormulaFeedback', t.dataset.fbdel); renderVersionPanel(); renderOverview(); return; }
+    if(t.id==='verNext'){ if(t.dataset.confirm!=='1'){ t.dataset.confirm='1'; t.textContent='กดอีกครั้งเพื่อยืนยัน'; setTimeout(()=>{ if(t.isConnected){ t.dataset.confirm=''; t.textContent=`สร้าง Version ถัดไป (v${(p.ver||1)+1})`; } },4000); return; }
+      busy(true); const c=compute(p); h.versions=await api('snapshotFormulaVersion', p.id, {ver:p.ver||1, name:p.name, lines:p.lines, design:p.design||{}, total:c.complete?c.total:null});
+      p.ver=(p.ver||1)+1; p.sample=false; save(); renderWork(); toast(`เริ่ม v${p.ver} แล้ว · สูตร v${p.ver-1} เก็บไว้ในประวัติ`); $('#s2').scrollIntoView({behavior:'smooth'}); return; }
+    const vc=t.dataset.vcopy, vr=t.dataset.vrestore;
+    if(vc||vr){ const v=(h.versions||[]).find(x=>x.id===(vc||vr)); if(!v) return;
+      if(vc){ const q={id:newId(), name:`${p.name} (จาก v${v.v})`, unit:p.unit, src:`คัดลอกจาก ${p.name} v${v.v}`, ...defaults(), batchKg:p.batchKg, lossPct:p.lossPct, overhead:p.overhead, meta:Object.assign({},p.meta), link:Object.assign({},p.link), design:JSON.parse(JSON.stringify(v.design||p.design||{})), ver:1, lines:JSON.parse(JSON.stringify(v.lines||[]))}; state.products.push(q); state.activeId=q.id; save(); renderWork(); toast('สร้างงานใหม่จาก v'+v.v+' แล้ว'); }
+      else { if(t.dataset.confirm!=='1'){ t.dataset.confirm='1'; t.textContent='กดอีกครั้ง: แทนที่สูตรปัจจุบัน'; setTimeout(()=>{ if(t.isConnected){ t.dataset.confirm=''; t.textContent=`ใช้สูตรนี้ใน v${p.ver||1}`; } },4000); return; } p.lines=JSON.parse(JSON.stringify(v.lines||[])); p.sample=false; save(); renderWork(); toast(`นำสูตร v${v.v} มาใช้ใน v${p.ver||1} แล้ว`); } }
+  }catch(err){ toast('ทำไม่สำเร็จ: '+errText(err)); renderVersionPanel(); }
 });
 $('#editor').addEventListener('click',e=>{
   const p=active(); if(!p) return;

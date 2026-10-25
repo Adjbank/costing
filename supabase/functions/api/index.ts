@@ -1266,6 +1266,27 @@ async function setStage(ctx: Ctx, id: string, stage: string, note: string, force
     return projOut({ ...pr, stage, actual, data, updated_by: m.email, updated_at: new Date() });
   });
 }
+/** ปิดงาน/ยกเลิกหลายโครงการพร้อมกัน (ล้างทะเบียนเก่า): เฉพาะ Project Coordinator หรือผู้ดูแลระบบ · ข้ามเงื่อนไขขั้นตอน บันทึกเหตุผลใน stageLog + overrides */
+async function bulkStage(ctx: Ctx, ids: Any, stage: string, note: string) {
+  return await locked(ctx, async (c) => {
+    const m = await needAny(c, RD_EDIT), db = c.db;
+    if (!isAdmin(m) && !hasPerm(m, "projects")) throw new Error("ปิดงานหรือยกเลิกแบบกลุ่มได้เฉพาะ Project Coordinator หรือผู้ดูแลระบบ");
+    if (stage !== "done" && stage !== "lost") throw new Error("เลือกได้เฉพาะ เสร็จสิ้น หรือ ยกเลิก");
+    note = str(note, 1000); if (!note) throw new Error("ใส่เหตุผล (เช่น ล้างทะเบียนเก่า ปิดงานตามจริง)");
+    const list = [...new Set((Array.isArray(ids) ? ids : []).map((x) => str(x, 40)).filter(Boolean))];
+    if (!list.length) throw new Error("ยังไม่ได้เลือกโครงการ"); if (list.length > 300) throw new Error("ทำได้ครั้งละไม่เกิน 300 โครงการ");
+    const rows = await db`select * from costing.projects where id = any(${list}) and stage <> 'done' and stage <> 'lost'`;
+    const at = new Date().toISOString(); let n = 0;
+    for (const pr of rows) {
+      const from = String(pr.stage), data = pr.data || {}, actual = { ...(pr.actual || {}) }; if (!actual[stage]) actual[stage] = at;
+      data.stageLog = (Array.isArray(data.stageLog) ? data.stageLog : []).concat([{ from, to: stage, note: "[กลุ่ม] " + note, by: m.email, at }]).slice(-100);
+      if (stage === "done") data.overrides = (Array.isArray(data.overrides) ? data.overrides : []).concat([{ stage, why: "ปิดงานแบบกลุ่มโดยไม่ผ่านเงื่อนไขขั้นตอน", note, by: m.email, at }]).slice(-50);
+      await db`update costing.projects set stage = ${stage}, actual = ${db.json(actual)}, data = ${db.json(data)}, updated_at = now(), updated_by = ${m.email} where id = ${String(pr.id)}`; n++;
+    }
+    await log(db, m.email, "bulkStage", n + " โครงการ → " + stage + " · " + note);
+    return { updated: n, skipped: list.length - n };
+  });
+}
 async function raCheck(ctx: Ctx, id: string, status: string, note: string) {
   return await locked(ctx, async (c) => {
     const m = await need(c, "ra"), db = c.db;
@@ -2397,7 +2418,7 @@ const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   loadCompliance, saveComplianceRules, saveRmMap, listDocs, getDoc, issueDoc, voidDoc, listRmDocs, getRmDocFile, uploadRmDoc, updateRmDoc, deleteRmDoc,
   listBriefs, saveBrief, deleteBrief, listScents, saveScent, deleteScent, getTypeformStatus, saveTypeformToken, syncTypeform, disconnectTypeform,
   pwLogin, setMyPassword, pwLogout, resetUserPassword,
-  listCustomers, saveCustomer, listProjects, getProject, saveProject, setStage, raCheck, issueProjectDoc, listSamples, saveSample, sendSample, deleteSample, evalSummary, importRd,
+  listCustomers, saveCustomer, listProjects, getProject, saveProject, setStage, bulkStage, raCheck, issueProjectDoc, listSamples, saveSample, sendSample, deleteSample, evalSummary, importRd,
   listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases,
   listPdTrials, savePdTrial, sendPdTrial, decidePdTrial, issuePdTrialStock,
   listRdStock, listRdStockTx, saveRdStockItem, deleteRdStockItem, addRdStockTx, importRdStock,

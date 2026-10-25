@@ -3669,7 +3669,7 @@ pfv.addEventListener('submit', e=>{ e.preventDefault();
   if(e.target.id==='tfForm'){ const v=$('#tfToken').value.trim(); if(!v){ $('#tfMsg').textContent='วาง token ก่อน'; return; } tfRun('saveTypeformToken',[v],e.target.querySelector('button'),'เชื่อม Typeform แล้ว กำลังดึงคำตอบเก่าทั้งหมด…'); } });
 /* --- โครงการพัฒนาสินค้า (R&D): คำขอพัฒนา (PDR) → 8 ขั้นตอน → ตัวอย่างและผลประเมินของลูกค้า → BOM
    ดู: projects / perfumer / pd / ra / calc / viewDb · แก้ไข: projects / perfumer / pd · RA: ra · ย้อนขั้น/ยกเลิก: projects หรือ admin (เซิร์ฟเวอร์ตรวจซ้ำทุกครั้ง) */
-let RD={list:null, sla:{}, customers:null, view:'board', q:'', stageF:'', open:null, edit:null, sampleEdit:null, sumPeriod:'', sumKind:'scent', sum:null, busy:false};
+let RD={list:null, sla:{}, customers:null, view:'board', q:'', stageF:'', sel:new Set(), open:null, edit:null, sampleEdit:null, sumPeriod:'', sumKind:'scent', sum:null, busy:false};
 const rdCanView=()=>['projects','perfumer','pd','ra','calc','viewDb'].some(can), rdCanEdit=()=>can('projects')||can('perfumer')||can('pd'), rdIsPc=()=>can('projects')||isAdminRole();
 const RD_STAGE=[['s1','รับบรีฟ / วางแผน','Project Co'],['s2','ตรวจกฎหมาย','RA'],['s3','ออกแบบกลิ่น','Perfumer'],['s4','ต้นแบบสินค้า','Product Dev'],['s5','ส่งต้นแบบ / ประเมิน','Project Co'],['s6','Stability / สูตรสุดท้าย','Product Dev'],['s7','BOM / ส่งมอบสูตร','Product Dev'],['s8','Pilot Batch','Product Dev'],['done','เสร็จสิ้น',''],['lost','ยกเลิก','']];
 const RD_STAGE_MAP=Object.fromEntries(RD_STAGE.map(s=>[s[0],s]));
@@ -3718,13 +3718,14 @@ function drawRd(){
   $('#rdBody').innerHTML=`<div class="search" style="flex-wrap:wrap;gap:8px">
       <div class="pf-tabs" role="tablist" style="margin:0"><button type="button" data-rdview="board" class="${RD.view==='board'?'on':''}">บอร์ด <span class="pf-n">${active.length}</span></button><button type="button" data-rdview="table" class="${RD.view==='table'?'on':''}">ตาราง <span class="pf-n">${RD.list.length}</span></button><button type="button" data-rdview="summary" class="${RD.view==='summary'?'on':''}">สรุปผลประเมิน FM-RD-11</button><button type="button" data-rdview="customers" class="${RD.view==='customers'?'on':''}">ลูกค้า <span class="pf-n">${RD.customers.length}</span></button></div>
       <input id="rdQ" type="search" autocomplete="off" placeholder="ค้นหา PDR แบรนด์ บริษัท เลข SO…" value="${esc(RD.q)}" style="flex:1;min-width:200px">
-      ${RD.view==='table'?`<select id="rdStageF"><option value="">ทุกขั้น</option>${RD_STAGE.map(s=>`<option value="${s[0]}" ${RD.stageF===s[0]?'selected':''}>${esc(s[1])}</option>`).join('')}</select>`:''}
+      ${RD.view==='table'?`<select id="rdStageF"><option value="">ทุกขั้น</option><optgroup label="ตัวกรองพิเศษ"><option value="__late" ${RD.stageF==='__late'?'selected':''}>เกินกำหนด SLA</option><option value="__nopc" ${RD.stageF==='__nopc'?'selected':''}>ไม่มี Project Co</option><option value="__old" ${RD.stageF==='__old'?'selected':''}>ไม่มีความเคลื่อนไหวเกิน 180 วัน</option></optgroup>${RD_STAGE.map(s=>`<option value="${s[0]}" ${RD.stageF===s[0]?'selected':''}>${esc(s[1])}</option>`).join('')}</select>`:''}
       ${ed?'<button class="btn primary" type="button" id="rdNew">+ เปิดโครงการใหม่</button>':''}<button class="btn" type="button" id="rdRefresh">รีเฟรช</button>
       ${late?`<span class="chip bad">เกินกำหนด ${late} โครงการ</span>`:''}</div>
     <div id="rdMain">${RD.view==='board'?rdBoard():RD.view==='table'?rdTable():RD.view==='summary'?rdSummary():rdCustomers()}</div>`;
   if(RD.view==='summary' && !RD.sum) rdLoadSummary();
 }
-function rdFiltered(){ const q=RD.q.trim().toLowerCase(); return RD.list.filter(p=>(!RD.stageF||p.stage===RD.stageF)&&(!q||[p.pdrNo,p.docNo,p.brand,p.company,p.soNo,p.title,p.customerCode,p.owners.pc,p.owners.sa,...(p.owners.perfumer||[])].join(' ').toLowerCase().includes(q))); }
+const rdOpenP=p=>p.stage!=='done'&&p.stage!=='lost';
+function rdFiltered(){ const q=RD.q.trim().toLowerCase(); return RD.list.filter(p=>(!RD.stageF||(RD.stageF==='__late'?(rdOpenP(p)&&(rdDue(p)||{}).overdue):RD.stageF==='__nopc'?(rdOpenP(p)&&!p.owners.pc):RD.stageF==='__old'?(rdOpenP(p)&&rdDays(p.updatedAt)>180):p.stage===RD.stageF))&&(!q||[p.pdrNo,p.docNo,p.brand,p.company,p.soNo,p.title,p.customerCode,p.owners.pc,p.owners.sa,...(p.owners.perfumer||[])].join(' ').toLowerCase().includes(q))); }
 function rdCard(p){
   const d=rdDue(p), days=p.actual&&p.actual[p.stage]?rdDays(p.actual[p.stage]):null;
   return `<button type="button" class="rd-card ${d&&d.overdue?'late':''}" data-rd-open="${esc(p.id)}">
@@ -3739,10 +3740,14 @@ function rdBoard(){
     <div class="rd-col rd-col-end"><div class="rd-col-h"><b>เสร็จสิ้น</b><span class="pf-n">${list.filter(p=>p.stage==='done').length}</span></div>${list.filter(p=>p.stage==='done').slice(0,8).map(rdCard).join('')}<div class="rd-col-h" style="margin-top:10px"><b>ยกเลิก</b><span class="pf-n">${list.filter(p=>p.stage==='lost').length}</span></div>${list.filter(p=>p.stage==='lost').slice(0,5).map(rdCard).join('')}</div></div>
     <div class="muted" style="font-size:12px;margin-top:6px">กดการ์ดเพื่อเปิดโครงการ · กำหนดเวลา: ออกแบบกลิ่น ${RD.sla.s3||15} วัน ส่งตัวอย่าง ${RD.sla.s3send||2} วัน ลูกค้าประเมิน ${RD.sla.s3eval||7} วัน (ผู้ดูแลแก้ได้ที่ settings rdSla)</div>`;
 }
+/* แถบปิดงาน/ยกเลิกแบบกลุ่ม (เฉพาะ Project Co / ผู้ดูแล) ใช้ล้างทะเบียนโครงการเก่า */
+function rdBulkBar(openList, nSel){
+  return `<div class="card" style="margin:0 0 10px;padding:10px 14px"><div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><b style="font-size:13px">ปิดงาน / ยกเลิกแบบกลุ่ม</b><label style="font-size:12.5px"><input type="checkbox" id="rdSelAll" ${openList.length&&nSel===openList.length?'checked':''}> เลือกที่แสดงทั้งหมด (${openList.length})</label><span class="muted" style="font-size:12.5px">เลือกแล้ว ${nSel}</span><select id="rdBulkStage"><option value="lost">ยกเลิกโครงการ</option><option value="done">เสร็จสิ้น (ปิดงานตามจริง)</option></select><input id="rdBulkNote" placeholder="เหตุผล เช่น ล้างทะเบียนเก่า ไม่มีความเคลื่อนไหว" maxlength="300" style="flex:1;min-width:220px"><button class="btn primary small" type="button" id="rdBulkGo" ${nSel?'':'disabled'}>ทำรายการ</button></div><div class="muted" style="font-size:12px;margin-top:4px">ใช้ตัวกรอง "เกินกำหนด SLA" / "ไม่มี Project Co" / "ไม่มีความเคลื่อนไหวเกิน 180 วัน" เพื่อเลือกโครงการเก่า · เหตุผลถูกบันทึกในประวัติของทุกโครงการ · ย้อนกลับได้โดยเปิดโครงการแล้วเปลี่ยนขั้น</div></div>`;
+}
 function rdTable(){
-  const list=rdFiltered().sort((a,b)=>(b.updatedAt||'').localeCompare(a.updatedAt||''));
-  return `<div class="tablebox"><table><thead><tr><th>PDR</th><th>ลูกค้า / แบรนด์</th><th>ประเภท</th><th>ขั้น</th><th>กำหนด</th><th>Perfumer</th><th>Project Co</th><th>กลิ่น</th><th>ตัวอย่าง</th><th>อัปเดต</th></tr></thead>
-    <tbody>${list.map(p=>{ const d=rdDue(p); return `<tr><td class="mono"><button type="button" class="linklike" data-rd-open="${esc(p.id)}">${esc(p.pdrNo)}</button><div class="muted" style="font-size:11px">${esc(p.docNo)}</div></td><td><b>${rdBrand(p)}</b>${p.company&&p.brand?`<div class="muted" style="font-size:12px">${esc(p.company)}</div>`:''}</td><td style="font-size:12.5px">${esc(RD_KIND[p.kind]||p.kind)}</td><td>${pfChip(p.stage,{s1:['1 รับบรีฟ','info'],s2:['2 ตรวจกฎหมาย','info'],s3:['3 ออกแบบกลิ่น','warn'],s4:['4 ต้นแบบ','warn'],s5:['5 ส่งต้นแบบ','warn'],s6:['6 Stability','warn'],s7:['7 BOM','warn'],s8:['8 Pilot','warn'],done:['เสร็จสิ้น','ok'],lost:['ยกเลิก','bad']})}</td><td>${rdDueChip(d)}</td><td style="font-size:12.5px">${(p.owners.perfumer||[]).map(rdPerson).join(', ')||'–'}</td><td style="font-size:12.5px">${rdPerson(p.owners.pc)}</td><td class="num">${p.scents||0}</td><td class="num">${p.samples||0}${p.evaluated?` <span class="muted">(${p.evaluated} ประเมิน)</span>`:''}</td><td class="muted" style="font-size:12px">${fmtSeen(p.updatedAt)}</td></tr>`; }).join('')||'<tr><td colspan="10" class="empty">ไม่พบโครงการ</td></tr>'}</tbody></table></div>
+  const list=rdFiltered().sort((a,b)=>(b.updatedAt||'').localeCompare(a.updatedAt||'')), pc=rdIsPc(), openList=list.filter(rdOpenP), nSel=openList.filter(p=>RD.sel.has(p.id)).length;
+  return `${pc?rdBulkBar(openList,nSel):''}<div class="tablebox"><table><thead><tr>${pc?'<th></th>':''}<th>PDR</th><th>ลูกค้า / แบรนด์</th><th>ประเภท</th><th>ขั้น</th><th>กำหนด</th><th>Perfumer</th><th>Project Co</th><th>กลิ่น</th><th>ตัวอย่าง</th><th>อัปเดต</th></tr></thead>
+    <tbody>${list.map(p=>{ const d=rdDue(p); return `<tr>${pc?`<td>${rdOpenP(p)?`<input type="checkbox" class="rd-sel" value="${esc(p.id)}" ${RD.sel.has(p.id)?'checked':''}>`:''}</td>`:''}<td class="mono"><button type="button" class="linklike" data-rd-open="${esc(p.id)}">${esc(p.pdrNo)}</button><div class="muted" style="font-size:11px">${esc(p.docNo)}</div></td><td><b>${rdBrand(p)}</b>${p.company&&p.brand?`<div class="muted" style="font-size:12px">${esc(p.company)}</div>`:''}</td><td style="font-size:12.5px">${esc(RD_KIND[p.kind]||p.kind)}</td><td>${pfChip(p.stage,{s1:['1 รับบรีฟ','info'],s2:['2 ตรวจกฎหมาย','info'],s3:['3 ออกแบบกลิ่น','warn'],s4:['4 ต้นแบบ','warn'],s5:['5 ส่งต้นแบบ','warn'],s6:['6 Stability','warn'],s7:['7 BOM','warn'],s8:['8 Pilot','warn'],done:['เสร็จสิ้น','ok'],lost:['ยกเลิก','bad']})}</td><td>${rdDueChip(d)}</td><td style="font-size:12.5px">${(p.owners.perfumer||[]).map(rdPerson).join(', ')||'–'}</td><td style="font-size:12.5px">${rdPerson(p.owners.pc)}</td><td class="num">${p.scents||0}</td><td class="num">${p.samples||0}${p.evaluated?` <span class="muted">(${p.evaluated} ประเมิน)</span>`:''}</td><td class="muted" style="font-size:12px">${fmtSeen(p.updatedAt)}</td></tr>`; }).join('')||`<tr><td colspan="${pc?11:10}" class="empty">ไม่พบโครงการ</td></tr>`}</tbody></table></div>
     <div class="row" style="margin-top:8px"><button class="btn small" type="button" id="rdXlsx">ดาวน์โหลด Excel</button></div>`;
 }
 function rdCustomers(){
@@ -3903,7 +3908,8 @@ const rdv=$('#rdView');
 rdv.addEventListener('input', e=>{ const t=e.target; if(t.id==='rdQ'){ RD.q=t.value; const m=$('#rdMain'); if(m) m.innerHTML=RD.view==='board'?rdBoard():RD.view==='table'?rdTable():RD.view==='customers'?rdCustomers():m.innerHTML; } });
 rdv.addEventListener('change', e=>{
   const t=e.target;
-  if(t.id==='rdStageF'){ RD.stageF=t.value; $('#rdMain').innerHTML=rdTable(); return; }
+  if(t.id==='rdStageF'){ RD.stageF=t.value; RD.sel.clear(); $('#rdMain').innerHTML=rdTable(); return; }
+  if(t.classList.contains('rd-sel')||t.id==='rdSelAll'){ if(t.id==='rdSelAll'){ const open=rdFiltered().filter(rdOpenP); open.forEach(p=>t.checked?RD.sel.add(p.id):RD.sel.delete(p.id)); } else { if(t.checked) RD.sel.add(t.value); else RD.sel.delete(t.value); } const note=($('#rdBulkNote')||{}).value||'', st=($('#rdBulkStage')||{}).value; $('#rdMain').innerHTML=rdTable(); if($('#rdBulkNote')){ $('#rdBulkNote').value=note; if(st) $('#rdBulkStage').value=st; } return; }
   if(t.id==='rdSumMonth'){ if(t.value){ RD.sumPeriod=t.value; rdLoadSummary(); } return; }
   if(t.id==='rdSumKind'){ RD.sumKind=t.value; rdLoadSummary(); return; }
   if(t.dataset.k==='customerCode'){ const nw=t.value==='__new'; $('#rdNewCust').hidden=!nw; $('#rdNewCust2').hidden=!nw; return; }
@@ -3911,7 +3917,10 @@ rdv.addEventListener('change', e=>{
 });
 rdv.addEventListener('click', async e=>{
   const t=e.target.closest('button,a'); if(!t||t.tagName==='A') return;
-  if(t.dataset.rdview){ RD.view=t.dataset.rdview; RD.stageF=''; drawRd(); return; }
+  if(t.dataset.rdview){ RD.view=t.dataset.rdview; RD.stageF=''; RD.sel.clear(); drawRd(); return; }
+  if(t.id==='rdBulkGo'){ const ids=[...RD.sel].filter(id=>RD.list.some(p=>p.id===id&&rdOpenP(p))), stage=$('#rdBulkStage').value, note=$('#rdBulkNote').value.trim(); if(!ids.length) return; if(!note){ toast('ใส่เหตุผลก่อน'); $('#rdBulkNote').focus(); return; }
+    if(!confirm(`${stage==='lost'?'ยกเลิก':'ปิดงาน (เสร็จสิ้น)'} ${ids.length} โครงการ?\nเหตุผล: ${note}\n\nทุกโครงการจะถูกบันทึกประวัติ และหายจากบอร์ดงานที่กำลังทำ`)) return; t.disabled=true;
+    try{ const r=await api('bulkStage', ids, stage, note); RD.sel.clear(); await loadRd(true); RD.stageF=''; drawRd(); toast(`${stage==='lost'?'ยกเลิก':'ปิดงาน'}แล้ว ${r.updated} โครงการ${r.skipped?` · ข้าม ${r.skipped}`:''}`); }catch(ex){ toast(errText(ex)); t.disabled=false; } return; }
   if(t.id==='rdRefresh'){ t.disabled=true; try{ await loadRd(true); if(RD.open) RD.open=await api('getProject', RD.open.project.id); drawRd(); }catch(ex){ toast(errText(ex)); } return; }
   if(t.id==='rdNew'){ RD.open={project:{id:'', pdrNo:'ใหม่', docNo:'', customerCode:'', company:'', brand:'', soNo:'', kind:'new', title:'', scentCount:1, stage:'s1', owners:{pc:S.me.email, sa:'', pd:'', perfumer:[]}, briefId:'', ra:{}, actual:{}, data:{}}, scents:[], samples:[]}; RD.sampleEdit=null; drawRd(); window.scrollTo(0,0); return; }
   if(t.dataset.rdOpen){ rdOpen(t.dataset.rdOpen); return; }

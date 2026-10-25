@@ -508,6 +508,52 @@ async function saveMyFormulas(ctx: Ctx, items: Any) {
     return { saved: Object.keys(keep).length, changed, at: now.toISOString() };
   });
 }
+/* ประวัติเวอร์ชันและ Feedback ลูกค้าของสูตรกลิ่น: ตารางแยก ทีม calc/perfumer/projects เห็นร่วมกัน · ไม่ติดขีดจำกัดขนาดสูตร */
+const FH_VIEW = ["calc", "perfumer", "projects"], FH_WRITE = ["calc", "perfumer"], FH_FB_KINDS = ["note", "revise", "approve", "reject"];
+const fhVerOut = (r: Any) => ({ id: String(r.id), formulaId: String(r.formula_id), owner: String(r.owner), v: Number(r.ver), name: String(r.name || ""), lines: r.lines || [], design: r.design || {}, total: r.total == null ? null : Number(r.total), fb: r.feedback || [], at: iso(r.created_at), by: String(r.created_by || "") });
+const fhFbOut = (r: Any) => ({ id: String(r.id), formulaId: String(r.formula_id), ver: Number(r.ver), kind: String(r.kind), text: String(r.text), at: iso(r.created_at), by: String(r.created_by || "") });
+const fhId = (fid: unknown) => { const id = str(fid, 40); if (!/^[A-Za-z0-9_-]{3,40}$/.test(id)) throw new Error("รหัสสูตรไม่ถูกต้อง"); return id; };
+const fhVer = (v: unknown) => Math.max(1, Math.min(999, Math.round(Number(v) || 1)));
+const fhNewId = (p: string) => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+async function listFormulaHistory(ctx: Ctx, formulaId: string) {
+  await needAny(ctx, FH_VIEW); const fid = fhId(formulaId), db = ctx.db;
+  return { versions: (await db`select * from costing.formula_versions where formula_id = ${fid} order by ver`).map(fhVerOut),
+    feedback: (await db`select * from costing.formula_feedback where formula_id = ${fid} order by created_at`).map(fhFbOut) };
+}
+async function addFormulaFeedback(ctx: Ctx, formulaId: string, fb: Any) {
+  return await locked(ctx, async (c) => {
+    const m = await needAny(c, FH_WRITE), db = c.db, fid = fhId(formulaId); fb = fb || {};
+    const text = str(fb.text, 2000); if (!text) throw new Error("ใส่รายละเอียด Feedback");
+    const kind = FH_FB_KINDS.includes(String(fb.kind)) ? String(fb.kind) : "note", ver = fhVer(fb.ver);
+    const own = (await db`select owner from costing.formulas where id = ${fid} limit 1`)[0]; const owner = own ? String(own.owner) : m.email;
+    await db`insert into costing.formula_feedback (id, formula_id, owner, ver, kind, text, created_at, created_by) values (${fhNewId("fb")}, ${fid}, ${owner}, ${ver}, ${kind}, ${text}, now(), ${m.email})`;
+    await log(db, m.email, "addFormulaFeedback", fid + " v" + ver + " " + kind);
+    return (await db`select * from costing.formula_feedback where formula_id = ${fid} order by created_at`).map(fhFbOut);
+  });
+}
+async function deleteFormulaFeedback(ctx: Ctx, id: string) {
+  return await locked(ctx, async (c) => {
+    const m = await needAny(c, FH_WRITE), db = c.db; id = str(id, 40);
+    const r = (await db`select * from costing.formula_feedback where id = ${id}`)[0]; if (!r) throw new Error("ไม่พบรายการนี้");
+    if (String(r.created_by) !== m.email && String(r.owner) !== m.email && !isAdmin(m)) throw new Error("FORBIDDEN");
+    await db`delete from costing.formula_feedback where id = ${id}`;
+    return (await db`select * from costing.formula_feedback where formula_id = ${String(r.formula_id)} order by created_at`).map(fhFbOut);
+  });
+}
+/** ปิดเวอร์ชันเป็นประวัติ: เก็บสูตร ข้อมูลสินค้า ต้นทุน และ Feedback ของเวอร์ชันนั้น (ซ้ำเลขเวอร์ชันเดิมของเจ้าของ = เขียนทับ) */
+async function snapshotFormulaVersion(ctx: Ctx, formulaId: string, snap: Any) {
+  return await locked(ctx, async (c) => {
+    const m = await need(c, "calc"), db = c.db, fid = fhId(formulaId); snap = snap || {};
+    const ver = fhVer(snap.ver);
+    const lines = Array.isArray(snap.lines) ? snap.lines.slice(0, 400).map((l: Any) => ({ code: str(l && l.code, 40), nameIn: str(l && l.nameIn, 200), amt: str(l && l.amt, 20), override: str(l && l.override, 20) })) : [];
+    const design = snap.design && typeof snap.design === "object" && !Array.isArray(snap.design) ? snap.design : {}; if (JSON.stringify(design).length > 4000) throw new Error("ข้อมูลสินค้าใหญ่เกินไป");
+    const fb = (await db`select * from costing.formula_feedback where formula_id = ${fid} and ver = ${ver} order by created_at`).map(fhFbOut);
+    await db`delete from costing.formula_versions where formula_id = ${fid} and ver = ${ver} and owner = ${m.email}`;
+    await db`insert into costing.formula_versions (id, formula_id, owner, ver, name, lines, design, total, feedback, created_at, created_by) values (${fhNewId("fv")}, ${fid}, ${m.email}, ${ver}, ${str(snap.name, 120)}, ${db.json(lines)}, ${db.json(design)}, ${numOrNull(snap.total)}, ${db.json(fb)}, now(), ${m.email})`;
+    await log(db, m.email, "snapshotFormulaVersion", fid + " v" + ver);
+    return (await db`select * from costing.formula_versions where formula_id = ${fid} order by ver`).map(fhVerOut);
+  });
+}
 async function adminFormulas(ctx: Ctx) {
   const m = await needAdmin(ctx);
   const list = (await ctx.db`select id, owner, name, updated_at, data from costing.formulas order by updated_at, id`).map(formulaOut);
@@ -2432,7 +2478,7 @@ const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   listFda, saveFdaReg, renewFdaReg, deleteFdaReg, saveFdaRequest, deleteFdaRequest, getFdaAlert, saveFdaAlert, resetFdaAlertSecret,
   listInci, saveInci, deleteInci, importInci,
   dashboard,
-  listBotanicals, getBotanicalPlate, getBotanicalPrices, saveBotanicalPrice, saveBotanical, deleteBotanical, uploadBotanicalImage, listBotanicalExtractions, saveBotanicalExtraction, deleteBotanicalExtraction, importBotanicals, importBotanicalImage,
+  listFormulaHistory, addFormulaFeedback, deleteFormulaFeedback, snapshotFormulaVersion, listBotanicals, getBotanicalPlate, getBotanicalPrices, saveBotanicalPrice, saveBotanical, deleteBotanical, uploadBotanicalImage, listBotanicalExtractions, saveBotanicalExtraction, deleteBotanicalExtraction, importBotanicals, importBotanicalImage,
   importAll, importRmFile, finishMigration,
 };
 

@@ -2268,6 +2268,128 @@ async function fdaCron(secret: string, req: Request) {
   return { ok: true, count: x.fresh.length, recipients, keys: x.fresh.map((i: Any) => ({ id: i.id, stage: i.stage, expiry: i.expiry })), ...mail };
 }
 
+/* ===== Dashboard ผู้บริหาร: สรุปภาพรวมการทำงานทุกแผนกในคำขอเดียว (ตัวเลขรวม ไม่มีข้อมูลราคา) ===== */
+const DASH_VIEW = RD_VIEW;
+/** รายการเดือน YYYY-MM ย้อนหลัง n เดือน (เวลาไทย) เรียงเก่า → ใหม่ */
+function dashMonths(n: number) {
+  const out: string[] = []; const p = bkkParts(new Date()); let y = Number(p.yyyy), m = Number(p.mm);
+  for (let i = 0; i < n; i++) { out.unshift(`${y}-${String(m).padStart(2, "0")}`); m--; if (m === 0) { m = 12; y--; } }
+  return out;
+}
+/** กำหนดส่งของขั้นปัจจุบัน (ตรรกะเดียวกับหน้าโครงการ): วันเข้าขั้น + SLA · ขั้น 3/5 ที่ส่งตัวอย่างแล้วนับจากวันส่ง */
+function dashDue(p: Any, sla: Record<string, number>, sent: Record<string, string>, now: number) {
+  const st = String(p.stage), entered = p.actual && p.actual[st]; if (!entered || st === "done" || st === "lost") return null;
+  let days = sla[st], from = String(entered), waiting = false;
+  if (st === "s3" || st === "s5") { const s = sent[p.id + "|" + (st === "s3" ? "scent" : "mockup")]; if (s) { from = s; days = sla[st === "s3" ? "s3eval" : "s5eval"]; waiting = true; } }
+  const inStage = Math.floor((now - Date.parse(String(entered))) / 86400000);
+  if (!days) return { left: null, overdue: false, waiting, inStage };
+  const left = Math.ceil((Date.parse(from) + days * 86400000 - now) / 86400000);
+  return { left, overdue: left < 0, waiting, inStage };
+}
+async function dashboard(ctx: Ctx, months?: number) {
+  const m = await needAny(ctx, DASH_VIEW), db = ctx.db;
+  const n = Math.min(Math.max(Math.round(Number(months) || 12), 3), 36), keys = dashMonths(n), since = keys[0] + "-01", now = Date.now(), today = fdaTodayBkk();
+  const series = (rows: Any[]) => { const o: Record<string, number> = {}; keys.forEach((k) => { o[k] = 0; }); rows.forEach((r: Any) => { if (o[String(r.ym)] !== undefined) o[String(r.ym)] = Number(r.n); }); return keys.map((k) => o[k]); };
+  const counts = (rows: Any[], k: string) => { const o: Record<string, number> = {}; rows.forEach((r: Any) => { o[String(r[k] ?? "")] = (o[String(r[k] ?? "")] || 0) + Number(r.n); }); return o; };
+  const inc = (o: Record<string, number>, k: string) => { o[k] = (o[k] || 0) + 1; };
+
+  /* ---- โครงการ (Project Coordinator) ---- */
+  const sla = await rdSla(db);
+  const projs = await db`select id, pdr_no, brand, company, kind, stage, owners, actual, ra, created_at, updated_at from costing.projects`;
+  const sentRows = await db`select project_id, kind, max(shipped_at) as shipped from costing.samples where status = 'sent' and shipped_at is not null group by project_id, kind`;
+  const sent: Record<string, string> = {}; sentRows.forEach((r: Any) => { sent[String(r.project_id) + "|" + String(r.kind)] = iso(r.shipped); });
+  const byStage: Record<string, number> = {}, overdueByStage: Record<string, number> = {}, byKind: Record<string, number> = {}, raStatus: Record<string, number> = {}, pcLoad: Record<string, Any> = {}, pfLoad: Record<string, Any> = {};
+  const ageSum: Record<string, number> = {}, ageN: Record<string, number> = {}, overdue: Any[] = [], waitingCust: Any[] = [];
+  let active = 0, lead = 0, leadN = 0, doneInPeriod = 0, openedInPeriod = 0, lostInPeriod = 0;
+  const doneM: Record<string, number> = {}, openM: Record<string, number> = {};
+  for (const p of projs) {
+    const st = String(p.stage); inc(byStage, st); inc(byKind, String(p.kind || "new"));
+    const cm = iso(p.created_at).slice(0, 7); if (cm >= keys[0]) { openedInPeriod++; inc(openM, cm); }
+    if (st === "done" || st === "lost") {
+      const endAt = p.actual && p.actual[st] ? String(p.actual[st]) : iso(p.updated_at);
+      if (endAt.slice(0, 7) >= keys[0]) { if (st === "done") { doneInPeriod++; inc(doneM, endAt.slice(0, 7)); } else lostInPeriod++; }
+      if (st === "done" && p.created_at) { lead += (Date.parse(endAt) - Date.parse(iso(p.created_at))) / 86400000; leadN++; }
+      continue;
+    }
+    active++;
+    const ra = p.ra && p.ra.status ? String(p.ra.status) : "pending"; inc(raStatus, ra);
+    const d = dashDue(p, sla, sent, now), ow = p.owners || {}, item = { id: String(p.id), pdrNo: String(p.pdr_no), brand: String(p.brand || p.company || ""), stage: st, left: d ? d.left : null, inStage: d ? d.inStage : null, pc: String(ow.pc || ""), waiting: !!(d && d.waiting) };
+    if (d) { ageSum[st] = (ageSum[st] || 0) + d.inStage; ageN[st] = (ageN[st] || 0) + 1; if (d.overdue) { inc(overdueByStage, st); overdue.push(item); } if (d.waiting) waitingCust.push(item); }
+    const pc = String(ow.pc || "") || "(ไม่ระบุ)"; pcLoad[pc] = pcLoad[pc] || { n: 0, overdue: 0 }; pcLoad[pc].n++; if (d && d.overdue) pcLoad[pc].overdue++;
+    (Array.isArray(ow.perfumer) ? ow.perfumer : []).forEach((e: string) => { pfLoad[e] = pfLoad[e] || { n: 0, s3: 0 }; pfLoad[e].n++; if (st === "s3") pfLoad[e].s3++; });
+  }
+  overdue.sort((a, b) => (a.left ?? 0) - (b.left ?? 0));
+  const ageAvg: Record<string, number> = {}; Object.keys(ageN).forEach((k) => { ageAvg[k] = Math.round(ageSum[k] / ageN[k]); });
+  const projects = { total: projs.length, active, byStage, overdueByStage, byKind, raStatus, ageAvg, overdueCount: overdue.length, overdue: overdue.slice(0, 20), waitingCustomer: waitingCust.length,
+    openedInPeriod, doneInPeriod, lostInPeriod, leadDays: leadN ? Math.round(lead / leadN) : null, pcLoad, pfLoad,
+    openedM: keys.map((k) => openM[k] || 0), doneM: keys.map((k) => doneM[k] || 0), sla };
+
+  /* ---- Perfumer: กลิ่น บรีฟ ตัวอย่างกลิ่น ผลประเมินลูกค้า ---- */
+  const scStatus = counts(await db`select status, count(*)::int as n from costing.scents group by status`, "status");
+  const brStatus = counts(await db`select status, count(*)::int as n from costing.briefs group by status`, "status");
+  const scM = series(await db`select to_char(created_at at time zone 'Asia/Bangkok', 'YYYY-MM') as ym, count(*)::int as n from costing.scents where created_at >= ${since}::date group by 1`);
+  const evalStats = async (kind: string) => {
+    const sentM = series(await db`select to_char(shipped_at at time zone 'Asia/Bangkok', 'YYYY-MM') as ym, count(*)::int as n from costing.samples where kind = ${kind} and shipped_at is not null and shipped_at >= ${since}::date group by 1`);
+    const evM = series(await db`select to_char(coalesce(nullif(eval->>'submittedAt', '')::timestamptz, updated_at) at time zone 'Asia/Bangkok', 'YYYY-MM') as ym, count(*)::int as n from costing.samples where kind = ${kind} and status = 'evaluated' and coalesce(nullif(eval->>'submittedAt', '')::timestamptz, updated_at) >= ${since}::date group by 1`);
+    const st = counts(await db`select status, count(*)::int as n from costing.samples where kind = ${kind} group by status`, "status");
+    const dec = counts(await db`select coalesce(nullif(e->>'decision', ''), '(ไม่ระบุ)') as d, count(*)::int as n from costing.samples s, jsonb_array_elements(case when jsonb_typeof(s.eval->'items') = 'array' then s.eval->'items' else '[]'::jsonb end) e where s.kind = ${kind} and s.status = 'evaluated' group by 1`, "d");
+    const sc = await db`select avg((coalesce((e->'scores'->>'scent')::numeric, 0) + coalesce((e->'scores'->>'appearance')::numeric, 0) + coalesce((e->'scores'->>'skinfeel')::numeric, 0) + coalesce((e->'scores'->>'target')::numeric, 0) + coalesce((e->'scores'->>'brand')::numeric, 0) + coalesce((e->'scores'->>'overall')::numeric, 0)) / 30 * 100) as pct, count(*)::int as n from costing.samples s, jsonb_array_elements(case when jsonb_typeof(s.eval->'items') = 'array' then s.eval->'items' else '[]'::jsonb end) e where s.kind = ${kind} and s.status = 'evaluated' and jsonb_typeof(e->'scores') = 'object' and e->'scores' <> '{}'::jsonb`;
+    const pending = (await db`select count(*)::int as n from costing.samples where kind = ${kind} and status = 'sent'`)[0].n;
+    return { sentM, evaluatedM: evM, status: st, decisions: dec, avgScore: sc[0] && sc[0].pct !== null ? Math.round(Number(sc[0].pct)) : null, scored: Number(sc[0] ? sc[0].n : 0), awaiting: Number(pending) };
+  };
+  const perfumer = { scents: scStatus, scentsTotal: Object.values(scStatus).reduce((a, b) => a + b, 0), briefs: brStatus, scentsM: scM, samples: await evalStats("scent"), load: pfLoad };
+
+  /* ---- Product Development: สูตรผลิตภัณฑ์ บันทึกขึ้นสินค้าทดลอง ต้นแบบ ---- */
+  const fmStatus = counts(await db`select status, count(*)::int as n from costing.pd_formulas group by status`, "status");
+  const fmM = series(await db`select to_char(created_at at time zone 'Asia/Bangkok', 'YYYY-MM') as ym, count(*)::int as n from costing.pd_formulas where created_at >= ${since}::date group by 1`);
+  const ptStatus = counts(await db`select status, count(*)::int as n from costing.pd_trials group by status`, "status");
+  const ptM = series(await db`select to_char(created_at at time zone 'Asia/Bangkok', 'YYYY-MM') as ym, count(*)::int as n from costing.pd_trials where created_at >= ${since}::date group by 1`);
+  const bases = (await db`select count(*)::int as n, sum(case when active then 1 else 0 end)::int as a from costing.pd_bases`)[0];
+  const pdLoad = counts(await db`select coalesce(nullif(created_by, ''), '(ไม่ระบุ)') as who, count(*)::int as n from costing.pd_formulas where created_at >= ${since}::date group by 1`, "who");
+  const pd = { formulas: fmStatus, formulasTotal: Object.values(fmStatus).reduce((a, b) => a + b, 0), formulasM: fmM, trials: ptStatus, trialsM: ptM, bases: Number(bases.n), basesActive: Number(bases.a), mockups: await evalStats("mockup"), load: pdLoad };
+
+  /* ---- RA: ตรวจกฎหมายโครงการ เลขจดแจ้ง อย. คำขอจดแจ้ง ฐาน INCI เอกสารวัตถุดิบ ---- */
+  const regs = await db`select expiry, decision, cancelled, data->'history' as hist from costing.fda_regs`;
+  const fda: Record<string, number> = { ok: 0, soon: 0, urgent: 0, expired: 0, no: 0, cancel: 0 }; let renewedInPeriod = 0; const expM: Record<string, number> = {};
+  regs.forEach((r: Any) => {
+    const left = r.expiry ? fdaDaysLeft(String(r.expiry), today) : null;
+    const st = r.cancelled ? "cancel" : left !== null && left < 0 ? (r.decision === "no" ? "no" : "expired") : r.decision === "no" ? "no" : left !== null && left <= 90 ? "urgent" : left !== null && left <= 180 ? "soon" : "ok";
+    inc(fda, st); if (st === "ok" || st === "soon" || st === "urgent") { const k = String(r.expiry).slice(0, 7); expM[k] = (expM[k] || 0) + 1; }
+    (Array.isArray(r.hist) ? r.hist : []).forEach((h: Any) => { if (String(h.renewedAt || "").slice(0, 7) >= keys[0]) renewedInPeriod++; });
+  });
+  const next12 = (() => { const out: string[] = []; const p = bkkParts(new Date()); let y = Number(p.yyyy), mm = Number(p.mm); for (let i = 0; i < 12; i++) { out.push(`${y}-${String(mm).padStart(2, "0")}`); mm++; if (mm === 13) { mm = 1; y++; } } return out; })();
+  const reqStatus = counts(await db`select status, count(*)::int as n from costing.fda_requests group by status`, "status");
+  const reqM = series(await db`select to_char(created_at at time zone 'Asia/Bangkok', 'YYYY-MM') as ym, count(*)::int as n from costing.fda_requests where created_at >= ${since}::date group by 1`);
+  const inci = (await db`select count(*)::int as total, sum(case when jsonb_array_length(comps) > 0 then 1 else 0 end)::int as has, sum(case when status = 'check' then 1 else 0 end)::int as chk from costing.rm_inci`)[0];
+  const docType = counts(await db`select type, count(*)::int as n from costing.docs where status = 'issued' and issued_at >= ${since}::date group by type`, "type");
+  const docM = series(await db`select to_char(issued_at at time zone 'Asia/Bangkok', 'YYYY-MM') as ym, count(*)::int as n from costing.docs where status = 'issued' and issued_at >= ${since}::date group by 1`);
+  const ra = { projectRa: raStatus, fda, fdaTotal: regs.length, fdaExpiring12: next12.map((k) => expM[k] || 0), fdaMonths12: next12, renewedInPeriod, requests: reqStatus, requestsM: reqM,
+    requestsOpen: Object.entries(reqStatus).filter(([k]) => k !== "เรียบร้อย" && k !== "ยกเลิกใบจดแจ้ง").reduce((a, [, v]) => a + v, 0), inci: { total: Number(inci.total), has: Number(inci.has), check: Number(inci.chk) }, docType, docM };
+
+  /* ---- Research Ingredients: ทะเบียนพืชหอม การสกัด คลัง R&D ---- */
+  const bt = await db`select data->>'status' as s, data->>'form' as f, count(*)::int as n from costing.botanicals group by 1, 2`;
+  const btStatus: Record<string, number> = {}, btForm: Record<string, number> = {}; bt.forEach((r: Any) => { btStatus[String(r.s || "")] = (btStatus[String(r.s || "")] || 0) + Number(r.n); btForm[String(r.f || "(ไม่ระบุ)")] = (btForm[String(r.f || "(ไม่ระบุ)")] || 0) + Number(r.n); });
+  const exM = series(await db`select to_char(created_at at time zone 'Asia/Bangkok', 'YYYY-MM') as ym, count(*)::int as n from costing.botanical_extractions where created_at >= ${since}::date group by 1`);
+  const exRes = counts(await db`select coalesce(nullif(data->>'result', ''), '(ไม่ระบุ)') as r, count(*)::int as n from costing.botanical_extractions group by 1`, "r");
+  const stk = await db`select i.kind, count(*)::int as n, sum(case when coalesce(b.bal, 0) <= 0 then 1 else 0 end)::int as zero, sum(case when i.min_qty is not null and coalesce(b.bal, 0) < i.min_qty then 1 else 0 end)::int as low, sum(case when b.last_at is null or b.last_at < now() - interval '90 days' then 1 else 0 end)::int as stale from costing.rdstock_items i left join (select item_id, sum(qty) as bal, max(at) as last_at from costing.rdstock_tx group by item_id) b on b.item_id = i.id where i.active group by i.kind`;
+  const stock: Record<string, Any> = {}; stk.forEach((r: Any) => { stock[String(r.kind)] = { n: Number(r.n), zero: Number(r.zero), low: Number(r.low), stale: Number(r.stale) }; });
+  const txM = await db`select to_char(at at time zone 'Asia/Bangkok', 'YYYY-MM') as ym, kind, count(*)::int as n from costing.rdstock_tx where at >= ${since}::date and created_by not like 'import:%' group by 1, 2`;
+  const txIn = series(txM.filter((r: Any) => r.kind === "in")), txOut = series(txM.filter((r: Any) => r.kind === "out")), txAdj = series(txM.filter((r: Any) => r.kind === "adjust"));
+  const lowItems = await db`select i.code, i.name, i.unit, i.min_qty, coalesce(b.bal, 0) as bal from costing.rdstock_items i left join (select item_id, sum(qty) as bal from costing.rdstock_tx group by item_id) b on b.item_id = i.id where i.active and i.min_qty is not null and coalesce(b.bal, 0) < i.min_qty order by coalesce(b.bal, 0) / nullif(i.min_qty, 0) limit 15`;
+  const research = { botanicals: Object.values(btStatus).reduce((a, b) => a + b, 0), btStatus, btForm, extractionsM: exM, extractionsTotal: Object.values(exRes).reduce((a, b) => a + b, 0), extractionResults: exRes, stock, txIn, txOut, txAdj,
+    lowItems: lowItems.map((r: Any) => ({ code: String(r.code), name: String(r.name), unit: String(r.unit || ""), min: Number(r.min_qty), bal: Math.round(Number(r.bal) * 100) / 100 })) };
+
+  /* ---- การใช้งานระบบ: ผู้ใช้ตามบทบาท กิจกรรม 30 วัน (จาก log) ---- */
+  const roles = await db`select u.role, coalesce(r.name, u.role) as name, count(*)::int as n from costing.users u left join costing.roles r on r.id = u.role where u.active group by u.role, r.name order by 3 desc`;
+  const act = await db`select coalesce(u.role, '(ไม่มีบัญชี)') as role, count(*)::int as n, count(distinct l.email)::int as users, max(l.at) as last from costing.log l left join costing.users u on u.email = l.email where l.at >= now() - interval '30 days' and l.action not in ('pwLogin', 'pwLoginFail', 'pwLogout', 'requestAccess') group by 1`;
+  const actM = series(await db`select to_char(at at time zone 'Asia/Bangkok', 'YYYY-MM') as ym, count(*)::int as n from costing.log where at >= ${since}::date and action not in ('pwLogin', 'pwLoginFail', 'pwLogout') group by 1`);
+  const activeUsers = Number((await db`select count(distinct email)::int as n from costing.log where at >= now() - interval '30 days'`)[0].n);
+  const people = { roles: roles.map((r: Any) => ({ id: String(r.role), name: String(r.name), n: Number(r.n) })), activity30: act.map((r: Any) => ({ role: String(r.role), n: Number(r.n), users: Number(r.users), last: iso(r.last) })), activityM: actM, activeUsers };
+
+  await log(db, m.email, "dashboard", `${n} เดือน`);
+  return { months: keys, generatedAt: new Date().toISOString(), projects, perfumer, pd, ra, research, people };
+}
+
 /* ===== ตารางฟังก์ชันที่หน้าเว็บเรียกได้ ===== */
 const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   bootstrap, requestAccess, savePrices, resetPrices, saveExport, adminData, setUser, removeUser, declineRequest, saveAccess, createRole, updateRole, deleteRole,
@@ -2281,6 +2403,7 @@ const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   listRdStock, listRdStockTx, saveRdStockItem, deleteRdStockItem, addRdStockTx, importRdStock,
   listFda, saveFdaReg, renewFdaReg, deleteFdaReg, saveFdaRequest, deleteFdaRequest, getFdaAlert, saveFdaAlert, resetFdaAlertSecret,
   listInci, saveInci, deleteInci, importInci,
+  dashboard,
   listBotanicals, getBotanicalPrices, saveBotanicalPrice, saveBotanical, deleteBotanical, uploadBotanicalImage, listBotanicalExtractions, saveBotanicalExtraction, deleteBotanicalExtraction, importBotanicals, importBotanicalImage,
   importAll, importRmFile, finishMigration,
 };

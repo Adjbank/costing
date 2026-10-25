@@ -1793,7 +1793,8 @@ const PERMS = [
   ['projects','โครงการ R&D (Project Coordinator)','เปิดโครงการ วางแผน มอบหมาย ส่งตัวอย่าง ย้อนขั้น/ยกเลิก'],
   ['pd','Product Development','ต้นแบบสินค้า Stability Pilot Batch BOM ในโครงการ'],
   ['ra','RA ตรวจกฎหมาย','บันทึกผลตรวจ IFRA / อย. ก่อนมอบงานออกแบบ'],
-  ['research','Research Ingredients','ทะเบียนพืชหอม: เพิ่ม/แก้ข้อมูล รูป และบันทึกการสกัด']
+  ['research','Research Ingredients','ทะเบียนพืชหอม: เพิ่ม/แก้ข้อมูล รูป และบันทึกการสกัด'],
+  ['rdView','ดูข้อมูล R&D (ไม่เห็นราคา)','ดูโครงการ บรีฟ กลิ่น ต้นแบบ ทะเบียนพืช และคลัง R&D โดยไม่เห็นราคาวัตถุดิบและส่วนประกอบสูตร']
 ];
 const DOMAINS = ['scentandsense.co.th','scentandsense.co'];
 const S = {me:null, roles:{}, order:[], access:{autoJoin:false, defaultRole:'costing'}, perms:{}, roleName:'',
@@ -2023,7 +2024,7 @@ function enterApp(){
   const s=store.get('ss-cost-state:'+S.me.email);
   if(s && Array.isArray(s.products) && s.products.length) state=Object.assign({threshold:30}, s);
   else if(!state.products.length){ state.products=sampleProducts(); state.activeId=state.products[0].id; }
-  showView(S.admin && can('manageUsers') ? 'admin' : 'calc');
+  showView(S.admin && can('manageUsers') ? 'admin' : homeView());
   if(can('calc') && !SYNC.loaded) loadFromServer();
 }
 /* โหมดสว่าง/มืด: จำค่าที่เลือกไว้ ถ้ายังไม่เลือกจะตามระบบของเครื่อง */
@@ -2109,6 +2110,7 @@ $('#navtabs').addEventListener('click', e=>{
   const view={btnDash:'dash', btnCalc:'calc', btnChk:'chk', btnDoc:'doc', btnRd:'rd', btnPd:'pd', btnBt:'bt', btnStk:'stk', btnFda:'fda', btnPerf:'perf', btnMsds:'msds', btnRm:'rm', btnAll:'all', btnPrice:'price', btnCmp:'cmp', btnAdmin:'admin'}[b.id];
   if(view) showView(view);
 });
+function homeView(){ if(can('calc')||can('viewDb')) return 'calc'; if(typeof rdCanView==='function'&&rdCanView()) return 'rd'; if(typeof pfCanView==='function'&&pfCanView()) return 'perf'; if(typeof btCanView==='function'&&btCanView()) return 'bt'; return 'calc'; }
 async function showView(v){
   if(v==='admin' && !can('manageUsers')) v='calc';
   if((v==='all' || v==='price') && !isAdminRole()) v='calc';
@@ -3661,7 +3663,7 @@ msv.addEventListener('drop', e=>{ if(!msCanEdit()) return; e.preventDefault(); i
    ต้นแบบฟอร์ม: ODM Brief · SV Brief · Brand Archetype Quiz (Typeform ของ Scent & Sense)
    ดู: perfumer / calc / viewDb · สร้างและแก้ไข: perfumer · ลบ: ผู้สร้างหรือ admin (เซิร์ฟเวอร์ตรวจซ้ำ) */
 let PF={briefs:null, scents:null}, pfTab='brief', pfQ='', pfKind='', pfStatus='', pfEdit=null, pfBusy=false;
-const pfCanView=()=>can('perfumer')||can('calc')||can('viewDb'), pfCanEdit=()=>can('perfumer');
+const pfCanView=()=>['perfumer','projects','pd','ra','calc','viewDb','rdView'].some(can), pfCanEdit=()=>can('perfumer');
 const PF_KIND={ODM:'ODM · บรีฟจ้างผลิต', SV:'SV · กลิ่นประจำแบรนด์ธุรกิจบริการ', INT:'ภายใน · ออกแบบกลิ่นเอง', QUIZ:'Archetype Quiz · ยังไม่มีบรีฟ'};
 let TFS=null;   /* สถานะการเชื่อม Typeform (admin) */
 const PF_BSTAT={new:['รับบรีฟ','info'], design:['กำลังออกแบบ','warn'], sample:['ส่งตัวอย่าง','warn'], revise:['ปรับแก้','warn'], approved:['ลูกค้าอนุมัติ','ok'], closed:['ปิดงาน','ok'], lost:['ยกเลิก','bad']};
@@ -4310,7 +4312,7 @@ pfv.addEventListener('submit', e=>{ e.preventDefault();
 /* --- โครงการพัฒนาสินค้า (R&D): คำขอพัฒนา (PDR) → 8 ขั้นตอน → ตัวอย่างและผลประเมินของลูกค้า → BOM
    ดู: projects / perfumer / pd / ra / calc / viewDb · แก้ไข: projects / perfumer / pd · RA: ra · ย้อนขั้น/ยกเลิก: projects หรือ admin (เซิร์ฟเวอร์ตรวจซ้ำทุกครั้ง) */
 let RD={list:null, sla:{}, customers:null, view:'board', q:'', stageF:'', sel:new Set(), open:null, edit:null, sampleEdit:null, sumPeriod:'', sumKind:'scent', sum:null, busy:false};
-const rdCanView=()=>['projects','perfumer','pd','ra','calc','viewDb'].some(can), rdCanEdit=()=>can('projects')||can('perfumer')||can('pd'), rdIsPc=()=>can('projects')||isAdminRole();
+const rdCanView=()=>['projects','perfumer','pd','ra','calc','viewDb','rdView'].some(can), rdCanEdit=()=>can('projects')||can('perfumer')||can('pd'), rdIsPc=()=>can('projects')||isAdminRole();
 const RD_STAGE=[['s1','รับบรีฟ / วางแผน','Project Co'],['s2','ตรวจกฎหมาย','RA'],['s3','ออกแบบกลิ่น','Perfumer'],['s4','ต้นแบบสินค้า','Product Dev'],['s5','ส่งต้นแบบ / ประเมิน','Project Co'],['s6','Stability / สูตรสุดท้าย','Product Dev'],['s7','BOM / ส่งมอบสูตร','Product Dev'],['s8','Pilot Batch','Product Dev'],['done','เสร็จสิ้น',''],['lost','ยกเลิก','']];
 const RD_STAGE_MAP=Object.fromEntries(RD_STAGE.map(s=>[s[0],s]));
 const RD_KIND={new:'สินค้าใหม่', cost:'ลดต้นทุน', topping:'Topping / ปรับกลิ่นเดิม', repeat:'สั่งซ้ำ / อื่น ๆ'};
@@ -5126,7 +5128,7 @@ $('#pdView').addEventListener('submit', async e=>{
 /* ===== Research Ingredients: ทะเบียนวัตถุดิบพืชหอม (BT-nnnn) — ย้ายจาก Artifact เดิม =====
    ข้อมูลหลักเก็บใน data (jsonb) ราคาอ้างอิง/ต้นทุนแยกตาราง (เห็นเฉพาะผู้มีสิทธิ์ editPrices) รูปเก็บใน Storage ส่งเป็นลิงก์ชั่วคราว */
 let BT={items:null, canEdit:false, canPrice:false, prices:null, q:'', form:'', coll:'', status:'', rdType:'', stock:'', odor:'', note:'', view:'cards', shown:60, open:null, edit:false, ext:null, extForm:false, busy:false};
-const btCanView=()=>['research','perfumer','pd','ra','projects','calc','viewDb'].some(can);
+const btCanView=()=>['research','perfumer','pd','ra','projects','calc','viewDb','rdView'].some(can);
 (function(){ const st=document.createElement('style'); st.textContent=`@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Noto+Serif+Thai:wght@500;600&display=swap');
 .bt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:12px;margin-top:12px}
 .bt-card{display:flex;flex-direction:column;text-align:left;background:var(--card,#fff);border:1px solid var(--line-strong);border-radius:12px;padding:0;overflow:hidden;cursor:pointer;font:inherit;color:inherit}

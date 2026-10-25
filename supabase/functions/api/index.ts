@@ -12,7 +12,7 @@ import { TF_FORMS } from "./tf_forms.ts";
 
 const GOOGLE_CLIENT_ID = "715998679704-s1u0frj5cj2vhf4el67mj54sarbu5iq7.apps.googleusercontent.com";
 const DOMAINS = ["scentandsense.co.th", "scentandsense.co"];
-const PERM_KEYS = ["calc", "export", "viewDb", "editPrices", "manageUsers", "perfumer", "projects", "pd", "ra", "research"];
+const PERM_KEYS = ["calc", "export", "viewDb", "editPrices", "manageUsers", "perfumer", "projects", "pd", "ra", "research", "rdView"];
 const BUILTIN_SOURCE = { file: "PRODUCT RM - Summary RM.pdf", updated: "12/10/2026 11:41:18" };
 const DEFAULT_PUBLIC_URL = "https://rd.scentandsense.co.th/";
 
@@ -237,6 +237,11 @@ async function me(ctx: Ctx) {
 }
 type Me = Awaited<ReturnType<typeof me>>;
 const hasPerm = (m: Me, p: string) => !!(m.isOwner || m.role === "admin" || m.perms[p]);
+const canCost = (m: Me) => hasPerm(m, "calc") || hasPerm(m, "editPrices") || hasPerm(m, "viewDb");
+const canRecipe = (m: Me) => hasPerm(m, "calc") || hasPerm(m, "perfumer");
+/** ตัดราคาวัตถุดิบออกจากสูตร/เบสผลิตภัณฑ์ก่อนส่งให้ผู้ที่ไม่มีสิทธิ์เห็นต้นทุน */
+const maskPd = (m: Me, o: Any) => canCost(m) || !o ? o : { ...o, fragrancePrice: null, lines: (o.lines || []).map((l: Any) => ({ ...l, price: null, override: null })) };
+const maskScent = (m: Me, o: Any) => canCost(m) || !o ? o : { ...o, data: { ...(o.data || {}), costKg: undefined, cost: undefined } };
 const isAdmin = (m: Me) => !!m.role && m.active && (m.isOwner || m.role === "admin");
 async function need(ctx: Ctx, perm: string) {
   const m = await me(ctx);
@@ -516,8 +521,9 @@ const fhId = (fid: unknown) => { const id = str(fid, 40); if (!/^[A-Za-z0-9_-]{3
 const fhVer = (v: unknown) => Math.max(1, Math.min(999, Math.round(Number(v) || 1)));
 const fhNewId = (p: string) => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 async function listFormulaHistory(ctx: Ctx, formulaId: string) {
-  await needAny(ctx, FH_VIEW); const fid = fhId(formulaId), db = ctx.db;
-  return { versions: (await db`select * from costing.formula_versions where formula_id = ${fid} order by ver`).map(fhVerOut),
+  const m = await needAny(ctx, FH_VIEW); const fid = fhId(formulaId), db = ctx.db;
+  const mask = (v: Any) => canRecipe(m) ? v : { ...v, lines: [], design: {}, total: null, recipeHidden: true };
+  return { versions: (await db`select * from costing.formula_versions where formula_id = ${fid} order by ver`).map((x: Any) => mask(fhVerOut(x))),
     feedback: (await db`select * from costing.formula_feedback where formula_id = ${fid} order by created_at`).map(fhFbOut) };
 }
 async function addFormulaFeedback(ctx: Ctx, formulaId: string, fb: Any) {
@@ -843,7 +849,7 @@ async function deleteRmDoc(ctx: Ctx, id: string) {
 }
 
 /* ===== Perfumer: บรีฟออกแบบกลิ่น (Briefs) และคลังกลิ่น (Scents) ===== */
-const PF_VIEW = ["perfumer", "calc", "viewDb"], PF_DATA_MAX = 45000;
+const PF_VIEW = ["perfumer", "projects", "pd", "ra", "calc", "viewDb", "rdView"], PF_DATA_MAX = 45000;
 const PF_KINDS: Record<string, number> = { ODM: 1, SV: 1, INT: 1, QUIZ: 1 };
 const PF_BRIEF_STATUS: Record<string, number> = { new: 1, design: 1, sample: 1, revise: 1, approved: 1, closed: 1, lost: 1 };
 const PF_SCENT_STATUS: Record<string, number> = { draft: 1, trial: 1, sent: 1, approved: 1, production: 1, retired: 1 };
@@ -859,7 +865,7 @@ const scentOut = (r: Any) => ({ id: String(r.id), code: String(r.code), name: St
   owner: String(r.owner).toLowerCase(), formulaId: String(r.formula_id || ""), projectId: String(r.project_id || ""), formulaCode: String(r.formula_code || ""),
   createdAt: iso(r.created_at), updatedAt: iso(r.updated_at), updatedBy: String(r.updated_by || ""), data: r.data || {} });
 async function listBriefs(ctx: Ctx) { await needAny(ctx, PF_VIEW); return (await ctx.db`select * from costing.briefs order by updated_at desc`).map(briefOut); }
-async function listScents(ctx: Ctx) { await needAny(ctx, PF_VIEW); return (await ctx.db`select * from costing.scents order by updated_at desc`).map(scentOut); }
+async function listScents(ctx: Ctx) { const m = await needAny(ctx, PF_VIEW); return (await ctx.db`select * from costing.scents order by updated_at desc`).map((x: Any) => maskScent(m, scentOut(x))); }
 async function saveBrief(ctx: Ctx, b: Any) {
   return await locked(ctx, async (c) => {
     const m = await need(c, "perfumer"), db = c.db;
@@ -923,7 +929,7 @@ async function saveScent(ctx: Ctx, s: Any) {
     if (ex) await db`update costing.scents set ${db(row, ...Object.keys(row).filter((k) => k !== "id"))} where id = ${row.id}`;
     else await db`insert into costing.scents ${db(row)}`;
     await log(db, m.email, "saveScent", (ex ? "แก้ไข " : "สร้าง ") + code + " · " + name + " [" + status + "]");
-    return scentOut({ ...row, data: pfData(s.data) });
+    return maskScent(m, scentOut({ ...row, data: pfData(s.data) }));
   });
 }
 async function deleteScent(ctx: Ctx, id: string) {
@@ -1160,7 +1166,7 @@ async function finishMigration(ctx: Ctx) {
 /* ===== แผนกวิจัยและพัฒนา: ลูกค้า โครงการพัฒนาสินค้า (PDR) ตัวอย่างที่ส่ง และผลประเมินของลูกค้า =====
    โครงการหนึ่งรายการ = คำขอพัฒนา (FM-RD-01) หนึ่งใบ เดินผ่านขั้น s1..s8 → done (หรือ lost) ตามระเบียบปฏิบัติ QP-RD-01
    เลขเอกสาร FM-RD-XX-DDMMYY-NNN ออกให้เองจากตัวนับ docseq (NNN รันต่อเดือน) · ลูกค้าประเมินตัวอย่างผ่านลิงก์สาธารณะ (ไม่ต้อง log in) */
-const RD_VIEW = ["projects", "perfumer", "pd", "ra", "calc", "viewDb"], RD_EDIT = ["projects", "perfumer", "pd"], RD_DATA_MAX = 60000;
+const RD_VIEW = ["projects", "perfumer", "pd", "ra", "calc", "viewDb", "rdView"], RD_EDIT = ["projects", "perfumer", "pd"], RD_DATA_MAX = 60000;
 const RD_STAGES = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "done", "lost"];
 const RD_KINDS: Record<string, number> = { new: 1, cost: 1, topping: 1, repeat: 1 };
 const RD_SLA_DEFAULT: Record<string, number> = { s1: 1, s2: 2, s3: 15, s3send: 2, s3eval: 7, s5send: 2, s5eval: 7, s7: 1 };
@@ -1231,18 +1237,20 @@ async function listProjects(ctx: Ctx) {
   return { sla: await rdSla(db), items: rows.map((r: Any) => ({ ...projOut(r), scents: scN[String(r.id)] || 0, samples: smN[String(r.id)] ? Number(smN[String(r.id)].n) : 0, evaluated: smN[String(r.id)] ? Number(smN[String(r.id)].ev) : 0 })) };
 }
 async function getProject(ctx: Ctx, id: string) {
-  await needAny(ctx, RD_VIEW); const db = ctx.db;
+  const m = await needAny(ctx, RD_VIEW); const db = ctx.db;
   const r = (await db`select * from costing.projects where id = ${String(id || "")}`)[0];
   if (!r) throw new Error("ไม่พบโครงการนี้");
-  return { project: projOut(r), scents: (await db`select * from costing.scents where project_id = ${String(r.id)} order by created_at`).map(scentOut),
+  return { project: projOut(r), scents: (await db`select * from costing.scents where project_id = ${String(r.id)} order by created_at`).map((x: Any) => maskScent(m, scentOut(x))),
     samples: (await db`select * from costing.samples where project_id = ${String(r.id)} order by created_at`).map((s: Any) => sampleOut(s, "")), sla: await rdSla(db) };
 }
 async function saveProject(ctx: Ctx, p: Any) {
   return await locked(ctx, async (c) => {
-    const m = await needAny(c, ["projects", "perfumer"]), db = c.db;
+    const m = await needAny(c, RD_EDIT), db = c.db;
     p = p || {};
     const now = new Date(), ex = p.id ? (await db`select * from costing.projects where id = ${String(p.id)}`)[0] : null;
     if (p.id && !ex) throw new Error("ไม่พบโครงการนี้ (อาจถูกลบไปแล้ว)");
+    if (!ex && !hasPerm(m, "projects") && !hasPerm(m, "perfumer")) throw new Error("FORBIDDEN");   /* PD แก้ได้เฉพาะโครงการที่เปิดแล้ว */
+    if (ex) { ["customerCode", "soNo", "kind", "title", "scentCount", "briefId", "owners"].forEach((k) => { if (p[k] === undefined && !(k === "customerCode" && p.customer)) p[k] = { customerCode: ex.customer_code, soNo: ex.so_no, kind: ex.kind, title: ex.title, scentCount: ex.scent_count, briefId: ex.brief_id, owners: ex.owners }[k]; }); }
     const kind = RD_KINDS[p.kind] ? String(p.kind) : "new";
     let cust: Any = null;
     if (p.customer && typeof p.customer === "object" && (p.customer.company || p.customer.brand)) cust = await upsertCustomer(db, p.customer, m.email);   /* สร้าง/แก้ลูกค้าในคำขอเดียวกัน */
@@ -1558,8 +1566,8 @@ function pdBaseData(b: Any) {
 const baseOut = (r: Any) => ({ id: String(r.id), category: String(r.category), name: String(r.name), active: !!r.active, sort: Number(r.sort) || 0, ...pdBaseData(r.data || {}),
   createdAt: iso(r.created_at), updatedAt: iso(r.updated_at), updatedBy: String(r.updated_by || "") });
 async function listPdBases(ctx: Ctx) {
-  await needAny(ctx, RD_VIEW);
-  return (await ctx.db`select * from costing.pd_bases order by sort, category, name`).map(baseOut);
+  const m = await needAny(ctx, RD_VIEW);
+  return (await ctx.db`select * from costing.pd_bases order by sort, category, name`).map((x: Any) => maskPd(m, baseOut(x)));
 }
 async function savePdBase(ctx: Ctx, b: Any) {
   return await locked(ctx, async (c) => {
@@ -1604,9 +1612,9 @@ async function nextPdCode(db: Db, at: Date) {
   return "PD" + p.yyyy.slice(2) + p.mm + String(Number(r[0].n)).padStart(3, "0");
 }
 async function listPdFormulas(ctx: Ctx, projectId?: string) {
-  await needAny(ctx, RD_VIEW); const db = ctx.db;
+  const m = await needAny(ctx, RD_VIEW); const db = ctx.db;
   const rows = projectId ? await db`select * from costing.pd_formulas where project_id = ${String(projectId)} order by updated_at desc` : await db`select * from costing.pd_formulas order by updated_at desc limit 1000`;
-  return rows.map(fmOut);
+  return rows.map((x: Any) => maskPd(m, fmOut(x)));
 }
 async function savePdFormula(ctx: Ctx, f: Any) {
   return await locked(ctx, async (c) => {
@@ -1799,7 +1807,7 @@ async function issuePdTrialStock(ctx: Ctx, id: string) {
 
 /* ===== Research Ingredients: ทะเบียนวัตถุดิบพืชหอม (BT-nnnn) =====
    ข้อมูลเก็บเป็น data (jsonb) ตามฟิลด์เดิมของทะเบียน · ราคาอ้างอิง/ต้นทุนแยกตาราง เปิดเฉพาะผู้มีสิทธิ์ editPrices · รูปอยู่ใน Storage (private) ส่งเป็นลิงก์ชั่วคราว */
-const BT_VIEW = ["research", "perfumer", "pd", "ra", "projects", "calc", "viewDb"], BT_DATA_MAX = 60000, BT_IMG_MAX = 3 * 1024 * 1024;
+const BT_VIEW = ["research", "perfumer", "pd", "ra", "projects", "calc", "viewDb", "rdView"], BT_DATA_MAX = 60000, BT_IMG_MAX = 3 * 1024 * 1024;
 const BT_IMG_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
 const BT_EXT_METHODS: Record<string, number> = { sd: 1, hd: 1, hdc: 1, sdc: 1, sol: 1, eth: 1, enf: 1, co2: 1, cold: 1, other: 1 };
 const BT_EXT_RESULTS: Record<string, number> = { ok: 1, low: 1, none: 1, hydrosol: 1, fail: 1 };

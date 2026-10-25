@@ -5479,7 +5479,7 @@ $('#fdaView').addEventListener('submit', async e=>{
 });
 
 /* ---------- ส่วนประกอบวัตถุดิบ (INCI breakdown) + คำนวณส่วนประกอบบนฉลาก (สคบ. / อย.) ---------- */
-let INC={items:null, by:null, refs:[], canEdit:false, q:'', f:'', shown:100, edit:null, lab:{src:'pd', pdId:'', pfId:'', pfPct:100, manual:'', type:'leave', list:'a26', fragName:'FRAGRANCE'}};
+let INC={items:null, by:null, refs:[], canEdit:false, q:'', f:'', shown:100, edit:null, lab:{src:'pd', pdId:'', pfId:'', pfPct:100, manual:'', type:'leave', list:'a83', fragName:'FRAGRANCE'}};
 const incNz=s=>String(s||'').toUpperCase().replace(/\(\s*อย\.?\s*แบน\s*\)/g,'').replace(/\s+/g,' ').trim();
 const incIsFrag=s=>/^(FRAGRANCE|PARFUM|PERFUME|AROMA|FLAVOU?R)( \(PARFUM\))?$/.test(incNz(s));
 const incBannedName=s=>/อย\.?\s*แบน/.test(String(s||''));

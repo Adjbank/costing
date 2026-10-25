@@ -1767,7 +1767,7 @@ function btClean(v: unknown, depth = 0): unknown {
   if (typeof v === "object") { const o: Record<string, unknown> = {}; for (const k of Object.keys(v as Any).slice(0, 80)) { if (/^[A-Za-z][A-Za-z0-9_]{0,40}$/.test(k)) o[k] = btClean((v as Any)[k], depth + 1); } return o; }
   return null;
 }
-const BT_SYSTEM_KEYS = ["regNo", "image", "imageId", "imagePath", "imageUrl"];
+const BT_SYSTEM_KEYS = ["regNo", "image", "imageId", "imagePath", "imageUrl", "platePath"];
 function btData(d: Any) { const o = btClean(d) as Any; BT_SYSTEM_KEYS.forEach((k) => delete o[k]); if (JSON.stringify(o).length > BT_DATA_MAX) throw new Error("ข้อมูลใหญ่เกินไป (ลดความยาวข้อความ)"); return o; }
 async function btSignedUrls(paths: string[]) {
   const out: Record<string, string> = {}; const uniq = [...new Set(paths.filter(Boolean))];
@@ -1782,6 +1782,13 @@ async function listBotanicals(ctx: Ctx) {
   const rows = await db`select * from costing.botanicals order by reg_no`;
   const urls = await btSignedUrls(rows.map((r: Any) => String(r.image_path)));
   return { items: rows.map((r: Any) => btOut(r, urls)), canEdit: hasPerm(m, "research"), canPrice: hasPerm(m, "editPrices") };
+}
+/** แผ่นภาพพฤกษศาสตร์ (Botanical Plate) ของพืช: ส่งลิงก์ชั่วคราวเมื่อเปิดหน้ารายละเอียดเท่านั้น (ไม่ต้องเซ็นลิงก์ทั้งทะเบียนทุกครั้ง) */
+async function getBotanicalPlate(ctx: Ctx, regNo: string) {
+  await needAny(ctx, BT_VIEW); regNo = str(regNo, 20);
+  const row = (await ctx.db`select data->>'platePath' as p from costing.botanicals where reg_no = ${regNo}`)[0];
+  const p = row && row.p ? String(row.p) : ""; if (!p) return { url: "" };
+  const urls = await btSignedUrls([p]); return { url: urls[p] || "" };
 }
 async function getBotanicalPrices(ctx: Ctx) {
   await need(ctx, "editPrices");
@@ -2425,7 +2432,7 @@ const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   listFda, saveFdaReg, renewFdaReg, deleteFdaReg, saveFdaRequest, deleteFdaRequest, getFdaAlert, saveFdaAlert, resetFdaAlertSecret,
   listInci, saveInci, deleteInci, importInci,
   dashboard,
-  listBotanicals, getBotanicalPrices, saveBotanicalPrice, saveBotanical, deleteBotanical, uploadBotanicalImage, listBotanicalExtractions, saveBotanicalExtraction, deleteBotanicalExtraction, importBotanicals, importBotanicalImage,
+  listBotanicals, getBotanicalPlate, getBotanicalPrices, saveBotanicalPrice, saveBotanical, deleteBotanical, uploadBotanicalImage, listBotanicalExtractions, saveBotanicalExtraction, deleteBotanicalExtraction, importBotanicals, importBotanicalImage,
   importAll, importRmFile, finishMigration,
 };
 

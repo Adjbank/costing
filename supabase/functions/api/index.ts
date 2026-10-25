@@ -16,13 +16,27 @@ const PERM_KEYS = ["calc", "export", "viewDb", "editPrices", "manageUsers", "per
 const BUILTIN_SOURCE = { file: "PRODUCT RM - Summary RM.pdf", updated: "12/10/2026 11:41:18" };
 const DEFAULT_PUBLIC_URL = "https://rd.scentandsense.co.th/";
 
-const sql = postgres(Deno.env.get("SUPABASE_DB_URL")!, {
+const PG_OPTS = {
   max: 4, prepare: false, idle_timeout: 20, connect_timeout: 15, transform: { undefined: null },
   types: {
     numeric: { to: 1700, from: [1700], serialize: (x: unknown) => String(x), parse: (x: string) => parseFloat(x) },
     int8: { to: 20, from: [20], serialize: (x: unknown) => String(x), parse: (x: string) => Number(x) },
   },
-});
+};
+const mkSql = () => postgres(Deno.env.get("SUPABASE_DB_URL")!, PG_OPTS);
+let sql = mkSql(), lastDbUse = Date.now(), inflight = 0;
+/** Edge isolates are frozen between requests: a pooled socket can die silently and the next query then waits for the 150 s gateway timeout.
+ *  After a quiet spell (> 8 s) start from a fresh pool; the old one is closed in the background. */
+function freshPool(why: string) { const old = sql as Any; sql = mkSql(); try { const p = old.end && old.end({ timeout: 0 }); if (p && p.catch) p.catch(() => {}); } catch (_e) { /* ignore */ } console.log("db pool recycled: " + why); }
+function touchDb() { const now = Date.now(); if (inflight === 0 && now - lastDbUse > 8000) freshPool("idle " + Math.round((now - lastDbUse) / 1000) + "s"); lastDbUse = now; }
+/** Safety net: a request still stuck after `ms` recycles the pool and gives up (the web client retries a non-JSON 503 by itself). */
+class DbStuck extends Error { constructor() { super("DB_STUCK"); } }
+async function guard<T>(p: Promise<T>, ms = 40000): Promise<T> {
+  const cap = Number(Deno.env.get("DB_GUARD_MS")); if (cap > 0) ms = Math.min(ms, cap);   /* tests shorten the safety net */
+  let t: number | undefined;
+  try { return await Promise.race([p, new Promise<never>((_, rej) => { t = setTimeout(() => rej(new DbStuck()), ms) as unknown as number; })]); }
+  finally { if (t !== undefined) clearTimeout(t); lastDbUse = Date.now(); }
+}
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 
 // deno-lint-ignore no-explicit-any
@@ -2493,10 +2507,17 @@ const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "content-type, authorization, apikey, x-client-info", "Access-Control-Allow-Methods": "POST, GET, OPTIONS" };
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
+  touchDb(); inflight++;   /* never recycle the pool under a request that is still running */
+  try { return await handle(req); } finally { inflight--; lastDbUse = Date.now(); }
+});
+async function handle(req: Request): Promise<Response> {
   const url = new URL(req.url);
   if (url.searchParams.get("tf")) return await tfWebhook(req, url);
   /* ลิงก์ประเมินตัวอย่างของลูกค้า: GET แสดงฟอร์ม, POST บันทึกผล (ไม่ต้อง log in ใช้ token ของชุดตัวอย่าง) */
-  if (url.searchParams.get("eval")) return await evalPage(url.searchParams.get("eval") || "");
+  if (url.searchParams.get("eval")) {
+    const tok = url.searchParams.get("eval") || "";
+    try { return await guard(evalPage(tok), 12000); } catch (err) { if (!(err instanceof DbStuck)) throw err; freshPool("evalPage stuck"); return await guard(evalPage(tok), 25000); }   /* read-only page: retry once automatically */
+  }
   /* เตือนวันหมดอายุเลขจดแจ้ง: เรียกจาก Google Apps Script รายวัน (ยืนยันด้วยรหัสลับใน settings) */
   if (url.searchParams.get("fdaCron")) {
     let out: Any; try { out = await fdaCron(url.searchParams.get("fdaCron") || "", req); } catch (err) { out = { ok: false, error: String((err && (err as Error).message) || err) }; }
@@ -2504,8 +2525,8 @@ Deno.serve(async (req: Request) => {
   }
   if (url.searchParams.get("evalSubmit")) {
     let out: Any;
-    try { out = await evalSubmit(url.searchParams.get("evalSubmit") || "", JSON.parse((await req.text()) || "{}")); }
-    catch (err) { out = { ok: false, error: String((err && (err as Error).message) || err) }; }
+    try { out = await guard(evalSubmit(url.searchParams.get("evalSubmit") || "", JSON.parse((await req.text()) || "{}")), 30000); }
+    catch (err) { if (err instanceof DbStuck) { freshPool("evalSubmit stuck"); out = { ok: false, error: "ระบบหน่วงชั่วคราว กรุณากดส่งอีกครั้ง" }; } else out = { ok: false, error: String((err && (err as Error).message) || err) }; }
     return new Response(JSON.stringify(out), { headers: { "Content-Type": "application/json", ...CORS } });
   }
   if (req.method !== "POST") return new Response(JSON.stringify({ ok: true, service: "costing-api" }), { headers: { "Content-Type": "application/json", ...CORS } });
@@ -2514,14 +2535,19 @@ Deno.serve(async (req: Request) => {
     const reqBody = JSON.parse((await req.text()) || "{}");
     if (!Object.prototype.hasOwnProperty.call(API, reqBody.fn)) throw new Error("UNKNOWN_FUNCTION");
     /* เข้าสู่ระบบด้วยรหัสผ่านเท่านั้น: ทุกฟังก์ชันใช้เซสชัน ยกเว้น pwLogin (ก่อนเข้าระบบ) และ setMyPassword ที่ยืนยันตัวตนด้วย Google ได้ (ตั้งครั้งแรก / ลืมรหัส) */
-    let ctx: Ctx;
-    if (reqBody.fn === "pwLogin") ctx = { email: "", db: sql, via: "none" };
-    else if (reqBody.session) { const s = await sessionEmail(reqBody.session); ctx = { email: s.email, db: sql, via: "session", sid: s.sid }; }
-    else if (reqBody.fn === "setMyPassword" && reqBody.idToken) ctx = { email: await verifyIdToken(reqBody.idToken), db: sql, via: "google" };
-    else throw new Error(reqBody.idToken ? "AUTH_PASSWORD_REQUIRED" : "AUTH_REQUIRED");
-    out = { ok: true, result: await API[reqBody.fn](ctx, ...(Array.isArray(reqBody.args) ? reqBody.args : [])) };
+    const slowOk = /^import/.test(String(reqBody.fn)) || reqBody.fn === "syncTypeform";   /* bulk import / sync jobs are not cut off */
+    const work = (async () => {
+      let ctx: Ctx;
+      if (reqBody.fn === "pwLogin") ctx = { email: "", db: sql, via: "none" };
+      else if (reqBody.session) { const s = await sessionEmail(reqBody.session); ctx = { email: s.email, db: sql, via: "session", sid: s.sid }; }
+      else if (reqBody.fn === "setMyPassword" && reqBody.idToken) ctx = { email: await verifyIdToken(reqBody.idToken), db: sql, via: "google" };
+      else throw new Error(reqBody.idToken ? "AUTH_PASSWORD_REQUIRED" : "AUTH_REQUIRED");
+      return await API[reqBody.fn](ctx, ...(Array.isArray(reqBody.args) ? reqBody.args : []));
+    })();
+    out = { ok: true, result: slowOk ? await work : await guard(work) };
   } catch (err) {
+    if (err instanceof DbStuck) { freshPool("api stuck"); return new Response("RETRY: database connection was stuck", { status: 503, headers: { "Content-Type": "text/plain", ...CORS } }); }   /* not JSON → the web client retries by itself */
     out = { ok: false, error: String((err && (err as Error).message) || err) };
   }
   return new Response(JSON.stringify(out), { headers: { "Content-Type": "application/json", ...CORS } });
-});
+}

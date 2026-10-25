@@ -5107,7 +5107,7 @@ const BT_EXTRACT_FORMS=new Set(['Essential oil','Absolute','CO2 extract','Concre
 .bt-board .attrib{font-size:10px;fill:#f8f1e4;opacity:.8}
 .bt-board .str{stroke:var(--string);stroke-width:1;opacity:.55;fill:none}.bt-board .str.on{opacity:1;stroke-width:1.6;stroke:var(--bt-copper)}
 .bt-board .pin{cursor:pointer}.bt-board .pin circle.dot{fill:var(--bt-navy);stroke:#fff;stroke-width:1.5}.bt-board .pin.region circle.dot{fill:var(--bt-copper)}
-.bt-board .pin text{fill:#fff;font:700 10px sans-serif;text-anchor:middle;dominant-baseline:central;pointer-events:none}.bt-board .pin.on circle.dot{fill:var(--bt-copper);stroke-width:2.5}
+.bt-board .pin text{fill:#fff;font-family:inherit;font-weight:700;text-anchor:middle;dominant-baseline:central;pointer-events:none;letter-spacing:-.02em;font-variant-numeric:tabular-nums}.bt-board .pin circle.dot{stroke-width:2;filter:drop-shadow(0 1.5px 2px rgba(0,0,0,.28))}.bt-board .pin:hover circle.dot,.bt-board .pin:focus circle.dot{stroke:var(--bt-copper);stroke-width:2.5}.bt-board .lead line{stroke:var(--bt-navy);stroke-width:1;opacity:.55}.bt-board .lead circle{fill:var(--bt-navy);stroke:#fff;stroke-width:.8}.bt-board .lead.region line{stroke:var(--bt-copper)}.bt-board .lead.region circle{fill:var(--bt-copper)}.bt-board .pin.on circle.dot{fill:var(--bt-copper);stroke-width:2.5}
 .bt-board .pol{cursor:pointer}.bt-board .pol rect.paper{fill:var(--polaroid);filter:drop-shadow(0 2px 3px rgba(0,0,0,.25))}.bt-board .pol.on rect.paper{stroke:var(--bt-copper);stroke-width:2}
 .bt-board .pol text{fill:var(--polaroid-ink)}.bt-board .pol .capth{font:600 9.5px sans-serif}.bt-board .pol .cnt{font:700 9px sans-serif;fill:#8a6a4a}.bt-board .tack{fill:var(--bt-copper);stroke:#fff;stroke-width:1}
 .bt-board .hint{position:absolute;left:12px;bottom:10px;font-size:12px;opacity:.8;background:color-mix(in srgb,var(--wall) 85%,transparent);padding:2px 8px;border-radius:4px}
@@ -5188,11 +5188,23 @@ function btProvLayer(G,list){
   const max=Math.max(1,...Object.values(cnt));
   return `<g class="provs">${G.prov.map(p=>{ const n=cnt[p.id]||0, lv=n?Math.min(3,1+Math.floor(n/max*2.999)):0; return `<path class="prov${n?' has':''}" d="${p.d}" style="fill:${n?`var(--wood-${3+lv})`:'transparent'}"><title>${esc(BT.lang==='en'?p.en:p.th)}${n?` · ${n} ชนิด`:''}</title></path>`; }).join('')}</g><text class="attrib" x="${BT_MW-12}" y="${BT_MH-10}" text-anchor="end">เส้นแบ่งจังหวัด © OpenStreetMap contributors (ODbL) · geoBoundaries</text>`;
 }
+/* หมุดแผนที่: รัศมีตามจำนวนชนิด (ทุกหมุดใหญ่พอใส่ตัวเลข) แล้วดันหมุดที่ทับกันให้แยกออก โดยดึงกลับเข้าหาตำแหน่งจริงเล็กน้อย */
+function btPinLayout(P){
+  P.forEach(p=>{ const n=p.items.length; p.r=Math.min(19,9+2.4*Math.sqrt(Math.max(0,n-1))); p.px=p.x; p.py=p.y; });
+  for(let it=0;it<160;it++){
+    let moved=false;
+    for(let i=0;i<P.length;i++) for(let j=i+1;j<P.length;j++){ const a=P[i], b=P[j]; let dx=b.px-a.px, dy=b.py-a.py, d=Math.hypot(dx,dy); const min=a.r+b.r+2.5;
+      if(d<min){ if(d<.01){ const t=(btHash(a.key+b.key)%628)/100; dx=Math.cos(t); dy=Math.sin(t); d=1; } const k=(min-d)/2/d, wa=b.r/(a.r+b.r), wb=a.r/(a.r+b.r); a.px-=dx*k*2*wa; a.py-=dy*k*2*wa; b.px+=dx*k*2*wb; b.py+=dy*k*2*wb; moved=true; } }
+    P.forEach(p=>{ p.px+=(p.x-p.px)*.04; p.py+=(p.y-p.py)*.04; p.px=Math.max(p.r+2,Math.min(BT_MW-p.r-2,p.px)); p.py=Math.max(p.r+2,Math.min(BT_MH-p.r-2,p.py)); });
+    if(!moved&&it>10) break;
+  }
+}
 function btRenderMap(list){
   const G=btGeo(); if(!G) return '<div class="empty">กำลังโหลดแผนที่…</div>';
   const board=BT.board||'world', proj=board==='world'?G.wp:G.tp;
   const places=btMapPlaces(list,board).map(p=>{ const g=BT_GAZ[p.key], xy=proj([g[3],g[2]]); return {...p,x:xy[0],y:xy[1],region:/^R-|^TH-[NCS]$/.test(p.key)}; });
   const sel=places.find(p=>p.key===BT.place)||null; if(!sel) BT.place='';
+  btPinLayout(places);
   const free=btSlots(board), cards=[];
   if(board==='th'){
     const pick=places.slice(0,10), mid=BT_MW/2, rows=[24,172,320,468,616]; let L=pick.filter(p=>p.x<mid), R=pick.filter(p=>p.x>=mid);
@@ -5202,8 +5214,9 @@ function btRenderMap(list){
   const hasC=new Set(places.filter(p=>BT_ISO[p.key]).map(p=>BT_ISO[p.key])), fill=(id,on)=>`var(--wood-${on?4+btHash(id)%3:1+btHash(id)%3})`;
   const land=board==='world'?G.world.map(c=>`<path class="land" d="${c.d}" style="fill:${fill(c.id,hasC.has(c.id))}"/>`).join(''):G.th.map(c=>c.id==='764'?`<path class="land" d="${c.d}" style="fill:var(--wood-3)"/>`:`<path class="nb" d="${c.d}"/>`).join('')+btProvLayer(G,list);
   const rep=p=>p.items.find(i=>i.collection&&i.imageUrl)||p.items.find(i=>i.imageUrl);
-  const strs=cards.map(({p,sx,sy})=>{ const [ax,ay]=btAnchor(sx,sy,p.x,p.y); return `<path class="str${sel===p?' on':''}" d="M${ax.toFixed(1)},${ay.toFixed(1)} L${p.x.toFixed(1)},${p.y.toFixed(1)}"/>`; }).join('');
-  const pins=places.map(p=>{ const n=p.items.length, r=Math.min(18,5+2.2*Math.sqrt(n)); return `<g class="pin${p.region?' region':''}${sel===p?' on':''}" data-bt-place="${p.key}" tabindex="0" role="button" aria-label="${esc(btPlaceName(p.key))}: ${n} ชนิด"><circle class="dot" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r.toFixed(1)}"/>${r>=8.5?`<text x="${p.x.toFixed(1)}" y="${p.y.toFixed(1)}">${n}</text>`:''}<title>${esc(btPlaceName(p.key))} · ${n} ชนิด</title></g>`; }).join('');
+  const strs=cards.map(({p,sx,sy})=>{ const [ax,ay]=btAnchor(sx,sy,p.px,p.py); return `<path class="str${sel===p?' on':''}" d="M${ax.toFixed(1)},${ay.toFixed(1)} L${p.px.toFixed(1)},${p.py.toFixed(1)}"/>`; }).join('');
+  const lead=places.filter(p=>Math.hypot(p.px-p.x,p.py-p.y)>p.r*.6).map(p=>`<g class="lead${p.region?' region':''}"><line x1="${p.x.toFixed(1)}" y1="${p.y.toFixed(1)}" x2="${p.px.toFixed(1)}" y2="${p.py.toFixed(1)}"/><circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.2"/></g>`).join('');
+  const pins=lead+places.slice().sort((a,b)=>b.r-a.r).map(p=>{ const n=p.items.length, r=p.r, fs=Math.min(13,n<10?r*1.02:n<100?r*.86:r*.68); return `<g class="pin${p.region?' region':''}${sel===p?' on':''}" data-bt-place="${p.key}" tabindex="0" role="button" aria-label="${esc(btPlaceName(p.key))}: ${n} ชนิด"><circle class="dot" cx="${p.px.toFixed(1)}" cy="${p.py.toFixed(1)}" r="${r.toFixed(1)}"/><text x="${p.px.toFixed(1)}" y="${p.py.toFixed(1)}" style="font-size:${fs.toFixed(1)}px">${n}</text><title>${esc(btPlaceName(p.key))} · ${n} ชนิด</title></g>`; }).join('');
   const pols=cards.map(({p,sx,sy})=>{ const im=rep(p), rot=((btHash(p.key)%7)-3)*.9, nm=btPlaceName(p.key);
     return `<g class="pol${sel===p?' on':''}" data-bt-place="${p.key}" tabindex="0" role="button" aria-label="${esc(nm)}" transform="rotate(${rot} ${sx+BT_CW/2} ${sy+BT_CH/2})"><rect class="paper" x="${sx}" y="${sy}" width="${BT_CW}" height="${BT_CH}"/>
       ${im?`<image href="${esc(im.imageUrl)}" x="${sx+7}" y="${sy+7}" width="${BT_CW-14}" height="${BT_CW-14}" preserveAspectRatio="xMidYMid slice"/>`:`<rect x="${sx+7}" y="${sy+7}" width="${BT_CW-14}" height="${BT_CW-14}" fill="#efe6d6"/>`}

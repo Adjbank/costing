@@ -411,6 +411,21 @@ tfoot td{font-weight:700;border-top:1px solid var(--ink);background:var(--bg-sof
 .checks{display:flex;flex-direction:column;gap:6px;font-size:13px}
 .checks label{display:flex;gap:8px;align-items:flex-start}
 .note-box{font-size:12.5px;color:var(--ink-muted);background:var(--bg-soft);border-radius:10px;padding:10px 12px;line-height:1.55}
+
+/* Dashboard ผู้บริหาร */
+.dash-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.dash-kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);padding:12px 14px;border-left:4px solid var(--info)}
+.dash-kpi.ok{border-left-color:var(--ok)} .dash-kpi.warn{border-left-color:var(--warn)} .dash-kpi.bad{border-left-color:var(--bad)}
+.dash-v{font-size:26px;font-weight:700;line-height:1.1} .dash-kpi.bad .dash-v{color:var(--bad)} .dash-kpi.warn .dash-v{color:var(--warn)} .dash-kpi.ok .dash-v{color:var(--ok)}
+.dash-l{font-size:12.5px;font-weight:600;margin-top:4px} .dash-s{font-size:11.5px;color:var(--ink-muted);margin-top:2px}
+.dash-h{font-size:15px;margin:22px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+.dash-card{margin:0;min-width:0} .dash-card h4{font-size:13px;margin:0 0 8px;color:var(--ink-muted);font-weight:700}
+.dash-bars{display:flex;flex-direction:column;gap:5px} .dash-bar{display:grid;grid-template-columns:minmax(90px,38%) 1fr auto;gap:8px;align-items:center;font-size:12.5px}
+.dash-bar-l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .dash-bar-t{height:12px;background:var(--bg-soft);border-radius:6px;overflow:hidden} .dash-bar-f{height:100%;border-radius:6px} .dash-bar-n{min-width:34px;text-align:right;font-variant-numeric:tabular-nums}
+.dash-legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;margin-top:6px;color:var(--ink-muted)} .dash-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.dash-ins{margin:0;padding-left:18px;font-size:13.5px;line-height:1.6} .dash-ins li.bad{color:var(--bad)} .dash-ins li.warn{color:var(--warn)} .dash-ins li.ok{color:var(--ok)}
+@media print{ #dashView .dash-grid{grid-template-columns:repeat(2,1fr)} #dashView .btn,#dashView select{display:none} #dashView .dash-card,#dashView .dash-kpi{break-inside:avoid} }
 </style>
 <script>try{var __t=JSON.parse(localStorage.getItem('ss-theme')); if(__t==='dark'||__t==='light') document.documentElement.setAttribute('data-theme',__t);}catch(e){}</script>
 
@@ -446,6 +461,7 @@ tfoot td{font-weight:700;border-top:1px solid var(--ink);background:var(--bg-sof
   <section id="btView" hidden style="padding-block:24px 56px"></section>
   <section id="stkView" hidden style="padding-block:24px 56px"></section>
   <section id="fdaView" hidden style="padding-block:24px 56px"></section>
+  <section id="dashView" hidden style="padding-block:24px 56px"></section>
   <section id="perfView" hidden style="padding-block:24px 56px"></section>
   <div id="calcView">
   <div id="calcSubTabs" style="padding-top:20px"></div>
@@ -1393,7 +1409,7 @@ function renderUserBar(){
   const tab=(id,view,label)=>`<button type="button" id="${id}" class="${v===view?'on':''}" ${v===view?'aria-current="page"':''}>${label}</button>`;
   /* หน้า "คำนวณ" รวมอยู่ในแท็บ Perfumer (แท็บย่อย "คำนวณต้นทุน") สำหรับผู้ที่เห็น Perfumer */
   const pfOn=v==='perf'||v==='calc';
-  $('#navtabs').innerHTML = (rdCanView() ? tab('btnRd','rd','โครงการ') : '')
+  $('#navtabs').innerHTML = (dashCanView() ? tab('btnDash','dash','Dashboard') : '') + (rdCanView() ? tab('btnRd','rd','โครงการ') : '')
     + (pfCanView() ? `<button type="button" id="btnPerf" class="${pfOn?'on':''}" ${pfOn?'aria-current="page"':''}>Perfumer</button>` : tab('btnCalc','calc','คำนวณ'))
     + (pdCanView() ? tab('btnPd','pd','Product Development') : '')
     + (btCanView() ? tab('btnBt','bt','ทะเบียนพืชหอม') : '')
@@ -1450,7 +1466,7 @@ $('#userbar').addEventListener('click', e=>{
 });
 $('#navtabs').addEventListener('click', e=>{
   const b=e.target.closest('button'); if(!b) return;
-  const view={btnCalc:'calc', btnChk:'chk', btnDoc:'doc', btnRd:'rd', btnPd:'pd', btnBt:'bt', btnStk:'stk', btnFda:'fda', btnPerf:'perf', btnMsds:'msds', btnRm:'rm', btnAll:'all', btnPrice:'price', btnCmp:'cmp', btnAdmin:'admin'}[b.id];
+  const view={btnDash:'dash', btnCalc:'calc', btnChk:'chk', btnDoc:'doc', btnRd:'rd', btnPd:'pd', btnBt:'bt', btnStk:'stk', btnFda:'fda', btnPerf:'perf', btnMsds:'msds', btnRm:'rm', btnAll:'all', btnPrice:'price', btnCmp:'cmp', btnAdmin:'admin'}[b.id];
   if(view) showView(view);
 });
 async function showView(v){
@@ -1468,8 +1484,9 @@ async function showView(v){
   if(v==='bt' && !btCanView()) v='calc';
   if(v==='stk' && !btCanView()) v='calc';
   if(v==='fda' && !fdaCanView()) v='calc';
+  if(v==='dash' && !dashCanView()) v='calc';
   S.view=v; S.admin = v!=='calc';                 /* S.admin = ไม่ได้อยู่หน้าคำนวณ */
-  $('#msdsView').hidden=v!=='msds'; $('#perfView').hidden=v!=='perf'; $('#rdView').hidden=v!=='rd'; $('#pdView').hidden=v!=='pd'; $('#btView').hidden=v!=='bt'; $('#stkView').hidden=v!=='stk'; $('#fdaView').hidden=v!=='fda';
+  $('#msdsView').hidden=v!=='msds'; $('#perfView').hidden=v!=='perf'; $('#rdView').hidden=v!=='rd'; $('#pdView').hidden=v!=='pd'; $('#btView').hidden=v!=='bt'; $('#stkView').hidden=v!=='stk'; $('#fdaView').hidden=v!=='fda'; $('#dashView').hidden=v!=='dash';
   $('#adminView').hidden=v!=='admin'; $('#allView').hidden=v!=='all'; $('#priceView').hidden=v!=='price'; $('#rmView').hidden=v!=='rm'; $('#cmpView').hidden=v!=='cmp'; $('#chkView').hidden=v!=='chk'; $('#docView').hidden=v!=='doc'; $('#calcView').hidden=v!=='calc';
   renderUserBar();
   if(v==='calc') renderCalcSubTabs();
@@ -1481,6 +1498,7 @@ async function showView(v){
   if(v==='bt'){ window.scrollTo(0,0); renderBtView(); return; }
   if(v==='stk'){ window.scrollTo(0,0); renderStkView(); return; }
   if(v==='fda'){ window.scrollTo(0,0); renderFdaView(); return; }
+  if(v==='dash'){ window.scrollTo(0,0); renderDashView(); return; }
   if(v==='chk'){ window.scrollTo(0,0); renderChkView(); return; }
   if(v==='cmp'){ window.scrollTo(0,0); renderCmpView(); return; }
   if(v==='rm'){ window.scrollTo(0,0); renderRmView(); return; }
@@ -5679,6 +5697,147 @@ $('#fdaView').addEventListener('submit', async e=>{
 }, true);
 /* จากหน้าสูตร PD: ปุ่ม "ส่วนประกอบฉลาก" */
 $('#pdView').addEventListener('click', e=>{ const b=e.target.closest('button[data-pd-inci]'); if(!b) return; FDA.sub='label'; INC.lab.src='pd'; INC.lab.pdId=b.dataset.pdInci; showView('fda'); });
+
+/* ===== Dashboard ผู้บริหาร: ภาพรวมการทำงานแต่ละแผนกในหน้าเดียว (ข้อมูลจาก api dashboard) ===== */
+let DASH={data:null, months:12, loading:false};
+const dashCanView=()=>['projects','perfumer','pd','ra','calc','viewDb'].some(can);
+const dashN=n=>(n==null||!isFinite(n))?'–':Number(n).toLocaleString('th-TH');
+const dashPct=(a,b)=>b?Math.round(a/b*100)+'%':'–';
+const DASH_MON=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const dashMon=ym=>{ const [y,m]=ym.split('-'); return DASH_MON[+m-1]+(m==='01'||ym===DASH.data.months[0]?' '+String(+y+543).slice(2):''); };
+const DASH_COL={a:'var(--accent)', b:'var(--info)', c:'var(--ok)', d:'var(--warn)', e:'var(--bad)', f:'var(--ink-muted)'};
+/* การ์ดตัวเลข */
+function dashKpi(v, label, sub, tone){ return `<div class="dash-kpi ${tone||''}"><div class="dash-v">${v}</div><div class="dash-l">${label}</div>${sub?`<div class="dash-s">${sub}</div>`:''}</div>`; }
+/* แท่งแนวนอนจากคู่ [ชื่อ, ค่า, (สี)] */
+function dashBars(rows, opt){
+  rows=rows.filter(r=>r[1]>0||(opt&&opt.keepZero)); if(!rows.length) return '<div class="empty" style="padding:14px">ยังไม่มีข้อมูล</div>';
+  const max=Math.max(...rows.map(r=>r[1]),1), tot=rows.reduce((s,r)=>s+r[1],0);
+  return `<div class="dash-bars">${rows.map(r=>`<div class="dash-bar"><div class="dash-bar-l" title="${esc(r[0])}">${esc(r[0])}</div><div class="dash-bar-t"><div class="dash-bar-f" style="width:${Math.max(2,r[1]/max*100)}%;background:${r[2]||DASH_COL.a}"></div></div><div class="dash-bar-n">${dashN(r[1])}${opt&&opt.pct?` <span class="muted">${dashPct(r[1],tot)}</span>`:''}</div></div>`).join('')}</div>`;
+}
+/* กราฟแท่งรายเดือน (SVG) · series = [{name, data[], color}] */
+function dashCols(series, months, h){
+  const H=h||120, W=Math.max(320, months.length*34), pad=22, max=Math.max(1,...series.flatMap(s=>s.data)), gw=(W-8)/months.length, bw=Math.max(4,(gw-6)/series.length);
+  if(!series.some(s=>s.data.some(v=>v>0))) return '<div class="empty" style="padding:14px">ยังไม่มีข้อมูลในช่วงนี้</div>';
+  const bars=months.map((mo,i)=>series.map((s,j)=>{ const v=s.data[i]||0, bh=v/max*(H-pad-6), x=4+i*gw+3+j*bw, y=H-pad-bh; return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${(bw-1).toFixed(1)}" height="${bh.toFixed(1)}" rx="2" fill="${s.color}"><title>${esc(dashMon(mo))} · ${esc(s.name)}: ${v}</title></rect>${v?`<text x="${(x+bw/2-0.5).toFixed(1)}" y="${(y-3).toFixed(1)}" font-size="9" text-anchor="middle" fill="var(--ink-muted)">${v}</text>`:''}`; }).join('')).join('');
+  const lab=months.map((mo,i)=>(months.length>14&&i%2)?'':`<text x="${(4+i*gw+gw/2).toFixed(1)}" y="${H-6}" font-size="9.5" text-anchor="middle" fill="var(--ink-muted)">${esc(dashMon(mo))}</text>`).join('');
+  return `<div class="dash-chart"><svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="none" style="height:${H}px;display:block"><line x1="4" x2="${W-4}" y1="${H-pad}" y2="${H-pad}" stroke="var(--line)"/>${bars}${lab}</svg>
+    <div class="dash-legend">${series.map(s=>`<span><i style="background:${s.color}"></i>${esc(s.name)} <b>${dashN(s.data.reduce((a,b)=>a+b,0))}</b></span>`).join('')}</div></div>`;
+}
+const dashCard=(title, body, foot)=>`<div class="card dash-card"><h4>${title}</h4>${body}${foot?`<div class="muted" style="font-size:12px;margin-top:8px">${foot}</div>`:''}</div>`;
+const dashMap=(o, MAP, order)=>(order||Object.keys(o)).filter(k=>o[k]!=null).map(k=>[MAP&&MAP[k]?MAP[k][0]:(k||'(ไม่ระบุ)'), o[k]||0, MAP&&MAP[k]?{ok:DASH_COL.c,warn:DASH_COL.d,bad:DASH_COL.e,info:DASH_COL.b}[MAP[k][1]]:DASH_COL.a]);
+const dashWho=e=>/^\(/.test(e)?esc(e):rdPerson(e);
+function renderDashView(){
+  $('#dashView').innerHTML=`<div class="bh"><h2>Dashboard ผู้บริหาร</h2><span class="hint">ภาพรวมการทำงานของทุกแผนก R&D เพื่อใช้ตัดสินใจ · ตัวเลขดึงจากระบบ ณ เวลาที่เปิดหน้า</span></div><div id="dashBody"><div class="empty">กำลังรวบรวมข้อมูล…</div></div>`;
+  dashLoad();
+}
+async function dashLoad(force){
+  if(DASH.data&&!force&&DASH.data._months===DASH.months){ drawDash(); return; }
+  DASH.loading=true;
+  try{ const d=await api('dashboard', DASH.months); d._months=DASH.months; DASH.data=d; drawDash(); }
+  catch(e){ $('#dashBody').innerHTML=`<div class="msg bad">${esc(errText(e))}</div>`; }
+  DASH.loading=false;
+}
+/* ข้อสังเกตอัตโนมัติ: จุดที่ผู้บริหารควรดูก่อน */
+function dashInsights(d){
+  const out=[], P=d.projects, R=d.ra, S=d.research, F=d.perfumer, D=d.pd;
+  if(P.overdueCount) out.push(['bad',`โครงการเกินกำหนด ${P.overdueCount} โครงการ จากที่กำลังทำ ${P.active} (${dashPct(P.overdueCount,P.active)})`]);
+  const bs=Object.entries(P.byStage).filter(([k])=>k!=='done'&&k!=='lost').sort((a,b)=>b[1]-a[1])[0]; if(bs&&bs[1]>=5) out.push(['warn',`งานกองอยู่ที่ขั้น "${RD_STAGE_MAP[bs[0]]?RD_STAGE_MAP[bs[0]][1]:bs[0]}" ${bs[1]} โครงการ (${RD_STAGE_MAP[bs[0]]?RD_STAGE_MAP[bs[0]][2]:''}) · อยู่ในขั้นเฉลี่ย ${dashN(P.ageAvg[bs[0]])} วัน`]);
+  if(P.raStatus.pending) out.push(['warn',`โครงการที่ RA ยังไม่ตรวจกฎหมาย ${P.raStatus.pending} โครงการ (ขั้นออกแบบกลิ่นเริ่มไม่ได้จนกว่าจะผ่าน)`]);
+  if(F.samples.awaiting) out.push(['info',`ตัวอย่างกลิ่นที่ส่งแล้วรอลูกค้าตอบ ${F.samples.awaiting} ชุด · อัตราลูกค้าเลือกผลิตจริง ${dashPct(F.samples.decisions.produce||0, Object.values(F.samples.decisions).reduce((a,b)=>a+b,0))}`]);
+  if(D.mockups.awaiting) out.push(['info',`ต้นแบบสินค้าที่รอลูกค้ายืนยัน ${D.mockups.awaiting} ชุด`]);
+  if(R.fda.expired||R.fda.urgent) out.push([R.fda.expired?'bad':'warn',`เลขจดแจ้ง อย. หมดอายุแล้ว ${R.fda.expired} · หมดอายุใน 90 วัน ${R.fda.urgent} · ใน 180 วัน ${R.fda.soon}`]);
+  if(R.requestsOpen) out.push(['info',`คำขอจดแจ้งที่ยังไม่เสร็จ ${R.requestsOpen} รายการ`]);
+  if(R.inci.total-R.inci.has) out.push(['warn',`วัตถุดิบที่ยังไม่มีส่วนประกอบ INCI ${dashN(R.inci.total-R.inci.has)} รหัส (${dashPct(R.inci.has,R.inci.total)} มีแล้ว) · รอ RA ตรวจ ${dashN(R.inci.check)} รหัส`]);
+  const low=Object.values(S.stock).reduce((a,x)=>a+x.low,0), zero=Object.values(S.stock).reduce((a,x)=>a+x.zero,0); if(low||zero) out.push(['warn',`คลัง R&D: ต่ำกว่าขั้นต่ำ ${low} รายการ · ยอดเป็นศูนย์ ${zero} รายการ`]);
+  if(P.doneInPeriod) out.push(['ok',`ปิดโครงการสำเร็จ ${P.doneInPeriod} โครงการใน ${d.months.length} เดือน · ใช้เวลาเฉลี่ย ${dashN(P.leadDays)} วัน · เปิดใหม่ ${P.openedInPeriod}`]);
+  return out;
+}
+function drawDash(){
+  const d=DASH.data; if(!d) return; const M=d.months, P=d.projects, F=d.perfumer, D=d.pd, R=d.ra, S=d.research, U=d.people;
+  const ins=dashInsights(d), sum=o=>Object.values(o).reduce((a,b)=>a+b,0);
+  const stageRows=RD_STAGE.filter(s=>s[0]!=='done'&&s[0]!=='lost').map(s=>[`${s[1]}${s[2]?' · '+s[2]:''}`, P.byStage[s[0]]||0, P.overdueByStage[s[0]]?DASH_COL.e:DASH_COL.a]);
+  const sPf=F.samples, sPd=D.mockups, decs=o=>dashMap(o, RD_DEC, ['produce','revise','reject','(ไม่ระบุ)']);
+  $('#dashBody').innerHTML=`
+    <div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px"><label class="muted" style="font-size:13px">ช่วงเวลา</label><select id="dashMonths">${[6,12,24,36].map(n=>`<option value="${n}" ${DASH.months===n?'selected':''}>${n} เดือนย้อนหลัง</option>`).join('')}</select><button class="btn small" type="button" id="dashRefresh">รีเฟรช</button><button class="btn small" type="button" id="dashExport">ส่งออก Excel</button><button class="btn small" type="button" id="dashPrint">พิมพ์</button><span class="muted" style="font-size:12px;margin-left:auto">ข้อมูล ณ ${fmtSeen(d.generatedAt)}</span></div>
+    <div class="dash-kpis">${dashKpi(dashN(P.active),'โครงการกำลังดำเนินการ',`ทั้งหมด ${dashN(P.total)} · ปิดแล้ว ${dashN(P.byStage.done||0)} · ยกเลิก ${dashN(P.byStage.lost||0)}`)}${dashKpi(dashN(P.overdueCount),'เกินกำหนด SLA',`${dashPct(P.overdueCount,P.active)} ของที่กำลังทำ`,P.overdueCount?'bad':'ok')}${dashKpi(dashN(P.doneInPeriod),`ปิดงานสำเร็จ ${M.length} เดือน`,`เปิดใหม่ ${dashN(P.openedInPeriod)} · ยกเลิก ${dashN(P.lostInPeriod)}`,'ok')}${dashKpi(P.leadDays==null?'–':dashN(P.leadDays)+' วัน','เวลาเฉลี่ยจนปิดงาน','นับจากเปิดโครงการถึงเสร็จสิ้น')}${dashKpi(dashN(sPf.awaiting+sPd.awaiting),'รอลูกค้าประเมิน',`กลิ่น ${dashN(sPf.awaiting)} · ต้นแบบ ${dashN(sPd.awaiting)}`,sPf.awaiting+sPd.awaiting?'warn':'')}${dashKpi(dashN(R.fda.urgent+R.fda.expired),'เลขจดแจ้งต้องจัดการ',`หมดอายุแล้ว ${R.fda.expired} · ภายใน 90 วัน ${R.fda.urgent}`,R.fda.expired?'bad':R.fda.urgent?'warn':'ok')}${dashKpi(dashN(U.activeUsers),'ผู้ใช้งานระบบ 30 วัน',`บัญชีทั้งหมด ${dashN(U.roles.reduce((a,r)=>a+r.n,0))}`)}</div>
+    ${ins.length?`<div class="card dash-card" style="margin-bottom:14px"><h4>ข้อสังเกตที่ควรดูก่อน</h4><ul class="dash-ins">${ins.map(([t,s])=>`<li class="${t}">${esc(s)}</li>`).join('')}</ul></div>`:''}
+
+    <h3 class="dash-h">Project Coordinator · โครงการลูกค้า (PDR)</h3>
+    <div class="dash-grid">
+      ${dashCard('โครงการตามขั้นตอน (แดง = มีงานเกินกำหนด)', dashBars(stageRows,{keepZero:true}), 'เวลาเฉลี่ยที่อยู่ในขั้นปัจจุบัน: '+RD_STAGE.filter(s=>P.ageAvg[s[0]]!=null).map(s=>`${s[1].split(' /')[0]} ${P.ageAvg[s[0]]} วัน`).join(' · '))}
+      ${dashCard('เปิดโครงการใหม่ vs ปิดสำเร็จ รายเดือน', dashCols([{name:'เปิดใหม่',data:P.openedM,color:DASH_COL.b},{name:'ปิดสำเร็จ',data:P.doneM,color:DASH_COL.c}],M))}
+      ${dashCard('ประเภทงาน', dashBars(Object.entries(P.byKind).map(([k,v])=>[RD_KIND[k]||k,v,DASH_COL.b]),{pct:true}))}
+      ${dashCard('ภาระงานผู้ประสานงาน (โครงการที่กำลังทำ)', `<div class="tablebox"><table><thead><tr><th>Project Co</th><th class="num">กำลังทำ</th><th class="num">เกินกำหนด</th></tr></thead><tbody>${Object.entries(P.pcLoad).sort((a,b)=>b[1].n-a[1].n).map(([e,x])=>`<tr><td>${dashWho(e)}</td><td class="num">${x.n}</td><td class="num" ${x.overdue?'style="color:var(--bad);font-weight:600"':''}>${x.overdue||''}</td></tr>`).join('')||'<tr><td colspan="3" class="muted">ยังไม่มี</td></tr>'}</tbody></table></div>`)}
+    </div>
+    ${P.overdue.length?dashCard(`โครงการเกินกำหนด (${P.overdueCount}${P.overdueCount>10?' · แสดง 10 รายการแรก เรียงตามเกินกำหนดมากสุด · ดูทั้งหมดในหน้าโครงการ':''})`, `<div class="tablebox"><table><thead><tr><th>PDR</th><th>ลูกค้า / แบรนด์</th><th>ขั้นตอน</th><th class="num">เกินมา (วัน)</th><th class="num">อยู่ในขั้นนี้ (วัน)</th><th>Project Co</th></tr></thead><tbody>${P.overdue.slice(0,10).map(p=>`<tr><td><button class="btn small" type="button" data-dash-proj="${esc(p.id)}">${esc(p.pdrNo)}</button></td><td>${esc(p.brand)}</td><td style="font-size:12.5px">${esc(RD_STAGE_MAP[p.stage]?RD_STAGE_MAP[p.stage][1]:p.stage)}${p.waiting?' <span class="chip info">รอลูกค้า</span>':''}</td><td class="num" style="color:var(--bad);font-weight:600">${-p.left}</td><td class="num">${dashN(p.inStage)}</td><td>${dashWho(p.pc||'(ไม่ระบุ)')}</td></tr>`).join('')}</tbody></table></div>`):''}
+
+    <h3 class="dash-h">Perfumer · ออกแบบกลิ่น</h3>
+    <div class="dash-grid">
+      ${dashCard(`กลิ่นในคลัง (${dashN(F.scentsTotal)})`, dashBars(dashMap(F.scents, PF_SSTAT, ['draft','trial','sent','approved','production','retired']),{keepZero:true,pct:true}))}
+      ${dashCard('บรีฟลูกค้า', dashBars(dashMap(F.briefs, PF_BSTAT, ['new','design','sample','revise','approved','closed','lost']),{keepZero:true}))}
+      ${dashCard('ตัวอย่างกลิ่น: ส่งลูกค้า vs ได้ผลประเมิน รายเดือน', dashCols([{name:'ส่งตัวอย่าง',data:sPf.sentM,color:DASH_COL.b},{name:'ได้ผลประเมิน',data:sPf.evaluatedM,color:DASH_COL.c}],M), `รอลูกค้าตอบ ${dashN(sPf.awaiting)} ชุด`)}
+      ${dashCard('ผลตัดสินของลูกค้า (ตัวอย่างกลิ่น)', dashBars(decs(sPf.decisions),{pct:true}), sPf.avgScore!=null?`คะแนนประเมินเฉลี่ย ${sPf.avgScore}% จาก ${dashN(sPf.scored)} กลิ่นที่ให้คะแนน`:'')}
+      ${dashCard('กลิ่นใหม่ที่สร้างรายเดือน', dashCols([{name:'กลิ่นใหม่',data:F.scentsM,color:DASH_COL.a}],M))}
+      ${dashCard('ภาระงาน Perfumer (โครงการที่กำลังทำ)', `<div class="tablebox"><table><thead><tr><th>Perfumer</th><th class="num">โครงการ</th><th class="num">กำลังออกแบบ (ขั้น 3)</th></tr></thead><tbody>${Object.entries(F.load).sort((a,b)=>b[1].n-a[1].n).map(([e,x])=>`<tr><td>${dashWho(e)}</td><td class="num">${x.n}</td><td class="num">${x.s3||''}</td></tr>`).join('')||'<tr><td colspan="3" class="muted">ยังไม่มีการมอบหมาย</td></tr>'}</tbody></table></div>`)}
+    </div>
+
+    <h3 class="dash-h">Product Development · สูตรผลิตภัณฑ์และต้นแบบ</h3>
+    <div class="dash-grid">
+      ${dashCard(`สูตรผลิตภัณฑ์ (${dashN(D.formulasTotal)})`, dashBars(dashMap(D.formulas, PD_STATUS, ['draft','testing','approved','retired']),{keepZero:true,pct:true}), `เบสสูตรพื้นฐาน ${dashN(D.basesActive)} ใช้งาน จาก ${dashN(D.bases)}`)}
+      ${dashCard('บันทึกขึ้นสินค้าทดลอง', dashBars(dashMap(D.trials, PT_ST, ['draft','made','sent','feedback','accepted','revised','rejected']),{keepZero:true}))}
+      ${dashCard('สูตรใหม่ และการขึ้นสินค้าทดลอง รายเดือน', dashCols([{name:'สูตรใหม่',data:D.formulasM,color:DASH_COL.b},{name:'ขึ้นสินค้าทดลอง',data:D.trialsM,color:DASH_COL.d}],M))}
+      ${dashCard('ต้นแบบสินค้า: ส่งลูกค้า vs ได้ผล รายเดือน', dashCols([{name:'ส่งต้นแบบ',data:sPd.sentM,color:DASH_COL.b},{name:'ได้ผลประเมิน',data:sPd.evaluatedM,color:DASH_COL.c}],M), `รอลูกค้ายืนยัน ${dashN(sPd.awaiting)} ชุด`)}
+      ${dashCard('ผลตัดสินของลูกค้า (ต้นแบบ)', dashBars(decs(sPd.decisions),{pct:true}), sPd.avgScore!=null?`คะแนนเฉลี่ย ${sPd.avgScore}% จาก ${dashN(sPd.scored)} ต้นแบบ`:'')}
+      ${dashCard(`ผู้สร้างสูตร (${M.length} เดือน)`, dashBars(Object.entries(D.load).sort((a,b)=>b[1]-a[1]).map(([e,v])=>[e.split('@')[0],v,DASH_COL.b])))}
+    </div>
+
+    <h3 class="dash-h">RA · กฎหมายและการจดแจ้ง</h3>
+    <div class="dash-grid">
+      ${dashCard('ตรวจกฎหมายโครงการที่กำลังทำ', dashBars(dashMap(P.raStatus, RD_RA, ['pending','pass','cond','fail']),{keepZero:true}))}
+      ${dashCard(`เลขจดแจ้ง อย. (${dashN(R.fdaTotal)})`, dashBars(dashMap(R.fda, FDA_ST, ['ok','soon','urgent','expired','no','cancel']),{keepZero:true}), `ต่ออายุใน ${M.length} เดือน ${dashN(R.renewedInPeriod)} ครั้ง`)}
+      ${dashCard('เลขจดแจ้งที่จะหมดอายุ 12 เดือนข้างหน้า', dashCols([{name:'หมดอายุ',data:R.fdaExpiring12,color:DASH_COL.d}],R.fdaMonths12))}
+      ${dashCard(`คำขอจดแจ้ง (ยังไม่เสร็จ ${dashN(R.requestsOpen)})`, dashBars(Object.entries(R.requests).sort((a,b)=>b[1]-a[1]).map(([k,v])=>[k||'(ยังไม่ระบุสถานะ)',v,{'เรียบร้อย':DASH_COL.c,'ยกเลิกใบจดแจ้ง':DASH_COL.f,'Post Audit ไม่ผ่าน':DASH_COL.e}[k]||DASH_COL.d])))}
+      ${dashCard('ฐานข้อมูล INCI สำหรับฉลาก', dashBars([['มีส่วนประกอบแล้ว',R.inci.has-R.inci.check,DASH_COL.c],['รอ RA ตรวจ',R.inci.check,DASH_COL.d],['ยังไม่มีข้อมูล',R.inci.total-R.inci.has,DASH_COL.e]],{keepZero:true,pct:true}))}
+      ${dashCard(`เอกสารวัตถุดิบที่ออก (${M.length} เดือน)`, dashCols([{name:'เอกสาร',data:R.docM,color:DASH_COL.b}],M), Object.entries(R.docType).map(([k,v])=>`${k} ${v}`).join(' · '))}
+    </div>
+
+    <h3 class="dash-h">Research Ingredients · วัตถุดิบและคลัง R&D</h3>
+    <div class="dash-grid">
+      ${dashCard(`ทะเบียนพืชหอม (${dashN(S.botanicals)})`, dashBars(dashMap(S.btStatus, BT_STATUS),{keepZero:true}))}
+      ${dashCard('รูปแบบวัตถุดิบในทะเบียน', dashBars(Object.entries(S.btForm).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([k,v])=>[BT_FORM_TH[k]||k,v,DASH_COL.a])))}
+      ${dashCard('บันทึกการสกัดรายเดือน', dashCols([{name:'การสกัด',data:S.extractionsM,color:DASH_COL.c}],M), `ทั้งหมด ${dashN(S.extractionsTotal)} ครั้ง · `+Object.entries(S.extractionResults).map(([k,v])=>`${BT_RES[k]?BT_RES[k][0]:k} ${v}`).join(' · '))}
+      ${dashCard('คลัง R&D', `<div class="tablebox"><table><thead><tr><th>ประเภท</th><th class="num">รายการ</th><th class="num">ต่ำกว่าขั้นต่ำ</th><th class="num">ยอดศูนย์</th><th class="num">ไม่เคลื่อนไหว 90 วัน</th></tr></thead><tbody>${Object.entries(S.stock).map(([k,x])=>`<tr><td>${STK_KIND[k]?STK_KIND[k][0]:k}</td><td class="num">${dashN(x.n)}</td><td class="num" ${x.low?'style="color:var(--warn);font-weight:600"':''}>${x.low}</td><td class="num">${x.zero}</td><td class="num">${x.stale}</td></tr>`).join('')||'<tr><td colspan="5" class="muted">ยังไม่มี</td></tr>'}</tbody></table></div>`)}
+      ${dashCard('การเคลื่อนไหวคลัง R&D รายเดือน (ไม่รวมนำเข้า)', dashCols([{name:'รับเข้า',data:S.txIn,color:DASH_COL.c},{name:'เบิกใช้',data:S.txOut,color:DASH_COL.e},{name:'ปรับยอด',data:S.txAdj,color:DASH_COL.d}],M))}
+      ${S.lowItems.length?dashCard('วัตถุดิบต่ำกว่าขั้นต่ำ', `<div class="tablebox"><table><thead><tr><th>รหัส</th><th>ชื่อ</th><th class="num">คงเหลือ</th><th class="num">ขั้นต่ำ</th></tr></thead><tbody>${S.lowItems.map(x=>`<tr><td class="mono" style="font-size:12px">${esc(x.code)}</td><td style="font-size:12.5px">${esc(x.name)}</td><td class="num" style="color:var(--warn);font-weight:600">${dashN(x.bal)} ${esc(x.unit)}</td><td class="num">${dashN(x.min)}</td></tr>`).join('')}</tbody></table></div>`):''}
+    </div>
+
+    <h3 class="dash-h">การใช้งานระบบ</h3>
+    <div class="dash-grid">
+      ${dashCard('ผู้ใช้ตามบทบาท', dashBars(U.roles.map(r=>[r.name,r.n,DASH_COL.b])))}
+      ${dashCard('กิจกรรมใน 30 วัน (ครั้งที่บันทึกข้อมูล)', `<div class="tablebox"><table><thead><tr><th>บทบาท</th><th class="num">ครั้ง</th><th class="num">ผู้ใช้</th><th>ล่าสุด</th></tr></thead><tbody>${U.activity30.sort((a,b)=>b.n-a.n).map(a=>`<tr><td>${esc((U.roles.find(r=>r.id===a.role)||{}).name||a.role)}</td><td class="num">${dashN(a.n)}</td><td class="num">${a.users}</td><td style="font-size:12px">${fmtSeen(a.last)}</td></tr>`).join('')||'<tr><td colspan="4" class="muted">ยังไม่มี</td></tr>'}</tbody></table></div>`)}
+      ${dashCard('กิจกรรมรายเดือน', dashCols([{name:'การบันทึกข้อมูล',data:U.activityM,color:DASH_COL.f}],M))}
+    </div>`;
+}
+function dashExport(){
+  const d=DASH.data; if(!d||typeof XLSX==='undefined') return; const M=d.months, wb=XLSX.utils.book_new();
+  const kv=(title,o,MAP)=>[[title],...Object.entries(o).map(([k,v])=>[MAP&&MAP[k]?MAP[k][0]:k,v]),[]];
+  const P=d.projects, F=d.perfumer, D=d.pd, R=d.ra, S=d.research;
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Dashboard ผู้บริหาร',d.generatedAt],[],['โครงการกำลังทำ',P.active],['เกินกำหนด',P.overdueCount],['ปิดสำเร็จในช่วง',P.doneInPeriod],['เปิดใหม่ในช่วง',P.openedInPeriod],['เวลาเฉลี่ยจนปิดงาน (วัน)',P.leadDays],[],
+    ...kv('โครงการตามขั้น',P.byStage,Object.fromEntries(RD_STAGE.map(s=>[s[0],[s[1]]]))),...kv('ประเภทงาน',P.byKind,Object.fromEntries(Object.entries(RD_KIND).map(([k,v])=>[k,[v]]))),...kv('RA โครงการ',P.raStatus,RD_RA),
+    ...kv('กลิ่น',F.scents,PF_SSTAT),...kv('บรีฟ',F.briefs,PF_BSTAT),...kv('ผลตัดสินตัวอย่างกลิ่น',F.samples.decisions,RD_DEC),...kv('สูตรผลิตภัณฑ์',D.formulas,PD_STATUS),...kv('ขึ้นสินค้าทดลอง',D.trials,PT_ST),...kv('ผลตัดสินต้นแบบ',D.mockups.decisions,RD_DEC),
+    ...kv('เลขจดแจ้ง อย.',R.fda,FDA_ST),...kv('คำขอจดแจ้ง',R.requests),['INCI มีข้อมูล',R.inci.has,'รอตรวจ',R.inci.check,'ทั้งหมด',R.inci.total],[],...kv('ทะเบียนพืชหอม',S.btStatus,BT_STATUS),['ข้อสังเกต'],...dashInsights(d).map(x=>[x[1]])]),'สรุป');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['เดือน',...M],['เปิดโครงการ',...P.openedM],['ปิดสำเร็จ',...P.doneM],['กลิ่นใหม่',...F.scentsM],['ส่งตัวอย่างกลิ่น',...F.samples.sentM],['ผลประเมินกลิ่น',...F.samples.evaluatedM],['สูตรผลิตภัณฑ์ใหม่',...D.formulasM],['ขึ้นสินค้าทดลอง',...D.trialsM],['ส่งต้นแบบ',...D.mockups.sentM],['ผลประเมินต้นแบบ',...D.mockups.evaluatedM],['คำขอจดแจ้ง',...R.requestsM],['เอกสารวัตถุดิบ',...R.docM],['การสกัด',...S.extractionsM],['คลัง รับเข้า',...S.txIn],['คลัง เบิกใช้',...S.txOut],['กิจกรรมระบบ',...d.people.activityM]]),'รายเดือน');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['PDR','ลูกค้า','ขั้น','เกินมา (วัน)','อยู่ในขั้น (วัน)','Project Co'],...P.overdue.map(p=>[p.pdrNo,p.brand,RD_STAGE_MAP[p.stage]?RD_STAGE_MAP[p.stage][1]:p.stage,-p.left,p.inStage,p.pc])]),'เกินกำหนด');
+  saveFile(`Dashboard RD_${d.generatedAt.slice(0,10)}.xlsx`, XLSX.write(wb,{type:'array',bookType:'xlsx'}));
+}
+$('#dashView').addEventListener('change', e=>{ if(e.target.id==='dashMonths'){ DASH.months=+e.target.value; dashLoad(true); } });
+$('#dashView').addEventListener('click', e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  if(b.id==='dashRefresh'){ b.disabled=true; dashLoad(true); return; }
+  if(b.id==='dashExport'){ dashExport(); return; }
+  if(b.id==='dashPrint'){ window.print(); return; }
+  if(b.dataset.dashProj){ const id=b.dataset.dashProj; showView('rd').then(()=>rdOpen(id)); return; }
+});
 
 async function boot(){
   showGate('loading');

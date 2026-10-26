@@ -5957,6 +5957,9 @@ $('#pdView').addEventListener('submit', async e=>{ if(e.target.id!=='ptForm') re
 
 /* ===== งาน RA: จดแจ้งเครื่องสำอาง (อย.) — ทะเบียนเลขจดแจ้ง (ต่ออายุทุก 3 ปี) + คำขอจดแจ้ง ===== */
 let FDA={alert:null, regs:null, reqs:null, canEdit:false, reqStatus:[], sub:'regs', q:'', f:'', x:{dec:'',yr:'',mo:'',trade:'',doc:'',sa:'',within:'',sort:''}, rq:'', rf:'', shown:150, form:null, renew:null, rform:null, open:null};
+const FDA_KEY='ss-fda-filter', FDA_FS=['active','due','expired','no','renewed','cancel'];
+try{ const sv=JSON.parse(localStorage.getItem(FDA_KEY)||'null'); if(sv&&typeof sv==='object'){ if(typeof sv.q==='string') FDA.q=sv.q.slice(0,100); if(FDA_FS.includes(sv.f)) FDA.f=sv.f; if(sv.x&&typeof sv.x==='object') Object.keys(FDA.x).forEach(k=>{ if(typeof sv.x[k]==='string') FDA.x[k]=sv.x[k].slice(0,100); }); } }catch(_e){ /* private mode / bad json: start clean */ }
+function fdaSaveFilters(){ try{ localStorage.setItem(FDA_KEY, JSON.stringify({q:FDA.q,f:FDA.f,x:FDA.x})); }catch(_e){ /* ignore */ } }
 const fdaCanView=()=>['projects','perfumer','pd','ra','calc','viewDb'].some(can);
 const FDA_DEC={'':['ยังไม่ตัดสินใจ','info'], renew:['ต่ออายุ','ok'], no:['ไม่ต่ออายุ','bad']};
 const FDA_ST={ok:['ใช้งาน','ok'], soon:['ใกล้หมดอายุ','warn'], urgent:['หมดอายุใน 90 วัน','bad'], expired:['หมดอายุแล้ว','bad'], no:['ไม่ต่ออายุ','info'], cancel:['ยกเลิก','bad']};
@@ -6007,6 +6010,7 @@ function fdaFilterBar(){
   const x=FDA.x, regs=FDA.regs;
   const years=[...new Set(regs.map(r=>String(r.expiry||'').slice(0,4)).filter(Boolean))].sort();
   const trades=[...new Set(regs.map(r=>r.tradeName).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th'));
+  if(x.yr&&!years.includes(x.yr)) x.yr='';
   const sel=(k,l,opts,cur)=>`<div class="field"><label>${l}</label><select data-fdax="${k}">${opts.map(([v,t])=>`<option value="${esc(v)}" ${String(cur)===String(v)?'selected':''}>${esc(t)}</option>`).join('')}</select></div>`;
   return `<div class="fda-fl">
     ${sel('st','สถานะ',[['','ทั้งหมด'],['active','ใช้งานอยู่'],['due','ใกล้หมดอายุ ≤ 180 วัน (ยังไม่ต่อ)'],['expired','หมดอายุแล้ว'],['no','ไม่ต่ออายุ'],['renewed','ต่ออายุแล้ว'],['cancel','ยกเลิกใบจดแจ้ง']],FDA.f)}
@@ -6021,9 +6025,10 @@ function fdaFilterBar(){
   </div>
   <div class="row" style="gap:10px;align-items:center;margin:2px 0 8px"><span class="muted" id="fdaCount" style="font-size:12.5px">แสดง ${fdaRegFiltered().length.toLocaleString('th-TH')} จาก ${regs.length.toLocaleString('th-TH')} รายการ</span>${fdaFiltersOn()?'<button class="btn small" type="button" id="fdaClear">ล้างตัวกรองทั้งหมด ✕</button>':''}</div>`;
 }
-function fdaRefreshMain(){ const list=fdaRegFiltered(), m=$('#fdaMain'), c=$('#fdaCount'); if(m) m.innerHTML=fdaRegTable(list); if(c) c.textContent='แสดง '+list.length.toLocaleString('th-TH')+' จาก '+FDA.regs.length.toLocaleString('th-TH')+' รายการ'; }
+function fdaRefreshMain(){ fdaSaveFilters(); const list=fdaRegFiltered(), m=$('#fdaMain'), c=$('#fdaCount'); if(m) m.innerHTML=fdaRegTable(list); if(c) c.textContent='แสดง '+list.length.toLocaleString('th-TH')+' จาก '+FDA.regs.length.toLocaleString('th-TH')+' รายการ'; }
 function drawFda(){
   if(!FDA.regs) return;
+  fdaSaveFilters();
   const regs=FDA.regs, st=regs.map(fdaState), cnt=k=>st.filter(s=>s===k).length;
   const due=regs.filter((r,i)=>(st[i]==='urgent'||st[i]==='soon')&&r.decision!=='renew').length, renewed=regs.filter(r=>(r.history||[]).length).length;
   const k=(v,l,f,cls)=>`<button type="button" class="field" data-fdaf="${f}" style="min-width:120px;text-align:left;border:1px solid ${FDA.f===f&&FDA.sub==='regs'?'var(--accent,#2b6)':'var(--line)'};border-radius:10px;padding:8px 10px;background:var(--card,transparent);cursor:pointer"><label style="cursor:pointer">${l}</label><div style="font-size:22px;font-weight:600;${cls||''}">${v}</div></button>`;

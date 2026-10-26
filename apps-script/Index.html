@@ -195,6 +195,14 @@ select.doc-new{border:1px solid var(--line-strong);border-radius:8px;padding:5px
 #rdForm .settings,#rdSampleForm .settings{grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px 16px;align-items:start;margin-bottom:0}
 #rdForm .field label,#rdSampleForm .field label{margin-bottom:5px}
 #rdForm .field input,#rdForm .field select,#rdForm .field textarea,#rdSampleForm .field input,#rdSampleForm .field select,#rdRaForm input,#rdRaForm select{width:100%;border:1px solid var(--line-strong);border-radius:8px;padding:8px 10px;background:var(--input-bg);min-height:38px;box-sizing:border-box}
+.rd-docs h4{font-size:14px}
+.rd-drop{margin:10px 0 4px;padding:18px 14px;border:2px dashed var(--line-strong,var(--line));border-radius:16px;text-align:center;font-size:13px;line-height:1.55;color:var(--ink-muted);transition:border-color .15s,background .15s}
+.rd-drop.on{border-color:#c46d4e;background:#c46d4e14;color:var(--ink)}
+.rd-file{display:flex;align-items:center;gap:12px;padding:10px 2px;border-top:1px solid var(--line)} .rd-docs h4+.rd-file,.rd-docs .row+.rd-file{border-top:0}
+.rd-ficon{flex:none;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-size:10.5px;font-weight:700;background:#091e4b;color:#fff;letter-spacing:.03em}
+.rd-fmeta{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px} .rd-fmeta b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13.5px} .rd-fmeta .muted{font-size:12px}
+.rd-fact{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+@media (max-width:640px){.rd-file{flex-wrap:wrap}.rd-fact{width:100%;justify-content:flex-start}}
 #rdForm .pf-wide,#rdSampleForm .pf-wide{grid-column:1/-1}
 #rdSampleForm td input,#rdSampleForm td select{border:1px solid var(--line-strong);border-radius:7px;padding:5px 8px;background:var(--input-bg);width:100%;min-width:90px}
 #docForm .field input,#docForm .field select{height:40px;box-sizing:border-box;width:100%;font-size:14px}
@@ -4425,7 +4433,7 @@ function drawRd(){
       <div class="pf-tabs" role="tablist" style="margin:0"><button type="button" data-rdview="board" class="${RD.view==='board'?'on':''}">บอร์ด <span class="pf-n">${active.length}</span></button><button type="button" data-rdview="table" class="${RD.view==='table'?'on':''}">ตาราง <span class="pf-n">${RD.list.length}</span></button><button type="button" data-rdview="summary" class="${RD.view==='summary'?'on':''}">สรุปผลประเมิน FM-RD-11</button><button type="button" data-rdview="customers" class="${RD.view==='customers'?'on':''}">ลูกค้า <span class="pf-n">${RD.customers.length}</span></button></div>
       <input id="rdQ" type="search" autocomplete="off" placeholder="ค้นหา PDR แบรนด์ บริษัท เลข SO…" value="${esc(RD.q)}" style="flex:1;min-width:200px">
       ${RD.view==='table'?`<select id="rdStageF"><option value="">ทุกขั้น</option><optgroup label="ตัวกรองพิเศษ"><option value="__late" ${RD.stageF==='__late'?'selected':''}>เกินกำหนด SLA</option><option value="__nopc" ${RD.stageF==='__nopc'?'selected':''}>ไม่มี Project Co</option><option value="__old" ${RD.stageF==='__old'?'selected':''}>ไม่มีความเคลื่อนไหวเกิน 180 วัน</option></optgroup>${RD_STAGE.map(s=>`<option value="${s[0]}" ${RD.stageF===s[0]?'selected':''}>${esc(s[1])}</option>`).join('')}</select>`:''}
-      ${ed?'<button class="btn primary" type="button" id="rdNew">+ เปิดโครงการใหม่</button>':''}<button class="btn" type="button" id="rdRefresh">รีเฟรช</button>
+      ${ed?'<button class="btn primary" type="button" id="rdNew">+ เปิดโครงการใหม่</button><button class="btn" type="button" id="rdNewUp" title="เลือกไฟล์ PDR (FM-RD-01) จากฝ่ายขาย แล้วเปิดโครงการใหม่">⬆ อัปโหลด PDR (FM-RD-01)</button>':''}<button class="btn" type="button" id="rdRefresh">รีเฟรช</button>
       ${late?`<span class="chip bad">เกินกำหนด ${late} โครงการ</span>`:''}</div>
     <div id="rdMain">${RD.view==='board'?rdBoard():RD.view==='table'?rdTable():RD.view==='summary'?rdSummary():rdCustomers()}</div>`;
   if(RD.view==='summary' && !RD.sum) rdLoadSummary();
@@ -4495,6 +4503,37 @@ function rdField(label, inner, wide){ return `<div class="field${wide?' pf-wide'
 const rdInp=(k,v,ph,type)=>`<input data-k="${k}" type="${type||'text'}" value="${esc(v==null?'':v)}" placeholder="${esc(ph||'')}" maxlength="300">`;
 const rdSel=(k,v,opts)=>`<select data-k="${k}">${opts.map(([val,lab])=>`<option value="${esc(val)}" ${String(v)===String(val)?'selected':''}>${esc(lab)}</option>`).join('')}</select>`;
 function rdEmailList(){ const s=new Set(); (RD.list||[]).forEach(p=>{ ['pc','sa','pd'].forEach(k=>p.owners[k]&&s.add(p.owners[k])); (p.owners.perfumer||[]).forEach(e=>s.add(e)); }); if(S.me) s.add(S.me.email); if(S.adm&&S.adm.users) S.adm.users.forEach(u=>s.add(u.email)); return [...s]; }
+/* ---------- เอกสารแนบโครงการ: PDR (FM-RD-01) จากฝ่ายขาย ---------- */
+const RD_DOC_OK=/\.(pdf|xlsx|xls|docx|doc|png|jpe?g)$/i, RD_DOC_MAX=15*1024*1024, RD_DOC_ACCEPT='.pdf,.xlsx,.xls,.docx,.doc,.png,.jpg,.jpeg';
+const rdBytes=n=>n>=1048576?(n/1048576).toFixed(1)+' MB':Math.max(1,Math.round(n/1024))+' KB';
+function rdReadB64(file){ return new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>{ const s=String(fr.result); res(s.slice(s.indexOf(',')+1)); }; fr.onerror=()=>rej(fr.error||new Error('อ่านไฟล์ไม่สำเร็จ')); fr.readAsDataURL(file); }); }
+function rdDocCheck(file){ if(!file) return 'ไม่พบไฟล์'; if(!RD_DOC_OK.test(file.name)) return 'รองรับไฟล์ PDF, Excel, Word และรูปภาพ (png/jpg) เท่านั้น'; if(!file.size) return 'ไฟล์ว่างเปล่า'; if(file.size>RD_DOC_MAX) return 'ไฟล์ใหญ่เกิน 15 MB'; return ''; }
+function rdDocCard(p){
+  const ed=rdCanEdit(), files=((p.data||{}).pdrFiles||[]), isNew=!p.id, draft=RD.pdrDraft, kindL={pdr:'PDR (FM-RD-01)',other:'เอกสารอื่น'};
+  const rows=files.map(f=>`<div class="rd-file"><span class="rd-ficon">${esc((f.ext||'').toUpperCase())}</span><div class="rd-fmeta"><b title="${esc(f.name)}">${esc(f.name)}</b><span class="muted">${esc(kindL[f.kind]||'')} · ${rdBytes(f.size)} · ${esc(rdPerson(f.by))} · ${rdDate(f.at)}</span></div><div class="rd-fact">${/^(pdf|png|jpe?g)$/i.test(f.ext)?`<button class="btn small" type="button" data-rdfview="${esc(f.id)}">เปิดดู</button>`:''}<button class="btn small" type="button" data-rdfdl="${esc(f.id)}">ดาวน์โหลด</button>${ed?`<button class="btn small" type="button" data-rdfdel="${esc(f.id)}" style="color:var(--bad)">ลบ</button>`:''}</div></div>`).join('');
+  const staged=draft?`<div class="rd-file"><span class="rd-ficon">${esc((draft.name.split('.').pop()||'').toUpperCase())}</span><div class="rd-fmeta"><b title="${esc(draft.name)}">${esc(draft.name)}</b><span class="muted">${rdBytes(draft.size)} · จะแนบกับโครงการเมื่อกด "บันทึกโครงการ"</span></div><div class="rd-fact"><button class="btn small" type="button" id="rdFClear">เอาออก</button></div></div>`:'';
+  const btnL=isNew?(draft?'เปลี่ยนไฟล์':'เลือกไฟล์ PDR'):'+ แนบไฟล์';
+  return `<div class="card rd-docs" style="margin:0 0 14px"><div class="row" style="justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center"><h4 style="margin:0">เอกสาร PDR (FM-RD-01)</h4>${ed?`<label class="btn small" for="rdDocFile" style="cursor:pointer">${btnL}</label><input id="rdDocFile" type="file" accept="${RD_DOC_ACCEPT}" hidden>`:''}</div>
+    ${ed&&(isNew?!draft:!files.length)?`<div class="rd-drop" id="rdDrop">ลากไฟล์ PDR (FM-RD-01) จากฝ่ายขายมาวางที่นี่ หรือกดปุ่ม "${btnL}" · PDF / Excel / Word / รูปภาพ ไม่เกิน 15 MB</div>`:''}
+    ${staged}${rows}<div id="rdFErr" class="muted" style="color:var(--bad);font-size:12.5px"></div></div>`;
+}
+function rdCardRefresh(){ const c=document.querySelector('.rd-docs'); if(c&&RD.open) c.outerHTML=rdDocCard(RD.open.project); }
+async function rdStageDoc(file){ const e=rdDocCheck(file); if(e){ toast(e); return false; } try{ RD.pdrDraft={name:file.name, size:file.size, b64:await rdReadB64(file)}; return true; }catch(err){ toast(errText(err)); return false; } }
+async function rdUploadDoc(file){
+  const p=RD.open&&RD.open.project; if(!p||!p.id) return; const e=rdDocCheck(file); if(e){ toast(e); return; }
+  const er=$('#rdFErr'); if(er) er.textContent='กำลังอัปโหลด '+file.name+'…';
+  try{ const b64=await rdReadB64(file), r=await api('uploadProjectDoc', p.id, {file:file.name, kind:'pdr'}, b64); RD.open.project.data=Object.assign({}, RD.open.project.data, {pdrFiles:r.files}); rdCardRefresh(); toast('แนบไฟล์แล้ว'); }
+  catch(err){ const x=$('#rdFErr'); if(x) x.textContent=errText(err); else toast(errText(err)); }
+}
+async function rdDocGet(fid, view, btn){
+  const p=RD.open&&RD.open.project; if(!p) return; const w=view?window.open('','_blank'):null; if(btn) btn.disabled=true;
+  try{ const r=await api('getProjectDocFile', p.id, fid), bin=atob(r.b64), u8=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u8[i]=bin.charCodeAt(i);
+    const url=URL.createObjectURL(new Blob([u8],{type:r.mime}));
+    if(view&&w){ w.location=url; } else { const a=document.createElement('a'); a.href=url; a.download=r.name; document.body.appendChild(a); a.click(); a.remove(); }
+    setTimeout(()=>URL.revokeObjectURL(url),120000); }
+  catch(err){ if(w) w.close(); toast(errText(err)); } finally{ if(btn) btn.disabled=false; }
+}
+function rdOpenBlank(){ RD.open={project:{id:'', pdrNo:'ใหม่', docNo:'', customerCode:'', company:'', brand:'', soNo:'', kind:'new', title:'', scentCount:1, stage:'s1', owners:{pc:S.me.email, sa:'', pd:'', perfumer:[]}, briefId:'', ra:{}, actual:{}, data:{}}, scents:[], samples:[]}; RD.sampleEdit=null; drawRd(); window.scrollTo(0,0); }
 function rdProjectPage(o){
   const p=o.project, d=p.data||{}, ed=rdCanEdit(), ro=ed?'':'disabled', due=rdDue(p, o.samples), next=rdNextStage(p), nextL=next?(next==='done'?'ปิดงาน (เสร็จสิ้น)':'ไปขั้น '+RD_STAGE_MAP[next][1]):'';
   const brief=(PF.briefs||[]).find(b=>b.id===p.briefId);
@@ -4505,6 +4544,7 @@ function rdProjectPage(o){
     ${ed&&p.stage!=='done'&&p.stage!=='lost'?`<div class="row" style="gap:8px;flex-wrap:wrap;margin:10px 0 14px;align-items:center"><button class="btn primary" type="button" data-rd-stage="${esc(next||'')}" ${next?'':'disabled'}>${esc(nextL)} →</button>${due&&due.label?`<span class="muted" style="font-size:12.5px">${esc(due.label)}${due.days?` · กำหนด ${due.days} วัน (${rdDate(due.due)})`:''}</span>`:''}
       <span style="flex:1"></span>${rdIsPc()&&p.stage!=='s1'?`<button class="btn small" type="button" data-rd-stage="${RD_STAGE[RD_STAGE.findIndex(s=>s[0]===p.stage)-1][0]}" data-rd-back="1">← ย้อนขั้น</button>`:''}${rdIsPc()?`<button class="btn small" type="button" data-rd-stage="lost" style="color:var(--bad)">ยกเลิกโครงการ</button>`:''}</div>`:''}
     ${(d.overrides||[]).length?`<div class="msg warn" style="font-size:12.5px;margin-bottom:10px"><b>ข้ามเงื่อนไข ${d.overrides.length} ครั้ง:</b> ${d.overrides.map(x=>`${esc(RD_STAGE_MAP[x.stage]?RD_STAGE_MAP[x.stage][1]:x.stage)} — ${esc(x.note)} (${rdPerson(x.by)} ${rdDate(x.at)})`).join(' · ')}</div>`:''}
+    ${rdDocCard(p)}
     <form id="rdForm" class="card" style="margin:0 0 14px" novalidate><fieldset ${ro} style="border:0;padding:0;margin:0;min-width:0">
       <div class="pf-group"><h4>ข้อมูลโครงการ (FM-RD-01)</h4><div class="settings">
         ${rdField('ลูกค้า *', rdSel('customerCode', p.customerCode, custOpts))}
@@ -4614,6 +4654,7 @@ const rdv=$('#rdView');
 rdv.addEventListener('input', e=>{ const t=e.target; if(t.id==='rdQ'){ RD.q=t.value; const m=$('#rdMain'); if(m) m.innerHTML=RD.view==='board'?rdBoard():RD.view==='table'?rdTable():RD.view==='customers'?rdCustomers():m.innerHTML; } });
 rdv.addEventListener('change', e=>{
   const t=e.target;
+  if(t.id==='rdDocFile'){ const f=t.files&&t.files[0]; t.value=''; if(!f) return; (async()=>{ if(RD.open&&RD.open.project.id) await rdUploadDoc(f); else if(await rdStageDoc(f)) rdCardRefresh(); })(); return; }
   if(t.id==='rdStageF'){ RD.stageF=t.value; RD.sel.clear(); $('#rdMain').innerHTML=rdTable(); return; }
   if(t.classList.contains('rd-sel')||t.id==='rdSelAll'){ if(t.id==='rdSelAll'){ const open=rdFiltered().filter(rdOpenP); open.forEach(p=>t.checked?RD.sel.add(p.id):RD.sel.delete(p.id)); } else { if(t.checked) RD.sel.add(t.value); else RD.sel.delete(t.value); } const note=($('#rdBulkNote')||{}).value||'', st=($('#rdBulkStage')||{}).value; $('#rdMain').innerHTML=rdTable(); if($('#rdBulkNote')){ $('#rdBulkNote').value=note; if(st) $('#rdBulkStage').value=st; } return; }
   if(t.id==='rdSumMonth'){ if(t.value){ RD.sumPeriod=t.value; rdLoadSummary(); } return; }
@@ -4628,9 +4669,15 @@ rdv.addEventListener('click', async e=>{
     if(!confirm(`${stage==='lost'?'ยกเลิก':'ปิดงาน (เสร็จสิ้น)'} ${ids.length} โครงการ?\nเหตุผล: ${note}\n\nทุกโครงการจะถูกบันทึกประวัติ และหายจากบอร์ดงานที่กำลังทำ`)) return; t.disabled=true;
     try{ const r=await api('bulkStage', ids, stage, note); RD.sel.clear(); await loadRd(true); RD.stageF=''; drawRd(); toast(`${stage==='lost'?'ยกเลิก':'ปิดงาน'}แล้ว ${r.updated} โครงการ${r.skipped?` · ข้าม ${r.skipped}`:''}`); }catch(ex){ toast(errText(ex)); t.disabled=false; } return; }
   if(t.id==='rdRefresh'){ t.disabled=true; try{ await loadRd(true); if(RD.open) RD.open=await api('getProject', RD.open.project.id); drawRd(); }catch(ex){ toast(errText(ex)); } return; }
-  if(t.id==='rdNew'){ RD.open={project:{id:'', pdrNo:'ใหม่', docNo:'', customerCode:'', company:'', brand:'', soNo:'', kind:'new', title:'', scentCount:1, stage:'s1', owners:{pc:S.me.email, sa:'', pd:'', perfumer:[]}, briefId:'', ra:{}, actual:{}, data:{}}, scents:[], samples:[]}; RD.sampleEdit=null; drawRd(); window.scrollTo(0,0); return; }
+  if(t.id==='rdNew'){ RD.pdrDraft=null; rdOpenBlank(); return; }
+  if(t.id==='rdNewUp'){ const inp=document.createElement('input'); inp.type='file'; inp.accept=RD_DOC_ACCEPT; inp.onchange=async()=>{ const f=inp.files&&inp.files[0]; if(!f) return; RD.pdrDraft=null; if(await rdStageDoc(f)) rdOpenBlank(); }; inp.click(); return; }
+  if(t.id==='rdFClear'){ RD.pdrDraft=null; rdCardRefresh(); return; }
+  if(t.dataset.rdfview){ rdDocGet(t.dataset.rdfview, true, t); return; }
+  if(t.dataset.rdfdl){ rdDocGet(t.dataset.rdfdl, false, t); return; }
+  if(t.dataset.rdfdel){ const f=((RD.open.project.data||{}).pdrFiles||[]).find(x=>x.id===t.dataset.rdfdel); if(!f||!confirm('ลบไฟล์ "'+f.name+'" ออกจากโครงการ?')) return; t.disabled=true;
+    try{ const r=await api('deleteProjectDoc', RD.open.project.id, f.id); RD.open.project.data=Object.assign({}, RD.open.project.data, {pdrFiles:r.files}); rdCardRefresh(); toast('ลบไฟล์แล้ว'); }catch(err){ toast(errText(err)); t.disabled=false; } return; }
   if(t.dataset.rdOpen){ rdOpen(t.dataset.rdOpen); return; }
-  if(t.id==='rdBack'){ RD.open=null; RD.sampleEdit=null; drawRd(); return; }
+  if(t.id==='rdBack'){ RD.pdrDraft=null; RD.open=null; RD.sampleEdit=null; drawRd(); return; }
   if(t.id==='rdXlsx'){ rdExportProjects(); return; }
   if(t.id==='rdSumXlsx'){ rdExportSummary(); return; }
   if(t.id==='rdSumYear'){ RD.sumPeriod=/^\d{4}$/.test(RD.sumPeriod)?new Date().toISOString().slice(0,7):(RD.sumPeriod||new Date().toISOString().slice(0,7)).slice(0,4); drawRd(); rdLoadSummary(); return; }
@@ -4661,6 +4708,10 @@ rdv.addEventListener('click', async e=>{
   if(t.dataset.rdSampleSend){ if(!confirm('ยืนยันว่าส่งตัวอย่างชุดนี้แล้ว? ระบบจะสร้างลิงก์ประเมินสำหรับลูกค้า')) return; rdRun('sendSample',[t.dataset.rdSampleSend],t,'สร้างลิงก์ประเมินแล้ว',async r=>{ RD.open.samples=RD.open.samples.map(x=>x.id===r.id?r:x); RD.open.project=(await api('getProject', p.id)).project; drawRd(); }); return; }
   if(t.dataset.rdSampleDel){ const s=RD.open.samples.find(x=>x.id===t.dataset.rdSampleDel); if(!s||!confirm(`ลบชุดตัวอย่าง ${s.docNo}?`)) return; rdRun('deleteSample',[s.id],t,'ลบแล้ว',r=>{ RD.open.samples=RD.open.samples.filter(x=>x.id!==r.deleted); drawRd(); }); return; }
 });
+rdv.addEventListener('dragover',e=>{ const z=e.target.closest&&e.target.closest('#rdDrop'); if(z){ e.preventDefault(); z.classList.add('on'); } });
+rdv.addEventListener('dragleave',e=>{ const z=e.target.closest&&e.target.closest('#rdDrop'); if(z) z.classList.remove('on'); });
+rdv.addEventListener('drop',e=>{ const z=e.target.closest&&e.target.closest('#rdDrop'); if(!z) return; e.preventDefault(); z.classList.remove('on'); const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]; if(!f) return;
+  (async()=>{ if(RD.open&&RD.open.project.id) await rdUploadDoc(f); else if(await rdStageDoc(f)) rdCardRefresh(); })(); });
 rdv.addEventListener('submit', async e=>{
   e.preventDefault(); if(!RD.open) return;
   const p=RD.open.project;
@@ -4668,7 +4719,7 @@ rdv.addEventListener('submit', async e=>{
     const np=rdReadProject(), err=$('#rdErr'), btn=e.target.querySelector('button[type=submit]'); err.textContent='';
     if(!np.customerCode && !(np.customer&&(np.customer.company||np.customer.brand))){ err.textContent='เลือกลูกค้า หรือใส่ชื่อลูกค้าใหม่'; return; }
     if(!np.owners.pc){ err.textContent='ระบุ Project Coordinator'; return; }
-    rdRun('saveProject',[np],btn,p.id?'บันทึกโครงการแล้ว':'เปิดโครงการแล้ว',async r=>{ rdPatchList(r); if(!p.id){ RD.customers=await api('listCustomers'); } RD.open=await api('getProject', r.id); drawRd(); });
+    rdRun('saveProject',[np],btn,p.id?'บันทึกโครงการแล้ว':'เปิดโครงการแล้ว',async r=>{ rdPatchList(r); if(!p.id){ RD.customers=await api('listCustomers'); if(RD.pdrDraft){ const dr=RD.pdrDraft; RD.pdrDraft=null; try{ await api('uploadProjectDoc', r.id, {file:dr.name, kind:'pdr'}, dr.b64); }catch(ex){ toast('เปิดโครงการแล้ว แต่แนบไฟล์ไม่สำเร็จ: '+errText(ex)); } } } RD.open=await api('getProject', r.id); drawRd(); });
     return;
   }
   if(e.target.id==='rdRaForm'){ if(!p.id){ toast('บันทึกโครงการก่อน'); return; } rdRun('raCheck',[p.id,$('#rdRaStatus').value,$('#rdRaNote').value],e.target.querySelector('button'),'บันทึกผลตรวจกฎหมายแล้ว',r=>{ RD.open.project=r; rdPatchList(r); drawRd(); }); return; }

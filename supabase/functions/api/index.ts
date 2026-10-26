@@ -1257,6 +1257,63 @@ async function getProject(ctx: Ctx, id: string) {
   return { project: projOut(r), scents: (await db`select * from costing.scents where project_id = ${String(r.id)} order by created_at`).map((x: Any) => maskScent(m, scentOut(x))),
     samples: (await db`select * from costing.samples where project_id = ${String(r.id)} order by created_at`).map((s: Any) => sampleOut(s, "")), sla: await rdSla(db) };
 }
+/* ---------- เอกสารแนบโครงการ (PDR FM-RD-01 ฯลฯ): ไฟล์อยู่ใน bucket rd-docs (private) · รายการไฟล์อยู่ใน projects.data.pdrFiles ---------- */
+const PDR_MIME: Record<string, string> = { pdf: "application/pdf", xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", xls: "application/vnd.ms-excel", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", doc: "application/msword", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg" };
+const PDR_MAX_BYTES = 15 * 1024 * 1024, PDR_MAX_FILES = 20, PDR_KINDS: Record<string, string> = { pdr: "PDR (FM-RD-01)", other: "เอกสารอื่น" };
+function pdrMagicOk(ext: string, b: Uint8Array) {
+  const is = (...h: number[]) => h.every((v, i) => b[i] === v);
+  if (ext === "pdf") return is(0x25, 0x50, 0x44, 0x46);
+  if (ext === "xlsx" || ext === "docx") return is(0x50, 0x4b, 0x03, 0x04);
+  if (ext === "xls" || ext === "doc") return is(0xd0, 0xcf, 0x11, 0xe0);
+  if (ext === "png") return is(0x89, 0x50, 0x4e, 0x47);
+  return is(0xff, 0xd8, 0xff);
+}
+const pdrList = (d: Any): Any[] => (d && Array.isArray(d.pdrFiles) ? d.pdrFiles : []);
+const pdrOut = (f: Any) => ({ id: String(f.id), name: String(f.name), ext: String(f.ext), size: Number(f.size) || 0, kind: String(f.kind || "pdr"), at: String(f.at || ""), by: String(f.by || "") });
+async function uploadProjectDoc(ctx: Ctx, projectId: string, meta: Any, b64: string) {
+  return await locked(ctx, async (c) => {
+    const m = await needAny(c, RD_EDIT), db = c.db;
+    const pr = (await db`select * from costing.projects where id = ${String(projectId || "")}`)[0]; if (!pr) throw new Error("ไม่พบโครงการนี้");
+    const name = String((meta && meta.file) || "").replace(/[\\\/:*?"<>|\u0000-\u001f]/g, " ").trim().slice(0, 150);
+    const ext = ((name.match(/\.([A-Za-z0-9]{2,5})$/) || [])[1] || "").toLowerCase();
+    if (!PDR_MIME[ext]) throw new Error("รองรับไฟล์ PDF, Excel (xlsx/xls), Word (docx/doc) และรูปภาพ (png/jpg) เท่านั้น");
+    if (typeof b64 !== "string" || !b64) throw new Error("ไม่มีข้อมูลไฟล์");
+    const bytes = decodeBase64(b64);
+    if (!bytes.length || bytes.length > PDR_MAX_BYTES) throw new Error("ไฟล์ต้องมีขนาดไม่เกิน 15 MB");
+    if (!pdrMagicOk(ext, bytes)) throw new Error("เนื้อหาไฟล์ไม่ตรงกับนามสกุล ." + ext);
+    const d = pr.data || {}, list = pdrList(d); if (list.length >= PDR_MAX_FILES) throw new Error("แนบได้ไม่เกิน " + PDR_MAX_FILES + " ไฟล์ต่อโครงการ");
+    const kind = PDR_KINDS[String(meta && meta.kind)] ? String(meta.kind) : "pdr", id = "f" + uuid(10), path = `${String(pr.id)}/${id}.${ext}`;
+    const up = await sb.storage.from("rd-docs").upload(path, bytes, { contentType: PDR_MIME[ext] });
+    if (up.error) throw new Error("บันทึกไฟล์ไม่สำเร็จ: " + up.error.message);
+    const f = { id, name, ext, size: bytes.length, kind, at: new Date().toISOString(), by: m.email };
+    const data = { ...d, pdrFiles: [...list, f] };
+    await db`update costing.projects set data = ${db.json(data)}, updated_at = now(), updated_by = ${m.email} where id = ${String(pr.id)}`;
+    await log(db, m.email, "uploadProjectDoc", String(pr.pdr_no) + " · " + PDR_KINDS[kind] + " · " + name);
+    return { files: data.pdrFiles.map(pdrOut) };
+  });
+}
+async function getProjectDocFile(ctx: Ctx, projectId: string, fileId: string) {
+  const m = await needAny(ctx, RD_VIEW), db = ctx.db;
+  const pr = (await db`select id, pdr_no, data from costing.projects where id = ${String(projectId || "")}`)[0]; if (!pr) throw new Error("ไม่พบโครงการนี้");
+  const f = pdrList(pr.data).find((x: Any) => String(x.id) === String(fileId || "")); if (!f) throw new Error("ไม่พบไฟล์นี้");
+  const dl = await sb.storage.from("rd-docs").download(`${String(pr.id)}/${String(f.id)}.${String(f.ext)}`);
+  if (dl.error || !dl.data) throw new Error("ไม่พบไฟล์ในที่เก็บไฟล์ อัปโหลดใหม่ได้");
+  await log(db, m.email, "getProjectDocFile", String(pr.pdr_no) + " · " + String(f.name));
+  return { name: String(f.name), mime: PDR_MIME[String(f.ext)] || "application/octet-stream", b64: encodeBase64(new Uint8Array(await dl.data.arrayBuffer())) };
+}
+async function deleteProjectDoc(ctx: Ctx, projectId: string, fileId: string) {
+  return await locked(ctx, async (c) => {
+    const m = await needAny(c, RD_EDIT), db = c.db;
+    const pr = (await db`select * from costing.projects where id = ${String(projectId || "")}`)[0]; if (!pr) throw new Error("ไม่พบโครงการนี้");
+    const d = pr.data || {}, list = pdrList(d), f = list.find((x: Any) => String(x.id) === String(fileId || "")); if (!f) throw new Error("ไม่พบไฟล์นี้");
+    if (String(f.by) !== m.email && !hasPerm(m, "projects") && !isAdmin(m)) throw new Error("FORBIDDEN");   /* ลบได้เฉพาะคนที่แนบ · Project Coordinator · ผู้ดูแล */
+    try { await sb.storage.from("rd-docs").remove([`${String(pr.id)}/${String(f.id)}.${String(f.ext)}`]); } catch (_e) { /* ignore */ }
+    const data = { ...d, pdrFiles: list.filter((x: Any) => x !== f) };
+    await db`update costing.projects set data = ${db.json(data)}, updated_at = now(), updated_by = ${m.email} where id = ${String(pr.id)}`;
+    await log(db, m.email, "deleteProjectDoc", String(pr.pdr_no) + " · " + String(f.name));
+    return { files: data.pdrFiles.map(pdrOut) };
+  });
+}
 async function saveProject(ctx: Ctx, p: Any) {
   return await locked(ctx, async (c) => {
     const m = await needAny(c, RD_EDIT), db = c.db;
@@ -1278,6 +1335,7 @@ async function saveProject(ctx: Ctx, p: Any) {
     const actual = ex ? (ex.actual || {}) : { s1: now.toISOString() };
     /* ส่วนที่เซิร์ฟเวอร์ดูแลเอง (ประวัติขั้น การข้ามเงื่อนไข เลขเอกสารย่อย) คงค่าเดิมไว้เสมอ แม้หน้าเว็บส่ง data ชุดเก่ามา */
     const data: Any = rdData(p.data), old: Any = ex ? ex.data || {} : {};
+    data.pdrFiles = old.pdrFiles;   /* รายการไฟล์แนบจัดการผ่าน uploadProjectDoc/deleteProjectDoc เท่านั้น */
     if (ex) { data.stageLog = old.stageLog; data.overrides = old.overrides; Object.keys(RD_SUBDOCS).forEach((k) => { if (old[k] && old[k].docNo) data[k] = { ...(data[k] && typeof data[k] === "object" ? data[k] : {}), docNo: old[k].docNo, issuedAt: old[k].issuedAt, issuedBy: old[k].issuedBy }; }); }
     const row = { id: ex ? String(ex.id) : "p" + uuid(12), pdr_no: ex ? String(ex.pdr_no) : await nextPdrNo(db, now), doc_no: ex ? String(ex.doc_no) : await nextDocNo(db, "FM-RD-01", now),
       customer_code: code, company, brand, so_no: str(p.soNo, 60), kind, title: str(p.title, 300), scent_count: scentCount, stage: ex ? String(ex.stage) : "s1",
@@ -2493,7 +2551,7 @@ const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   loadCompliance, saveComplianceRules, saveRmMap, listDocs, getDoc, issueDoc, voidDoc, listRmDocs, getRmDocFile, uploadRmDoc, updateRmDoc, deleteRmDoc,
   listBriefs, saveBrief, deleteBrief, listScents, saveScent, deleteScent, getTypeformStatus, saveTypeformToken, syncTypeform, disconnectTypeform,
   pwLogin, setMyPassword, pwLogout, resetUserPassword,
-  listCustomers, saveCustomer, listProjects, getProject, saveProject, setStage, bulkStage, raCheck, issueProjectDoc, listSamples, saveSample, sendSample, deleteSample, evalSummary, importRd,
+  listCustomers, saveCustomer, listProjects, getProject, saveProject, setStage, bulkStage, raCheck, issueProjectDoc, uploadProjectDoc, getProjectDocFile, deleteProjectDoc, listSamples, saveSample, sendSample, deleteSample, evalSummary, importRd,
   listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases,
   listPdTrials, savePdTrial, sendPdTrial, decidePdTrial, issuePdTrialStock,
   listRdStock, listRdStockTx, saveRdStockItem, deleteRdStockItem, addRdStockTx, importRdStock,

@@ -4953,7 +4953,7 @@ adm.addEventListener('submit', e=>{
 /* ===== boot ===== */
 /* ===== Product Development: สูตรพื้นฐาน (เบส) ต่อประเภทสินค้า และสูตรผลิตภัณฑ์ (เบส + กลิ่นจาก Perfumer) =====
    ราคาวัตถุดิบ: ฐานราคาปัจจุบันตามรหัส RM → ราคาที่บันทึกในเบส → ราคาที่ผู้ใช้ใส่เอง · น้ำหอม: ต้นทุนสูตรน้ำหอมที่เลือก หรือใส่เอง */
-let PD={bases:null, list:null, tab:'formulas', q:'', cat:'', statusF:'', open:null, baseOpen:null};
+let PD={bases:null, list:null, tab:'formulas', q:'', cat:'', statusF:'', open:null, baseOpen:null, imp:null, impQ:'', impTotal:null, impSeq:0, impT:null};
 const pdCanView=()=>rdCanView(), pdCanEdit=()=>can('pd')||isAdminRole();
 const PD_STATUS={draft:['ร่าง','info'], testing:['ทดสอบ / Stability','warn'], approved:['อนุมัติ','ok'], retired:['เลิกใช้','bad']};
 const PD_MODE={standard:'เบสเดิม (เปลี่ยนแค่น้ำหอม)', modified:'ปรับเบส / สูตรใหม่ (ต้อง Stability + Pilot Batch)'};
@@ -5051,13 +5051,13 @@ function drawPd(){
   if(PD.trial){ $('#pdBody').innerHTML=ptPage(PD.trial); return; }
   if(PD.open){ $('#pdBody').innerHTML=pdFormulaPage(PD.open); return; }
   if(PD.baseOpen){ $('#pdBody').innerHTML=pdBasePage(PD.baseOpen); return; }
-  const ed=pdCanEdit(), bases=PD.tab==='bases', trials=PD.tab==='trials';
+  const ed=pdCanEdit(), bases=PD.tab==='bases', trials=PD.tab==='trials', imported=PD.tab==='imported';
   $('#pdBody').innerHTML=`<div class="search" style="flex-wrap:wrap;gap:8px">
-      <div class="pf-tabs" role="tablist" style="margin:0"><button type="button" data-pdtab="formulas" class="${bases||trials?'':'on'}">สูตรผลิตภัณฑ์ <span class="pf-n">${PD.list.length}</span></button><button type="button" data-pdtab="bases" class="${bases?'on':''}">สูตรพื้นฐาน (เบส) <span class="pf-n">${PD.bases.length}</span></button><button type="button" data-pdtab="trials" class="${trials?'on':''}">บันทึกขึ้นสินค้าทดลอง <span class="pf-n">${(PD.trials||[]).length}</span></button></div>
-      <input id="pdQ" type="search" autocomplete="off" placeholder="${bases?'ค้นหาเบส ประเภท วัตถุดิบ…':trials?'ค้นหาเลขที่บันทึก สูตร โครงการ แบรนด์…':'ค้นหาสูตร รหัส โครงการ แบรนด์ เบส กลิ่น…'}" value="${esc(PD.q)}" style="flex:1;min-width:200px">
+      <div class="pf-tabs" role="tablist" style="margin:0"><button type="button" data-pdtab="formulas" class="${bases||trials||imported?'':'on'}">สูตรผลิตภัณฑ์ <span class="pf-n">${PD.list.length}</span></button><button type="button" data-pdtab="bases" class="${bases?'on':''}">สูตรพื้นฐาน (เบส) <span class="pf-n">${PD.bases.length}</span></button><button type="button" data-pdtab="trials" class="${trials?'on':''}">บันทึกขึ้นสินค้าทดลอง <span class="pf-n">${(PD.trials||[]).length}</span></button><button type="button" data-pdtab="imported" class="${imported?'on':''}" title="ประวัติสูตรต้นแบบที่นำเข้าจากไฟล์ FM-RD-03 (ค้นหาจากเซิร์ฟเวอร์)">สูตรจากไฟล์ FM-RD-03 <span class="pf-n" id="pdImpN">${PD.impTotal==null?'…':PD.impTotal.toLocaleString('en-US')}</span></button></div>
+      <input id="pdQ" type="search" autocomplete="off" placeholder="${bases?'ค้นหาเบส ประเภท วัตถุดิบ…':trials?'ค้นหาเลขที่บันทึก สูตร โครงการ แบรนด์…':imported?'ค้นหาชื่อสูตร ลูกค้า แบรนด์ รหัสวัตถุดิบ รหัส FM03…':'ค้นหาสูตร รหัส โครงการ แบรนด์ เบส กลิ่น…'}" value="${esc(PD.q)}" style="flex:1;min-width:200px">
       ${trials?`<select id="pdStatusF"><option value="">ทุกสถานะ</option>${Object.entries(PT_ST).map(([k,[l]])=>`<option value="${k}" ${PD.statusF===k?'selected':''}>${l}</option>`).join('')}</select>`:bases?`<select id="pdCat"><option value="">ทุกประเภท</option>${pdCats().map(c=>`<option value="${esc(c)}" ${PD.cat===c?'selected':''}>${esc(c)}</option>`).join('')}</select>`:`<select id="pdStatusF"><option value="">ทุกสถานะ</option>${Object.entries(PD_STATUS).map(([k,[l]])=>`<option value="${k}" ${PD.statusF===k?'selected':''}>${l}</option>`).join('')}</select>`}
-      ${ed&&!trials?(bases?'<button class="btn primary" type="button" id="pdNewBase">+ เบสใหม่</button>':'<button class="btn primary" type="button" id="pdNew">+ สูตรผลิตภัณฑ์ใหม่</button>'):''}<button class="btn" type="button" id="pdRefresh">รีเฟรช</button></div>
-    <div id="pdMain">${trials?ptTable():bases?pdBaseTable():pdFormulaTable()}</div>`;
+      ${ed&&!trials&&!imported?(bases?'<button class="btn primary" type="button" id="pdNewBase">+ เบสใหม่</button>':'<button class="btn primary" type="button" id="pdNew">+ สูตรผลิตภัณฑ์ใหม่</button>'):''}<button class="btn" type="button" id="pdRefresh">รีเฟรช</button></div>
+    <div id="pdMain">${trials?ptTable():bases?pdBaseTable():imported?pdImportedTable():pdFormulaTable()}</div>`;
 }
 function pdBaseTable(){
   const q=PD.q.trim().toLowerCase();
@@ -5069,13 +5069,25 @@ function pdBaseTable(){
       return `<tr><td><b>${esc(b.name)}</b>${b.active?'':' <span class="chip bad">ปิดใช้</span>'}${b.benchmark?`<div class="muted" style="font-size:12px">Benchmark: ${esc(b.benchmark)}</div>`:''}</td><td class="num">${fr&&fr.pct!=null?fmt(fr.pct,2):'–'}</td><td class="num">${b.lines.length}</td><td class="num">${c.missing?`<span class="chip warn" title="ไม่มีราคา ${c.missing} รายการ">${fmt(c.total,2)}*</span>`:fmt(c.total,2)}</td><td class="num">${b.targetPrice!=null?fmt(b.targetPrice,0):'–'}</td><td style="font-size:12.5px">${esc([b.shelfLife,b.stability].filter(Boolean).join(' · '))}</td><td class="num">${used||''}</td><td style="white-space:nowrap"><button class="btn small" type="button" data-pd-base="${esc(b.id)}">เปิด</button>${pdCanEdit()&&b.active?` <button class="btn small" type="button" data-pd-from-base="${esc(b.id)}">สร้างสูตร</button>`:''}</td></tr>`; }).join('')}
     </tbody></table></div>`).join('')+'<div class="muted" style="font-size:12px;margin-top:8px">ต้นทุนคำนวณจากฐานราคาวัตถุดิบปัจจุบันตามรหัส RM · * = บางรายการไม่มีราคา · น้ำหอมใช้ราคาประมาณที่บันทึกในเบส</div>';
 }
-function pdFormulaTable(){
-  const q=PD.q.trim().toLowerCase();
-  const list=PD.list.filter(f=>(!PD.statusF||f.status===PD.statusF)&&(!q||[f.code,f.name,f.baseName,f.category,f.fragranceName,f.fragranceCode,f.customer,f.brand,(pdProj(f.projectId)||{}).pdrNo].join(' ').toLowerCase().includes(q)));
+function pdFormulaTable(src, noFilter){
+  const q=noFilter?'':PD.q.trim().toLowerCase();
+  const list=(src||PD.list).filter(f=>(!PD.statusF||f.status===PD.statusF)&&(!q||[f.code,f.name,f.baseName,f.category,f.fragranceName,f.fragranceCode,f.customer,f.brand,(pdProj(f.projectId)||{}).pdrNo].join(' ').toLowerCase().includes(q)));
   if(!list.length) return `<div class="empty">ยังไม่มีสูตรผลิตภัณฑ์${pdCanEdit()?' · กด "+ สูตรผลิตภัณฑ์ใหม่" หรือเปิดแท็บเบสแล้วกด "สร้างสูตร"':''}</div>`;
   return `<div class="tablebox"><table><thead><tr><th>รหัส</th><th>สูตรผลิตภัณฑ์</th><th>โครงการ / ลูกค้า</th><th>เบส</th><th>กลิ่น</th><th class="num">น้ำหอม %</th><th class="num">ต้นทุน ฿/กก.</th><th class="num">เป้า</th><th>สถานะ</th><th>แก้ล่าสุด</th><th></th></tr></thead><tbody>
     ${list.map(f=>{ const c=pdCost(f), p=pdProj(f.projectId), over=toNum(f.targetPrice)>0&&c.total>toNum(f.targetPrice);
-      return `<tr><td class="mono">${esc(f.code)}</td><td><b>${esc(f.name)}</b><div class="muted" style="font-size:12px">${esc(PD_MODE[f.mode]||'')}</div></td><td style="font-size:12.5px">${p?`<span class="mono">${esc(p.pdrNo)}</span> · ${rdBrand(p)}`:esc(f.brand||f.customer||'–')}</td><td style="font-size:12.5px">${esc(f.baseName||'–')}<div class="muted" style="font-size:11.5px">${esc(f.category||'')}</div></td><td style="font-size:12.5px">${esc(f.fragranceName||'–')}${f.fragranceCode?`<div class="mono muted" style="font-size:11.5px">${esc(f.fragranceCode)}</div>`:''}</td><td class="num">${fmt(c.fragPct,2)}</td><td class="num" ${over?'style="color:var(--bad);font-weight:600"':''}>${c.missing?`<span class="chip warn">${fmt(c.total,2)}*</span>`:fmt(c.total,2)}</td><td class="num">${f.targetPrice!=null?fmt(f.targetPrice,0):'–'}</td><td>${pfChip(f.status,PD_STATUS)}</td><td class="muted" style="font-size:12px">${fmtSeen(f.updatedAt)}<br>${rdPerson(f.updatedBy)}</td><td><button class="btn small" type="button" data-pd-open="${esc(f.id)}">เปิด</button></td></tr>`; }).join('')}</tbody></table></div>`;
+      return `<tr><td class="mono">${esc(f.code)}</td><td><b>${esc(f.name)}</b>${String(f.createdBy||'').startsWith('import:')?' <span class="chip info" style="font-size:11px">จากไฟล์</span>':''}<div class="muted" style="font-size:12px">${esc(PD_MODE[f.mode]||'')}</div></td><td style="font-size:12.5px">${p?`<span class="mono">${esc(p.pdrNo)}</span> · ${rdBrand(p)}`:esc(f.brand||f.customer||'–')}</td><td style="font-size:12.5px">${esc(f.baseName||'–')}<div class="muted" style="font-size:11.5px">${esc(f.category||'')}</div></td><td style="font-size:12.5px">${esc(f.fragranceName||'–')}${f.fragranceCode?`<div class="mono muted" style="font-size:11.5px">${esc(f.fragranceCode)}</div>`:''}</td><td class="num">${fmt(c.fragPct,2)}</td><td class="num" ${over?'style="color:var(--bad);font-weight:600"':''}>${c.missing?`<span class="chip warn">${fmt(c.total,2)}*</span>`:fmt(c.total,2)}</td><td class="num">${f.targetPrice!=null?fmt(f.targetPrice,0):'–'}</td><td>${pfChip(f.status,PD_STATUS)}</td><td class="muted" style="font-size:12px">${fmtSeen(f.updatedAt)}<br>${rdPerson(f.updatedBy)}</td><td><button class="btn small" type="button" data-pd-open="${esc(f.id)}">เปิด</button></td></tr>`; }).join('')}</tbody></table></div>`;
+}
+function pdImportedTable(){
+  if(!PD.imp||PD.impQ!==PD.q.trim()){ pdImportedLoad(); return '<div class="empty">กำลังค้นหา…</div>'; }
+  const head=`<div class="muted" style="font-size:12.5px;margin:0 0 8px">ประวัติสูตรต้นแบบที่นำเข้าจากไฟล์ FM-RD-03 ทั้งหมด ${(PD.impTotal||0).toLocaleString('en-US')} สูตร · แสดง ${PD.imp.length} สูตร${PD.impQ?' ที่ตรงกับ "'+esc(PD.impQ)+'"':' ล่าสุด'} · พิมพ์ชื่อสูตร ลูกค้า แบรนด์ รหัสวัตถุดิบ หรือรหัส FM03 เพื่อค้นหา · เปิดดูได้ แก้ไขแล้วบันทึกได้ (ต้นทุนคำนวณจากฐานราคาปัจจุบัน)</div>`;
+  return head+(PD.imp.length?pdFormulaTable(PD.imp, true):'<div class="empty">ไม่พบสูตรที่ตรงคำค้น</div>');
+}
+async function pdImportedLoad(){
+  const q=PD.q.trim(), my=++PD.impSeq;
+  try{ const r=await api('searchPdImported', q, 200); if(my!==PD.impSeq) return; PD.imp=r.items; PD.impTotal=r.total; PD.impQ=q; }
+  catch(e){ if(my!==PD.impSeq) return; PD.imp=[]; PD.impQ=q; toast(errText(e)); }
+  const n=$('#pdImpN'); if(n&&PD.impTotal!=null) n.textContent=PD.impTotal.toLocaleString('en-US');
+  const m=$('#pdMain'); if(m&&PD.tab==='imported'&&!PD.open&&!PD.baseOpen&&!PD.trial) m.innerHTML=pdImportedTable();
 }
 function pdSummary(f, c){
   const batch=toNum(f.batchG)||1000, tgt=toNum(f.targetPrice), base=PD.bases.find(b=>b.id===f.baseId), bc=base?pdCost(base):null;
@@ -5359,7 +5371,7 @@ function rdPdBlock(p){
     ${list.length?`<div class="tablebox" style="margin-top:8px"><table><thead><tr><th>รหัส</th><th>สูตร</th><th>เบส</th><th>กลิ่น</th><th class="num">฿/กก.</th><th>สถานะ</th><th></th></tr></thead><tbody>${list.map(f=>{ const c=pdCost(f); return `<tr><td class="mono">${esc(f.code)}</td><td><b>${esc(f.name)}</b><div class="muted" style="font-size:11.5px">${esc(PD_MODE[f.mode]||'')}</div></td><td style="font-size:12.5px">${esc(f.baseName||'–')}</td><td style="font-size:12.5px">${esc(f.fragranceName||'–')}</td><td class="num">${fmt(c.total,2)}</td><td>${pfChip(f.status,PD_STATUS)}</td><td><button class="btn small" type="button" data-pd-open="${esc(f.id)}">เปิด</button></td></tr>`; }).join('')}</tbody></table></div>`
     :`<div class="muted" style="font-size:12.5px;margin-top:6px">ยังไม่มีสูตรผลิตภัณฑ์ในโครงการนี้${PD.list?' · Product Development สร้างจากเบสในแท็บ Product Development':' (โหลดข้อมูล Product Development ไม่สำเร็จ)'}</div>`}</div>`;
 }
-async function pdOpenFormula(id){ try{ await loadPd(false); }catch(e){ toast(errText(e)); return; } const f=PD.list.find(x=>x.id===id); if(!f) return; PD.baseOpen=null; PD.trial=null; PD.open=JSON.parse(JSON.stringify(f)); PD.tab='formulas'; if(S.view==='pd') drawPd(); else showView('pd'); window.scrollTo(0,0); }
+async function pdOpenFormula(id){ try{ await loadPd(false); }catch(e){ toast(errText(e)); return; } let f=PD.list.find(x=>x.id===id)||(PD.imp||[]).find(x=>x.id===id); if(!f){ try{ f=await api('getPdFormula', id); }catch(e){ toast(errText(e)); return; } } if(!f) return; PD.baseOpen=null; PD.trial=null; PD.open=JSON.parse(JSON.stringify(f)); PD.tab='formulas'; if(S.view==='pd') drawPd(); else showView('pd'); window.scrollTo(0,0); }
 /* ปุ่มจากหน้าอื่น (หน้าโครงการ): เปิดสูตร / สร้างสูตรให้โครงการ */
 document.addEventListener('click', async e=>{
   const t=e.target.closest('[data-pd-open],[data-pd-new]'); if(!t || t.closest('#pdView')) return;
@@ -5369,7 +5381,7 @@ document.addEventListener('click', async e=>{
   const sc=t.dataset.pdScent?(PF.scents||[]).find(x=>x.id===t.dataset.pdScent):null;
   PD.baseOpen=null; PD.open=pdNewFormula(null, p, sc); PD.tab='formulas'; showView('pd');
 });
-$('#pdView').addEventListener('input', e=>{ if(e.target.id==='pdQ'){ PD.q=e.target.value; const m=$('#pdMain'); if(m) m.innerHTML=PD.tab==='trials'?ptTable():PD.tab==='bases'?pdBaseTable():pdFormulaTable(); } });
+$('#pdView').addEventListener('input', e=>{ if(e.target.id==='pdQ'){ PD.q=e.target.value; if(PD.tab==='imported'){ clearTimeout(PD.impT); PD.impT=setTimeout(pdImportedLoad, 350); return; } const m=$('#pdMain'); if(m) m.innerHTML=PD.tab==='trials'?ptTable():PD.tab==='bases'?pdBaseTable():pdFormulaTable(); } });
 $('#pdView').addEventListener('change', e=>{
   const t=e.target;
   if(t.id==='pdCat'){ PD.cat=t.value; drawPd(); return; }

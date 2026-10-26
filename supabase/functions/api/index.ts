@@ -1716,7 +1716,7 @@ async function nextPdCode(db: Db, at: Date) {
 }
 async function listPdFormulas(ctx: Ctx, projectId?: string) {
   const m = await needAny(ctx, RD_VIEW); const db = ctx.db;
-  const rows = projectId ? await db`select * from costing.pd_formulas where project_id = ${String(projectId)} order by updated_at desc` : await db`select * from costing.pd_formulas order by updated_at desc limit 1000`;
+  const rows = projectId ? await db`select * from costing.pd_formulas where project_id = ${String(projectId)} order by updated_at desc` : await db`select * from costing.pd_formulas where created_by not like 'import:%' order by updated_at desc limit 1000`;   /* สูตรที่นำเข้าจากไฟล์ (หลายพันสูตร) ดูผ่าน searchPdImported */
   return rows.map((x: Any) => maskPd(m, fmOut(x)));
 }
 async function savePdFormula(ctx: Ctx, f: Any) {
@@ -1754,6 +1754,44 @@ async function deletePdFormula(ctx: Ctx, id: string) {
     await db`delete from costing.pd_formulas where id = ${String(ex.id)}`;
     await log(db, m.email, "deletePdFormula", String(ex.code) + " · " + String(ex.name));
     return { ok: true };
+  });
+}
+/** สูตรที่นำเข้าจากไฟล์ FM-RD-03 (ประวัติ): ค้นหาฝั่งเซิร์ฟเวอร์ เพราะมีหลายพันสูตร ไม่โหลดทั้งหมดขึ้นหน้าเว็บ */
+async function searchPdImported(ctx: Ctx, q: string, limit?: number) {
+  const m = await needAny(ctx, RD_VIEW); const db = ctx.db;
+  q = str(q, 120); const n = Math.min(500, Math.max(1, Number(limit) || 200));
+  const like = "%" + q.replace(/[%_\\]/g, (ch) => "\\" + ch) + "%";
+  const rows = q
+    ? await db`select * from costing.pd_formulas where created_by like 'import:%' and (code ilike ${like} or name ilike ${like} or data::text ilike ${like}) order by created_at desc nulls last, code limit ${n}`
+    : await db`select * from costing.pd_formulas where created_by like 'import:%' order by created_at desc nulls last, code limit ${n}`;
+  const total = Number((await db`select count(*)::int as n from costing.pd_formulas where created_by like 'import:%'`)[0].n);
+  return { total, items: rows.map((x: Any) => maskPd(m, fmOut(x))) };
+}
+async function getPdFormula(ctx: Ctx, id: string) {
+  const m = await needAny(ctx, RD_VIEW);
+  const x = (await ctx.db`select * from costing.pd_formulas where id = ${str(id, 60)}`)[0];
+  if (!x) throw new Error("ไม่พบสูตรนี้");
+  return maskPd(m, fmOut(x));
+}
+/** นำเข้าสูตรต้นแบบจากไฟล์ FM-RD-03 (เจ้าของระบบเท่านั้น · upsert ตาม id imp-fm03-… ทำซ้ำได้ · created_by = import:fm03) */
+async function importPdFormulas(ctx: Ctx, d: Any) {
+  return await locked(ctx, async (c) => {
+    const m = await me(c), db = c.db;
+    if (m.email !== MIGRATION_OWNER || !m.isOwner) throw new Error("FORBIDDEN");
+    let n = 0, skipped = 0;
+    for (const f of (Array.isArray(d && d.items) ? d.items : [])) {
+      if (!f || !/^imp-fm03-[a-z0-9]{6,20}$/.test(String(f.id || ""))) { skipped++; continue; }
+      const name = str(f.name, 200), data = pdFormulaData(f);
+      if (!name || !data.lines.length || JSON.stringify(data).length > RD_DATA_MAX) { skipped++; continue; }
+      const id = String(f.id), status = PD_STATUS[f.status] ? String(f.status) : "draft", now = new Date();
+      const ex = (await db`select id from costing.pd_formulas where id = ${id}`)[0];
+      const row = { id, code: str(f.code, 40), project_id: "", name, base_id: "", status, data: db.json(data), updated_at: now, updated_by: m.email };
+      if (ex) await db`update costing.pd_formulas set ${db(row, "code", "name", "status", "data", "updated_at", "updated_by")} where id = ${id}`;
+      else await db`insert into costing.pd_formulas ${db({ ...row, created_at: ts(f.createdAt) || now, created_by: "import:fm03" })}`;
+      n++;
+    }
+    await log(db, m.email, "importPdFormulas", `formulas ${n} skipped ${skipped}`);
+    return { imported: n, skipped };
   });
 }
 /** นำเข้าทะเบียนเบสจากไฟล์ Formula Base.xlsx (เจ้าของระบบเท่านั้น · upsert ตาม id ทำซ้ำได้) */
@@ -2583,7 +2621,7 @@ const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   listBriefs, saveBrief, deleteBrief, listScents, saveScent, deleteScent, getTypeformStatus, saveTypeformToken, syncTypeform, disconnectTypeform,
   pwLogin, setMyPassword, pwLogout, resetUserPassword,
   listCustomers, saveCustomer, listProjects, getProject, saveProject, setStage, bulkStage, raCheck, issueProjectDoc, uploadProjectDoc, getProjectDocFile, deleteProjectDoc, listSamples, saveSample, sendSample, deleteSample, evalSummary, importRd,
-  listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases,
+  listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases, importPdFormulas, searchPdImported, getPdFormula,
   listPdTrials, savePdTrial, sendPdTrial, decidePdTrial, issuePdTrialStock,
   listRdStock, listRdStockTx, saveRdStockItem, deleteRdStockItem, addRdStockTx, importRdStock,
   listFda, saveFdaReg, renewFdaReg, deleteFdaReg, saveFdaRequest, deleteFdaRequest, getFdaAlert, saveFdaAlert, resetFdaAlertSecret,

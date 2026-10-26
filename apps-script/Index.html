@@ -864,6 +864,8 @@ main.wrap::after{content:"";display:block;height:52px;margin:36px 0 6px;border-r
 .cd-ctx{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin:0 0 12px}
 .cd-src{background:var(--card);border-radius:14px;padding:10px 12px;font-size:12.5px;line-height:1.55;color:var(--ink-muted)} .cd-src b{color:var(--ink);font-size:13.5px}
 .pd-lines tr.pd-sub td{font-size:12.5px;color:var(--ink-muted);background:rgba(196,109,78,.06);padding-top:5px;padding-bottom:5px}.pd-lines tr.pd-sub td:nth-child(4){padding-left:18px}.pd-lines td.num{white-space:nowrap}
+.pd-ck{display:inline-flex;align-items:center;gap:6px;margin:0 14px 0 0;font-size:13px;cursor:pointer}.pd-ck input{width:auto;margin:0}
+#pdExtra .pd-lines td .x{opacity:.7}
 .pd-pi{grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
 .cd-tl{font-size:13px;font-weight:600;margin:6px 0 8px} .cd-tl .muted{font-weight:400;font-size:12px}
 .cd-chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
@@ -4956,7 +4958,7 @@ function pdClearScent(f){ f.fragranceScentId=''; f.fragranceFormulaId=''; }
 function pdNewFormula(base, project, scent){
   const f={id:'', code:'ใหม่', projectId:project?project.id:'', name:'', baseId:'', baseName:'', category:'', mode:'standard', customer:project?project.company||'':'', brand:project?project.brand||'':'',
     fragranceFormulaId:'', fragranceScentId:'', fragranceName:'', fragranceCode:'', fragrancePrice:null, batchG:1000, targetPrice:null, note:'', lines:[], status:'draft',
-    productName:'', fgCode:'', revision:0, purpose:'', packaging:'', fillQty:'', qty:null, sampleDue:'', designDate:'', mockupDate:'', perfumer:'', designer:'', operator:''};
+    steps:[], spec:[], stab:[], concl:{}, productName:'', fgCode:'', revision:0, purpose:'', packaging:'', fillQty:'', qty:null, sampleDue:'', designDate:'', mockupDate:'', perfumer:'', designer:'', operator:''};
   if(base) pdApplyBase(f, base);
   if(!scent && project){ const mine=(PF.scents||[]).filter(s=>s.projectId===project.id&&s.status!=='retired'); if(mine.length===1) scent=mine[0]; }   /* โครงการมีกลิ่นเดียว → เลือกให้ */
   if(scent) pdApplyScent(f, scent);
@@ -5115,6 +5117,35 @@ function pdLinesTable(f, c, ed, opts){
     </tbody><tfoot><tr><th colspan="4">รวม</th><th class="num" ${Math.abs(c.pctSum-100)>0.01?'style="color:var(--bad)"':''}>${fmt(c.pctSum,2)}</th><th class="num">${fmt(c.pctSum/100*batch,2)}</th><th></th><th class="num">${fmt(c.total,2)}</th><th></th>${showStk?`<th class="num" style="font-size:12px;white-space:nowrap">${pdStkFoot(f, c, sm, batch)}</th>`:''}<th></th>${isBase?'<th></th>':''}<th></th></tr></tfoot></table></div>
     <div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap;align-items:center">${ed?`<button class="btn small" type="button" id="pdRowAdd">เพิ่มแถว</button>${isBase?'':'<button class="btn small" type="button" id="pdReloadBase">ดึงส่วนประกอบจากเบสใหม่</button>'}<button class="btn small" type="button" id="pdNormalize">ปรับรายการสัดส่วนสูงสุดให้รวม 100%</button>`:''}<span class="muted" style="font-size:12px">ราคา: ฐานราคาปัจจุบันตามรหัส RM → ${isBase?'ราคาที่บันทึกในเบส':'ราคาที่บันทึกในเบส → ใส่เองในช่อง "ราคา"'}${isBase?'':' · แถวน้ำหอมแจกแจงเป็นส่วนประกอบจากสูตรกลิ่นที่ผูกไว้'}</span></div>`;
 }
+/* ---------- ส่วนท้ายใบสูตร FM-RD-03: วิธีทำ · ข้อกำหนดผลิตภัณฑ์ · ประเมินความคงตัวหลังเติมน้ำหอม · สรุปผล ---------- */
+const PD_SPEC_DEF=[['Appearance','Visual','Match std. ref.'],['Color','Visual','Match std. ref.'],['Odor','Sensory Panel','Match std. ref.'],['pH','pH meter','±1'],['Viscosity','Viscosity Meter','±25%'],['Specific Gravity','Digital Densitometer','±10%']];
+/* [หัวข้อ, [ตัวเลือก 0, ตัวเลือก 1], ดัชนีตัวเลือกที่ถือว่า "ดี" (ใช้เติม Pass/Fail ให้เมื่อเลือก)] */
+const PD_STAB=[['การแยกชั้น (Phase Separation)',['มี','ไม่มี'],1],['การเปลี่ยนสี (Discoloration)',['เปลี่ยน','ไม่เปลี่ยน'],1],['การตกตะกอน (Precipitation)',['พบ','ไม่พบ'],1],['กลิ่นเปลี่ยนเมื่ออยู่ในสูตร',['เปลี่ยน','ไม่เปลี่ยน'],1],['กลิ่นหาย / กลิ่นแรงขึ้นเกินไป',['เหมาะสม','ไม่เหมาะสม'],0],['ส่งผลต่อ texture หรือความหนืด',['ส่งผล','ไม่ส่งผล'],1]];
+const PD_CONCL=[['pass','ผ่าน เหมาะสำหรับการพัฒนาในสูตรนี้'],['cond','ผ่านแบบมีเงื่อนไข (โปรดปรับสูตร / สารช่วยกระจายกลิ่น)'],['fail','ไม่ผ่าน เนื่องจาก']];
+function pdSpecRows(f){ return PD_SPEC_DEF.map((d,i)=>{ const s=(f.spec||[])[i]||{}; return {name:d[0], target:s.target||'', method:s.method?s.method:d[1], limit:s.limit?s.limit:d[2], result:s.result||''}; }); }
+function pdSecHtml(f){
+  const inp=PD_INP, steps=(f.steps||[]).slice(); while(steps.length<6) steps.push({});
+  const stepRows=steps.map((s,i)=>`<tr data-step="${i}"><td class="num">${i+1}</td><td><input data-st="step" value="${esc(s.step||'')}" maxlength="300" style="${inp};min-width:260px"></td><td><input data-st="min" value="${esc(s.min||'')}" maxlength="20" style="${inp};width:84px;text-align:center"></td><td><input data-st="temp" value="${esc(s.temp||'')}" maxlength="20" style="${inp};width:84px;text-align:center"></td><td><input data-st="rpm" value="${esc(s.rpm||'')}" maxlength="20" style="${inp};width:84px;text-align:center"></td><td><input data-st="equip" value="${esc(s.equip||'')}" maxlength="120" style="${inp};min-width:140px"></td><td><input data-st="note" value="${esc(s.note||'')}" maxlength="200" style="${inp};min-width:160px"></td><td><button class="x" type="button" data-st-del="${i}" aria-label="ลบขั้นตอน">×</button></td></tr>`).join('');
+  const specRows=pdSpecRows(f).map((r,i)=>`<tr data-spec="${i}"><td><b>${esc(r.name)}</b></td><td><input data-sp="target" value="${esc(r.target)}" maxlength="120" style="${inp};min-width:130px"></td><td><input data-sp="method" value="${esc(r.method)}" maxlength="120" style="${inp};min-width:150px"></td><td><input data-sp="limit" value="${esc(r.limit)}" maxlength="120" style="${inp};min-width:130px"></td><td><input data-sp="result" value="${esc(r.result)}" maxlength="120" style="${inp};min-width:130px"></td></tr>`).join('');
+  const stabRows=PD_STAB.map(([lab,opts],i)=>{ const s=(f.stab||[])[i]||{}; return `<tr data-stab="${i}"><td><b>${esc(lab)}</b></td><td style="white-space:nowrap">${opts.map((o,k)=>`<label class="pd-ck"><input type="checkbox" data-sb="obs" data-v="${k}" ${String(s.obs)===String(k)?'checked':''}> ${esc(o)}</label>`).join('')}</td><td><select data-sb="pf" style="${inp};width:96px"><option value=""></option><option value="pass" ${s.pf==='pass'?'selected':''}>Pass</option><option value="fail" ${s.pf==='fail'?'selected':''}>Fail</option></select></td><td><input data-sb="note" value="${esc(s.note||'')}" maxlength="300" style="${inp};min-width:200px"></td></tr>`; }).join('');
+  const cc=f.concl||{};
+  return `<div id="pdExtra">
+    <div class="pf-group"><h4>วิธีทำ (Manufacturing Instructions)</h4><div class="tablebox"><table class="pd-lines"><thead><tr><th class="num">ลำดับ</th><th>ขั้นตอน</th><th class="num">เวลาที่ใช้ (นาที)</th><th class="num">อุณหภูมิ (°C)</th><th class="num">ความเร็วรอบ (ถ้ามี)</th><th>อุปกรณ์ที่ใช้</th><th>หมายเหตุ</th><th></th></tr></thead><tbody>${stepRows}</tbody></table></div>
+      <div class="row" style="margin-top:8px"><button class="btn small" type="button" id="pdStepAdd">+ เพิ่มขั้นตอน</button><span class="muted" style="font-size:12px">แถวที่ไม่ได้กรอกจะไม่ถูกบันทึก</span></div></div>
+    <div class="pf-group"><h4>สรุปข้อกำหนดผลิตภัณฑ์ (Product Specification Summary)</h4><div class="tablebox"><table class="pd-lines"><thead><tr><th>Test Parameter</th><th>Target Value</th><th>Method / Instrument</th><th>Spec Limit (if any)</th><th>Result</th></tr></thead><tbody>${specRows}</tbody></table></div></div>
+    <div class="pf-group"><h4>ประเมินความคงตัวหลังเติมน้ำหอม (Product Stability Evaluation After Fragrance Addition)</h4><div class="tablebox"><table class="pd-lines"><thead><tr><th>หัวข้อประเมิน</th><th>สังเกต / รายละเอียด</th><th>Pass/Fail</th><th>Note</th></tr></thead><tbody>${stabRows}</tbody></table></div><div class="muted" style="font-size:12px;margin-top:6px">เลือกผลสังเกตแล้วระบบเติม Pass/Fail ให้ แก้ได้</div></div>
+    <div class="pf-group"><h4>สรุปผลและข้อเสนอแนะ (Conclusion &amp; Recommendation)</h4><div class="muted" style="font-size:12.5px;margin-bottom:6px">สรุปผลการประเมินโดยทีม R&amp;D</div>
+      ${PD_CONCL.map(([k,l])=>`<div class="row" style="gap:8px;align-items:center;margin:4px 0"><label class="pd-ck" style="min-width:380px"><input type="checkbox" data-cl="result" data-v="${k}" ${cc.result===k?'checked':''}> ${esc(l)}</label>${k==='cond'?`<input data-cl="cond" value="${esc(cc.cond||'')}" maxlength="300" placeholder="ระบุเงื่อนไข" style="${inp};flex:1;min-width:200px">`:k==='fail'?`<input data-cl="fail" value="${esc(cc.fail||'')}" maxlength="300" placeholder="ระบุเหตุผล" style="${inp};flex:1;min-width:200px">`:''}</div>`).join('')}</div>
+  </div>`;
+}
+/* แก้ในส่วนท้ายใบสูตร: เก็บค่าทันทีโดยไม่วาดหน้าใหม่ (กันโฟกัสหลุดระหว่างกรอกต่อ) */
+function pdExtraChange(t){
+  const f=PD.open, tr=t.closest('tr');
+  if(t.dataset.sb==='obs'&&tr){ tr.querySelectorAll('[data-sb="obs"]').forEach(c=>{ if(c!==t) c.checked=false; }); const pf=tr.querySelector('[data-sb="pf"]'), good=PD_STAB[+tr.dataset.stab][2]; if(pf&&t.checked&&(!pf.value||pf.dataset.auto==='1')){ pf.value=String(t.dataset.v)===String(good)?'pass':'fail'; pf.dataset.auto='1'; } else if(pf&&!t.checked&&pf.dataset.auto==='1'){ pf.value=''; delete pf.dataset.auto; } }
+  if(t.dataset.sb==='pf') delete t.dataset.auto;
+  if(t.dataset.cl==='result'){ document.querySelectorAll('#pdExtra [data-cl="result"]').forEach(c=>{ if(c!==t) c.checked=false; }); }
+  pdCollect(f);
+}
 function pdFormulaPage(f){
   const lock=f.status==='approved', ed=pdCanEdit(), ro=ed&&!lock?'':'disabled', c=pdCost(f), p=pdProj(f.projectId), fr=pdFragLine(f);
   const projOpts=[['','– ไม่ผูกโครงการ –'],...(RD.list||[]).filter(x=>x.stage!=='lost'||x.id===f.projectId).map(x=>[x.id, `${x.pdrNo} · ${x.brand||x.company}`])];
@@ -5156,6 +5187,7 @@ function pdFormulaPage(f){
         ${pdField('ราคาน้ำหอม ฿/กก.', pdInp('fragrancePrice', f.fragrancePrice, '', 'number'))}${pdField('% น้ำหอมในสูตร', `<input data-pk="fragPct" type="number" step="any" min="0" max="100" value="${fr&&fr.pct!=null?esc(fr.pct):''}">`)}
       </div><div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">${sel?`${pfChip(sel.status,PF_SSTAT)}<button class="btn small" type="button" data-pd-scentopen="${esc(sel.id)}">เปิดกลิ่นในคลัง</button>${sel.status==='draft'||sel.status==='trial'?'<span class="chip warn">กลิ่นยังไม่ผ่านการอนุมัติจากลูกค้า</span>':''}${sc?`<span class="muted" style="font-size:12px">ราคาน้ำหอม ${fmt(sc.price,2)} ฿/กก. ${sc.src==='formula'?'จากสูตรต้นทุนของกลิ่น':'จากต้นทุนที่บันทึกไว้กับกลิ่น'+(sc.at?' ('+rdDate(sc.at)+')':'')}${sc.src==='formula'&&!sc.complete?' · ราคาวัตถุดิบในสูตรกลิ่นยังไม่ครบ':''} · ใช้ราคาขายแทนต้นทุนได้โดยแก้ในช่อง "ราคาน้ำหอม"</span>`:'<span class="chip warn">กลิ่นนี้ยังไม่มีต้นทุน</span><span class="muted" style="font-size:12px">ผูกสูตรต้นทุนกับกลิ่นใน Perfumer หรือใส่ราคาน้ำหอมเอง</span>'}`:'<span class="muted" style="font-size:12px">ไม่ได้เลือกกลิ่นจากคลัง? ใส่ชื่อ รหัส และราคาน้ำหอมเอง</span>'}</div></div>
       <div class="pf-group"><h4>ส่วนประกอบ (เบส + น้ำหอม)</h4>${pdLinesTable(f, c, ed&&!lock, {})}${pdSummary(f, c)}</div>
+      ${pdSecHtml(f)}
       </fieldset>
       <div class="row" style="margin-top:14px;gap:8px;flex-wrap:wrap;align-items:center">${ed?`<button class="btn primary" type="submit">บันทึก</button><select id="pdStatus" aria-label="สถานะ">${Object.entries(PD_STATUS).map(([k,[l]])=>`<option value="${k}" ${f.status===k?'selected':''}>${l}</option>`).join('')}</select>`:''}<button class="btn" type="button" id="pdPrint">พิมพ์ใบสูตร</button>${f.id&&fdaCanView()?`<button class="btn" type="button" data-pd-inci="${esc(f.id)}">ส่วนประกอบฉลาก (INCI)</button>`:""}${ed&&f.id&&!lock?'<button class="btn small" type="button" id="pdDelete" style="color:var(--bad);margin-left:auto">ลบสูตร</button>':''}<span class="muted" id="pdErr" role="alert" style="color:var(--bad)"></span></div></form>
     ${ptCard(f)}`;
@@ -5187,6 +5219,12 @@ function pdCollect(f){
     if(old.frag) return Object.assign({}, old, {part:g('part')||''});
     return {part:g('part')||'', code:g('code')||'', name:g('name')||'', fn:g('fn')||'', pct:pdNumOrNull(g('pct')), price:old.price==null?null:old.price, override:pdNumOrNull(g('override')), frag:false}; });
   const fp=box.querySelector('[data-pk="fragPct"]'), fr=pdFragLine(f); if(fp && fr) fr.pct=pdNumOrNull(fp.value.trim());
+  const ex=box.querySelector('#pdExtra');
+  if(ex){ const v=(root,sel)=>{ const el=root.querySelector(sel); return el?el.value.trim():''; };
+    f.steps=[...ex.querySelectorAll('tr[data-step]')].map(tr=>({step:v(tr,'[data-st="step"]'), min:v(tr,'[data-st="min"]'), temp:v(tr,'[data-st="temp"]'), rpm:v(tr,'[data-st="rpm"]'), equip:v(tr,'[data-st="equip"]'), note:v(tr,'[data-st="note"]')}));
+    f.spec=[...ex.querySelectorAll('tr[data-spec]')].map(tr=>({target:v(tr,'[data-sp="target"]'), method:v(tr,'[data-sp="method"]'), limit:v(tr,'[data-sp="limit"]'), result:v(tr,'[data-sp="result"]')}));
+    f.stab=[...ex.querySelectorAll('tr[data-stab]')].map(tr=>{ const on=tr.querySelector('[data-sb="obs"]:checked'); return {obs:on?on.dataset.v:'', pf:v(tr,'[data-sb="pf"]'), note:v(tr,'[data-sb="note"]')}; });
+    const cr=ex.querySelector('[data-cl="result"]:checked'); f.concl={result:cr?cr.dataset.v:'', cond:v(ex,'[data-cl="cond"]'), fail:v(ex,'[data-cl="fail"]')}; }
   const st=$('#pdStatus'); if(st) f.status=st.value;
   return f;
 }
@@ -5230,7 +5268,11 @@ function pdPrintHtml(f){
     ${docSec(2,'Formula')}<table class="dt"><thead><tr><th>No.</th><th>Part</th><th>RM code</th><th>Ingredient</th><th>%</th><th>g / batch</th><th>Price ฿/kg</th><th>Cost ฿/kg</th></tr></thead><tbody>${rows}</tbody>
       <tfoot><tr><th colspan="4" style="text-align:right">Total</th><th style="text-align:right">${fmt(c.pctSum,2)}</th><th style="text-align:right">${fmt(c.pctSum/100*batch,2)}</th><th></th><th style="text-align:right">${fmt(c.total,2)}</th></tr></tfoot></table>
     <p class="dsmall">Raw material cost ${fmt(c.total,2)} ฿/kg · fragrance ${fmt(c.fragPct,2)}% = ${fmt(c.fragCost,2)} ฿/kg${toNum(f.targetPrice)>0?` · target ${fmt(f.targetPrice,2)} ฿/kg (${c.total>toNum(f.targetPrice)?'over by '+fmt(c.total-toNum(f.targetPrice),2):'under by '+fmt(toNum(f.targetPrice)-c.total,2)} ฿/kg)`:''}${c.missing?` · ${c.missing} item(s) without price`:''}</p>
-    ${docSec(3,'Base Requirements and Notes')}${docKv([['Shelf life',base&&base.shelfLife],['Stability requirement',base&&base.stability],['Benchmark',base&&base.benchmark],['Notes',f.note]])}
+    ${docSec(3,'Manufacturing Instructions')}<table class="dt"><thead><tr><th>No.</th><th>Step</th><th>Time (min)</th><th>Temp. (°C)</th><th>Speed (rpm)</th><th>Equipment</th><th>Remarks</th></tr></thead><tbody>${(f.steps||[]).filter(x=>x.step||x.min||x.temp||x.rpm||x.equip||x.note).map((x,i)=>`<tr><td style="text-align:center">${i+1}</td><td>${esc(x.step)}</td><td style="text-align:center">${esc(x.min)}</td><td style="text-align:center">${esc(x.temp)}</td><td style="text-align:center">${esc(x.rpm)}</td><td>${esc(x.equip)}</td><td>${esc(x.note)}</td></tr>`).join('')||'<tr><td colspan="7" style="height:44px">&nbsp;</td></tr>'}</tbody></table>
+    ${docSec(4,'Product Specification Summary')}<table class="dt"><thead><tr><th>Test Parameter</th><th>Target Value</th><th>Method / Instrument</th><th>Spec Limit (if any)</th><th>Result</th></tr></thead><tbody>${pdSpecRows(f).map(r=>`<tr><td>${esc(r.name)}</td><td>${esc(r.target)}</td><td>${esc(r.method)}</td><td>${esc(r.limit)}</td><td>${esc(r.result)}</td></tr>`).join('')}</tbody></table>
+    ${docSec(5,'Product Stability Evaluation After Fragrance Addition')}<table class="dt"><thead><tr><th>Evaluation item</th><th>Observation</th><th>Pass/Fail</th><th>Note</th></tr></thead><tbody>${PD_STAB.map(([lab,opts],i)=>{ const s=(f.stab||[])[i]||{}; return `<tr><td>${esc(lab)}</td><td>${opts.map((o,k)=>(String(s.obs)===String(k)?'☑ ':'☐ ')+esc(o)).join('&nbsp;&nbsp;')}</td><td style="text-align:center">${s.pf==='pass'?'Pass':s.pf==='fail'?'Fail':''}</td><td>${esc(s.note||'')}</td></tr>`; }).join('')}</tbody></table>
+    ${docSec(6,'Conclusion &amp; Recommendation')}<div style="line-height:1.9">R&amp;D evaluation summary<br>${PD_CONCL.map(([k,l])=>`${(f.concl||{}).result===k?'☑':'☐'} ${esc(l)}${k==='cond'&&(f.concl||{}).cond?': '+esc(f.concl.cond):''}${k==='fail'&&(f.concl||{}).fail?': '+esc(f.concl.fail):''}`).join('<br>')}</div>
+    ${docSec(7,'Base Requirements and Notes')}${docKv([['Shelf life',base&&base.shelfLife],['Stability requirement',base&&base.stability],['Benchmark',base&&base.benchmark],['Notes',f.note]])}
     ${docSign([['Prepared by (Product Development)',''],['Approved by',f.approvedBy?shortName(f.approvedBy):'']])}
     <p class="dsmall dfoot">Product Formula Sheet ${esc(f.code)} · Internal document · Prices are current purchase prices at the time of printing</p>`;
 }
@@ -5257,6 +5299,7 @@ $('#pdView').addEventListener('change', e=>{
   const t=e.target;
   if(t.id==='pdCat'){ PD.cat=t.value; drawPd(); return; }
   if(t.id==='pdStatusF'){ PD.statusF=t.value; drawPd(); return; }
+  if(PD.open && t.closest('#pdExtra')){ pdExtraChange(t); return; }
   if(PD.open && t.closest('#pdForm')){
     const f=PD.open, k=t.dataset.pk; pdCollect(f);
     if(k==='baseId'){ const b=PD.bases.find(x=>x.id===f.baseId); if(b){ if(!f.lines.some(l=>!l.frag) || confirm(`แทนที่ส่วนประกอบทั้งหมดด้วยเบส "${b.name}" ?`)){ const fr=pdFragLine(f), keep=fr?fr.pct:null; pdApplyBase(f, b); } else { f.baseName=b.name; f.category=b.category; } } }
@@ -5285,6 +5328,8 @@ $('#pdView').addEventListener('click', async e=>{
   if(t.id==='pdBack'){ PD.open=null; PD.baseOpen=null; drawPd(); window.scrollTo(0,0); return; }
   if(PD.open){
     const f=PD.open;
+    if(t.id==='pdStepAdd'){ pdCollect(f); f.steps.push({}); drawPd(); const rows=document.querySelectorAll('#pdExtra tr[data-step]'); const el=rows[rows.length-1]&&rows[rows.length-1].querySelector('[data-st="step"]'); if(el) el.focus(); return; }
+    if(t.dataset.stDel!==undefined){ pdCollect(f); f.steps.splice(+t.dataset.stDel,1); drawPd(); return; }
     if(t.dataset.pdUsefrag){ pdCollect(f); f.fragrancePrice=toNum(t.dataset.pdUsefrag); drawPd(); toast('ใช้ต้นทุนสูตรกลิ่น '+fmt(f.fragrancePrice,2)+' ฿/กก.'); return; }
     if(t.id==='pdRowAdd'){ pdCollect(f); const i=f.lines.findIndex(l=>l.frag); const row={part:(f.lines[(i>=0?i:f.lines.length)-1]||{}).part||'', code:'', name:'', fn:'', pct:null, price:null, override:null, frag:false}; if(i>=0) f.lines.splice(i,0,row); else f.lines.push(row); drawPd(); const el=$('#pdForm').querySelector(`tr[data-i="${i>=0?i:f.lines.length-1}"] [data-pl="code"]`); if(el) el.focus(); return; }
     if(t.dataset.plDel!=null){ pdCollect(f); f.lines.splice(Number(t.dataset.plDel),1); drawPd(); return; }

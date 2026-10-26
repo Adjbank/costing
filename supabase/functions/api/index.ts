@@ -1670,6 +1670,11 @@ async function deletePdBase(ctx: Ctx, id: string) {
     return { ok: true };
   });
 }
+/* ส่วนท้ายใบสูตร FM-RD-03 */
+const pdSteps = (v: Any) => (Array.isArray(v) ? v : []).slice(0, 30).map((x: Any) => ({ step: str(x && x.step, 300), min: str(x && x.min, 20), temp: str(x && x.temp, 20), rpm: str(x && x.rpm, 20), equip: str(x && x.equip, 120), note: str(x && x.note, 200) })).filter((x: Any) => x.step || x.min || x.temp || x.rpm || x.equip || x.note);
+const pdSpec = (v: Any) => { const a = Array.isArray(v) ? v : []; return [0, 1, 2, 3, 4, 5].map((i) => { const x: Any = a[i] || {}; return { target: str(x.target, 120), method: str(x.method, 120), limit: str(x.limit, 120), result: str(x.result, 120) }; }); };
+const pdStab = (v: Any) => { const a = Array.isArray(v) ? v : []; return [0, 1, 2, 3, 4, 5].map((i) => { const x: Any = a[i] || {}; return { obs: x.obs === "0" || x.obs === "1" ? String(x.obs) : "", pf: x.pf === "pass" || x.pf === "fail" ? String(x.pf) : "", note: str(x.note, 300) }; }); };
+const pdConcl = (v: Any) => { const x: Any = v || {}; return { result: ["pass", "cond", "fail"].includes(String(x.result)) ? String(x.result) : "", cond: str(x.cond, 300), fail: str(x.fail, 300) }; };
 const pdDate = (v: unknown) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || "")) ? String(v) : "");
 function pdFormulaData(f: Any) {
   return { category: str(f.category, 80), baseName: str(f.baseName, 200), mode: PD_MODES[f.mode] ? String(f.mode) : "standard", customer: str(f.customer, 200), brand: str(f.brand, 200),
@@ -1677,7 +1682,8 @@ function pdFormulaData(f: Any) {
     batchG: numOrNull(f.batchG), targetPrice: numOrNull(f.targetPrice), note: str(f.note, 3000), lines: pdLines(f.lines), approvedBy: str(f.approvedBy, 120), approvedAt: str(f.approvedAt, 40),
     /* หัวใบสูตร FM-RD-03 (Product Information) */
     productName: str(f.productName, 200), fgCode: str(f.fgCode, 60), revision: numOrNull(f.revision), purpose: str(f.purpose, 200), packaging: str(f.packaging, 200), fillQty: str(f.fillQty, 60), qty: numOrNull(f.qty),
-    sampleDue: pdDate(f.sampleDue), designDate: pdDate(f.designDate), mockupDate: pdDate(f.mockupDate), perfumer: str(f.perfumer, 120), designer: str(f.designer, 120), operator: str(f.operator, 120) };
+    sampleDue: pdDate(f.sampleDue), designDate: pdDate(f.designDate), mockupDate: pdDate(f.mockupDate), perfumer: str(f.perfumer, 120), designer: str(f.designer, 120), operator: str(f.operator, 120),
+    steps: pdSteps(f.steps), spec: pdSpec(f.spec), stab: pdStab(f.stab), concl: pdConcl(f.concl) };
 }
 const fmOut = (r: Any) => ({ id: String(r.id), code: String(r.code || ""), projectId: String(r.project_id || ""), name: String(r.name), baseId: String(r.base_id || ""), status: String(r.status), ...pdFormulaData(r.data || {}),
   createdAt: iso(r.created_at), createdBy: String(r.created_by || ""), updatedAt: iso(r.updated_at), updatedBy: String(r.updated_by || "") });

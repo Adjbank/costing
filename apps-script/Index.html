@@ -1702,7 +1702,7 @@ function renderEditor(){
     </table></div>
     <div class="row" style="margin-top:12px;justify-content:space-between">
       <div class="row"><button class="btn small" type="button" id="btnAddRow">+ เพิ่มวัตถุดิบ</button><span class="muted" style="font-size:12.5px">หรือพิมพ์ค้นหาในช่อง "เลือกวัตถุดิบจากฐานข้อมูล" ด้านบนแล้วกด "เพิ่ม"</span></div>
-      <button class="btn link" type="button" id="btnDelProd">ลบสูตรนี้</button>
+      <div class="row" style="gap:10px;align-items:center"><button class="btn link" type="button" id="btnDelProd">ลบสูตรนี้</button><button class="btn primary" type="button" id="btnSaveProd">บันทึก</button></div>
     </div>`;
 }
 function renderSummary(){
@@ -1847,6 +1847,7 @@ $('#versionPanel').addEventListener('click',async e=>{
 $('#editor').addEventListener('click',e=>{
   const p=active(); if(!p) return;
   const ad=e.target.closest('[data-add]'); if(ad){ calcAddLine(p, ad.dataset.add, ad.dataset.name); return; }
+  if(e.target.id==='btnSaveProd'){ calcSaveNow(e.target); return; }
   if(e.target.id==='btnAddRow'){ p.lines.push({code:'',nameIn:'',amt:''}); save(); renderWork(); const ins=document.querySelectorAll('#editor input.code'); ins[ins.length-1]?.focus(); return; }
   if(e.target.id==='btnDelProd'){
     if(e.target.dataset.confirm!=='1'){ e.target.dataset.confirm='1'; e.target.textContent='กดอีกครั้งเพื่อยืนยันการลบ'; setTimeout(()=>{ if(e.target.isConnected){e.target.dataset.confirm='';e.target.textContent='ลบสูตรนี้';} },4000); return; }
@@ -2104,6 +2105,23 @@ async function loadFromServer(){
     if(!S.admin) renderAll();
     if(localOnly.length) scheduleSync(); else setSyncStatus(server.length?'saved':'offline');
   }catch(e){ SYNC.loaded=false; }
+}
+/* ปุ่ม "บันทึก" ในตัวออกแบบ: ส่งขึ้นเซิร์ฟเวอร์ทันที (ไม่รอ 1.5 วินาที) แล้วแจ้งผล */
+async function calcSaveNow(btn){
+  const p=active(); if(!p) return;
+  if(p.sample){ toast('สูตรตัวอย่างไม่ถูกบันทึกขึ้นเซิร์ฟเวอร์ · กด "+ งานออกแบบใหม่" เพื่อเริ่มงานของคุณ'); return; }
+  if(document.activeElement&&document.activeElement.blur) document.activeElement.blur();   /* ให้ช่องที่กำลังพิมพ์ส่งค่าเข้า state ก่อน */
+  clearTimeout(SYNC.timer); SYNC.timer=null;
+  const old=btn.textContent; btn.disabled=true; btn.textContent='กำลังบันทึก…';
+  try{
+    for(let i=0;i<30&&SYNC.busy;i++) await new Promise(res=>setTimeout(res,300));
+    save(); clearTimeout(SYNC.timer); SYNC.timer=null;
+    await syncNow();
+    for(let i=0;i<30&&SYNC.busy;i++) await new Promise(res=>setTimeout(res,300));
+    const ok=SYNC.loaded && !SYNC.dirty;
+    toast(ok?'บันทึกแล้ว':'บันทึกไม่สำเร็จ ลองกดบันทึกอีกครั้ง');
+  }catch(err){ toast('บันทึกไม่สำเร็จ ลองกดบันทึกอีกครั้ง'); }
+  finally{ if(btn.isConnected){ btn.disabled=false; btn.textContent=old; } }
 }
 window.addEventListener('beforeunload', e=>{ if(SYNC.dirty || SYNC.busy){ e.preventDefault(); e.returnValue=''; } });
 

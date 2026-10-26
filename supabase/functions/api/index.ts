@@ -1188,6 +1188,7 @@ const RA_STATUS: Record<string, number> = { pending: 1, pass: 1, cond: 1, fail: 
 const SAMPLE_KINDS: Record<string, number> = { scent: 1, mockup: 1 };
 const EVAL_FIELDS = ["scent", "appearance", "skinfeel", "target", "brand", "overall"];
 const EVAL_DECISIONS: Record<string, number> = { produce: 1, revise: 1, reject: 1 };
+const RD_DIRECTIONS = 3;   /* ตัวอย่างกลิ่นรอบแรกเสนอ 3 แนวทาง ลูกค้าเลือก 1 กลิ่นเพื่อไปต่อหรือนำไปแก้ไข */
 
 function bkkParts(d: Date) {
   const p = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(d).map((x) => [x.type, x.value]));
@@ -1354,7 +1355,7 @@ async function gateCheck(db: Db, pr: Any, to: string): Promise<string> {
   switch (to) {
     case "s2": return !pr.customer_code ? "ระบุรหัสลูกค้าก่อน" : !ow.pc ? "ระบุผู้ประสานงาน (Project Coordinator) ก่อน" : "";
     case "s3": return ra.status !== "pass" && ra.status !== "cond" ? "RA ต้องตรวจกฎหมายผ่าน (หรือผ่านแบบมีเงื่อนไข) ก่อน" : !(ow.perfumer || []).length ? "มอบหมาย Perfumer ก่อน" : "";
-    case "s4": return (await decided("scent")) ? "" : 'ลูกค้ายังไม่ได้เลือก "ผลิตจริงต่อไป" ให้กลิ่นใด (ต้องมีผลประเมินตัวอย่างกลิ่น)';
+    case "s4": return (await decided("scent")) ? "" : 'ลูกค้ายังไม่ได้เลือกกลิ่นที่จะ "ผลิตจริงต่อไป" (ส่งตัวอย่างกลิ่น ' + RD_DIRECTIONS + ' แนวทาง แล้วให้ลูกค้าเลือก 1 กลิ่นในแบบประเมิน)';
     case "s5": return (await db`select 1 from costing.samples where project_id = ${String(pr.id)} and kind = 'mockup' limit 1`).length ? "" : "ยังไม่มีชุดตัวอย่างต้นแบบสินค้า (FM-RD-04)";
     case "s6": return (await decided("mockup")) ? "" : 'ลูกค้ายังไม่ได้ยืนยันต้นแบบ (ต้องมีผลประเมินต้นแบบที่เลือก "ผลิตจริงต่อไป")';
     case "s7": return d.stability && (d.stability.standard || d.stability.result === "pass") ? "" : "บันทึก Stability ก่อน: เบสเดิมใช้เอกสารมาตรฐาน หรือเบสใหม่ต้องมีผลทดสอบผ่าน (FM-RD-08)";
@@ -1487,6 +1488,11 @@ async function sendSample(ctx: Ctx, id: string) {
     const ex = (await db`select * from costing.samples where id = ${String(id || "")}`)[0];
     if (!ex) throw new Error("ไม่พบชุดตัวอย่างนี้");
     if (String(ex.status) === "evaluated") throw new Error("ชุดนี้ประเมินแล้ว");
+    if (String(ex.kind) === "scent") {
+      const n = (Array.isArray(ex.items) ? ex.items : []).length;
+      const prior = (await db`select 1 from costing.samples where project_id = ${String(ex.project_id)} and kind = 'scent' and status = 'evaluated' limit 1`).length > 0;
+      if (!prior && n !== RD_DIRECTIONS) throw new Error(`ตัวอย่างกลิ่นรอบแรกต้องเสนอ ${RD_DIRECTIONS} แนวทาง (ชุดนี้มี ${n}) · รอบแก้ไขหลังลูกค้าเลือกแล้วส่งกี่กลิ่นก็ได้`);
+    }
     const now = new Date(), token = ex.eval_token || uuid(24), shipped = ex.shipped_at || now;
     await db`update costing.samples set status = 'sent', eval_token = ${token}, shipped_at = ${shipped}, updated_at = now(), updated_by = ${m.email} where id = ${String(ex.id)}`;
     const pr = (await db`select * from costing.projects where id = ${String(ex.project_id)}`)[0];
@@ -1535,20 +1541,25 @@ button{background:#1f3a5f;color:#fff;border:0;border-radius:10px;padding:12px 20
   const items = Array.isArray(r.items) ? r.items : [], ev = r.eval || {}, done = String(r.status) === "evaluated";
   const CRIT = [["scent", "กลิ่น (Scent)"], ["appearance", "สี / ลักษณะภายนอก (Appearance)"], ["skinfeel", "ความรู้สึกหลังใช้งาน (Skin feel)"], ["target", "ความเหมาะสมกับกลุ่มเป้าหมาย (Target fit)"], ["brand", "ความเหมาะสมกับแบรนด์ (Brand alignment)"], ["overall", "ความชอบโดยรวม (Overall liking)"]];
   const prev = (code: string) => (Array.isArray(ev.items) ? ev.items : []).find((x: Any) => x.code === code) || {};
+  const isScent = String(r.kind) === "scent", pk = ev.pick || {};
   const itemHtml = (it: Any, i: number) => { const pv = prev(it.code); return `<div class="card" data-item="${i}"><h2>${hx(it.code || "ตัวอย่าง " + (i + 1))}${it.name ? " · " + hx(it.name) : ""}</h2>${it.size ? `<div class="muted">${hx(it.size)}${it.qty ? " × " + hx(it.qty) : ""}</div>` : ""}
     ${CRIT.map(([k, l]) => `<div class="crit"><span>${l}</span><div class="scale">${[1, 2, 3, 4, 5].map((v) => `<label><input type="radio" name="s${i}_${k}" value="${v}" ${Number((pv.scores || {})[k]) === v ? "checked" : ""}><span>${v}</span></label>`).join("")}</div></div>`).join("")}
     <div style="margin-top:8px"><div class="muted">ความเห็น / ข้อเสนอแนะ</div><textarea name="c${i}" rows="2" maxlength="1000">${hx(pv.comment || "")}</textarea></div>
-    <div class="dec" style="margin-top:8px"><div class="muted">ตัวอย่างนี้เหมาะสำหรับ</div><label><input type="radio" name="d${i}" value="produce" ${pv.decision === "produce" ? "checked" : ""}><span>ผลิตจริงต่อไป</span></label><label><input type="radio" name="d${i}" value="revise" ${pv.decision === "revise" ? "checked" : ""}><span>ปรับแก้แล้วส่งใหม่</span></label><label><input type="radio" name="d${i}" value="reject" ${pv.decision === "reject" ? "checked" : ""}><span>ไม่เลือก</span></label></div></div>`; };
+    ${isScent ? "" : `<div class="dec" style="margin-top:8px"><div class="muted">ตัวอย่างนี้เหมาะสำหรับ</div><label><input type="radio" name="d${i}" value="produce" ${pv.decision === "produce" ? "checked" : ""}><span>ผลิตจริงต่อไป</span></label><label><input type="radio" name="d${i}" value="revise" ${pv.decision === "revise" ? "checked" : ""}><span>ปรับแก้แล้วส่งใหม่</span></label><label><input type="radio" name="d${i}" value="reject" ${pv.decision === "reject" ? "checked" : ""}><span>ไม่เลือก</span></label></div>`}</div>`; };
+  const pickHtml = !isScent ? "" : `<div class="card" id="pick"><h2>เลือก 1 กลิ่นที่จะไปต่อ *</h2><div class="muted">จาก ${items.length} แนวทางที่ส่งมา เลือกได้กลิ่นเดียว</div>
+    <div class="dec">${items.map((it: Any, i: number) => `<label><input type="radio" name="pick" value="${i}" ${Number(pk.idx) === i && pk.action ? "checked" : ""}><span>${hx(it.code || "ตัวอย่าง " + (i + 1))}${it.name ? " · " + hx(it.name) : ""}</span></label>`).join("")}</div>
+    <div class="muted" style="margin-top:10px">กลิ่นที่เลือกจะนำไป</div><div class="dec"><label><input type="radio" name="pickAct" value="produce" ${pk.action === "produce" ? "checked" : ""}><span>ไปต่อ · ผลิตจริงต่อไป</span></label><label><input type="radio" name="pickAct" value="revise" ${pk.action === "revise" ? "checked" : ""}><span>นำไปแก้ไขแล้วส่งใหม่</span></label></div></div>`;
   const body = `<div class="brandbar">Scent &amp; Sense · แผนกวิจัยและพัฒนา</div><h1>แบบประเมิน${String(r.kind) === "mockup" ? "ต้นแบบผลิตภัณฑ์" : "ตัวอย่างกลิ่น"}</h1>
     <div class="muted">${hx(r.brand || r.company)}${r.brand && r.company ? " · " + hx(r.company) : ""} · เอกสาร ${hx(r.doc_no)} · ส่งเมื่อ ${r.shipped_at ? hx(bkk(new Date(r.shipped_at)).slice(0, 10)) : "-"}</div>
-    ${done ? `<div class="card ok"><b>ประเมินแล้ว</b> เมื่อ ${hx(bkk(new Date(ev.submittedAt || Date.now())))} โดย ${hx(ev.email || "")} · แก้ไขคำตอบได้ด้านล่างแล้วกดส่งอีกครั้ง</div>` : `<div class="card"><p style="margin:0">ให้คะแนน 1 (น้อย) ถึง 5 (มาก) ในแต่ละด้าน และเลือกว่าตัวอย่างใดให้ผลิตจริงต่อไป ใช้เวลาประมาณ 2 นาที</p></div>`}
-    <form id="f">${items.map(itemHtml).join("")}
+    ${done ? `<div class="card ok"><b>ประเมินแล้ว</b> เมื่อ ${hx(bkk(new Date(ev.submittedAt || Date.now())))} โดย ${hx(ev.email || "")} · แก้ไขคำตอบได้ด้านล่างแล้วกดส่งอีกครั้ง</div>` : `<div class="card"><p style="margin:0">${isScent ? "ให้คะแนน 1 (น้อย) ถึง 5 (มาก) ทุกกลิ่นที่ส่งมา " + items.length + " แนวทาง แล้วเลือก 1 กลิ่นที่จะไปต่อ (ผลิตจริง) หรือนำไปแก้ไข" : "ให้คะแนน 1 (น้อย) ถึง 5 (มาก) ในแต่ละด้าน และเลือกว่าตัวอย่างใดให้ผลิตจริงต่อไป"} ใช้เวลาประมาณ 2 นาที</p></div>`}
+    <form id="f">${items.map(itemHtml).join("")}${pickHtml}
     <div class="card"><div class="muted">ความเห็นเพิ่มเติมโดยรวม</div><textarea name="note" rows="3" maxlength="2000">${hx(ev.note || "")}</textarea>
       <div style="margin-top:10px"><div class="muted">อีเมลผู้ประเมิน *</div><input type="email" name="email" required value="${hx(ev.email || "")}" placeholder="name@company.com"></div>
       <div style="margin-top:14px"><button type="submit" id="go">ส่งผลประเมิน</button></div><div id="msg" class="muted" style="margin-top:8px" aria-live="polite"></div></div></form>
     <script>const F=document.getElementById('f'),M=document.getElementById('msg');F.addEventListener('submit',async e=>{e.preventDefault();const b=document.getElementById('go');const items=[...document.querySelectorAll('[data-item]')].map((el,i)=>{const sc={};['scent','appearance','skinfeel','target','brand','overall'].forEach(k=>{const r=el.querySelector('input[name="s'+i+'_'+k+'"]:checked');sc[k]=r?+r.value:0});const d=el.querySelector('input[name="d'+i+'"]:checked');return {idx:i,scores:sc,comment:el.querySelector('[name="c'+i+'"]').value,decision:d?d.value:''}});
     const miss=items.find(x=>Object.values(x.scores).some(v=>!v));if(miss){M.innerHTML='<span class="bad">ให้คะแนนให้ครบทุกด้านของตัวอย่างที่ '+(miss.idx+1)+'</span>';return}
-    b.disabled=true;M.textContent='กำลังส่ง…';try{const r=await fetch('${hx((Deno.env.get("SUPABASE_URL") || "") + "/functions/v1/api?evalSubmit=" + token)}',{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({items,note:F.note.value,email:F.email.value})});const j=await r.json();if(!j.ok)throw new Error(j.error||'ส่งไม่สำเร็จ');M.innerHTML='<b style="color:#1a7f37">ขอบคุณครับ ระบบบันทึกผลประเมินแล้ว</b> ทีม Scent &amp; Sense จะติดต่อกลับโดยเร็ว';window.scrollTo(0,document.body.scrollHeight)}catch(err){M.innerHTML='<span class="bad">'+(err.message||err)+'</span>';b.disabled=false}});</script>`;
+    const pk=document.querySelector('input[name="pick"]:checked'),pa=document.querySelector('input[name="pickAct"]:checked');if(document.getElementById('pick')&&(!pk||!pa)){M.innerHTML='<span class="bad">เลือก 1 กลิ่นที่จะไปต่อ และระบุว่าจะผลิตจริงหรือนำไปแก้ไข</span>';document.getElementById('pick').scrollIntoView({behavior:'smooth'});return}
+    b.disabled=true;M.textContent='กำลังส่ง…';try{const r=await fetch('${hx((Deno.env.get("SUPABASE_URL") || "") + "/functions/v1/api?evalSubmit=" + token)}',{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({items,note:F.note.value,email:F.email.value,pick:pk?{idx:+pk.value,action:pa?pa.value:''}:null})});const j=await r.json();if(!j.ok)throw new Error(j.error||'ส่งไม่สำเร็จ');M.innerHTML='<b style="color:#1a7f37">ขอบคุณครับ ระบบบันทึกผลประเมินแล้ว</b> ทีม Scent &amp; Sense จะติดต่อกลับโดยเร็ว';window.scrollTo(0,document.body.scrollHeight)}catch(err){M.innerHTML='<span class="bad">'+(err.message||err)+'</span>';b.disabled=false}});</script>`;
   return html(body);
 }
 async function evalSubmit(token: string, body: Any): Promise<Any> {
@@ -1564,14 +1575,24 @@ async function evalSubmit(token: string, body: Any): Promise<Any> {
       EVAL_FIELDS.forEach((f) => { const v = Math.round(Number((a.scores || {})[f])); scores[f] = v >= 1 && v <= 5 ? v : 0; });
       return { code: String(it.code || ""), name: String(it.name || ""), scentId: String(it.scentId || ""), formulaCode: String(it.formulaCode || ""), scores, comment: str(a.comment, 1000), decision: EVAL_DECISIONS[a.decision] ? String(a.decision) : "" }; });
     if (evItems.some((x: Any) => EVAL_FIELDS.some((f) => !x.scores[f]))) throw new Error("ให้คะแนนให้ครบทุกด้าน");
+    let pick: Any = null;
+    if (String(ex.kind) === "scent") {   /* ตัวอย่างกลิ่น: ลูกค้าเลือก 1 กลิ่น ที่เหลือถือว่าไม่เลือก */
+      const pb = body.pick || {}, idx = Math.round(Number(pb.idx)), act = String(pb.action || "");
+      if (!(idx >= 0 && idx < evItems.length) || (act !== "produce" && act !== "revise")) throw new Error("เลือก 1 กลิ่นที่จะไปต่อ และระบุว่าจะผลิตจริงหรือนำไปแก้ไข");
+      evItems.forEach((x: Any, i: number) => { x.decision = i === idx ? act : "reject"; });
+      const it = evItems[idx]; pick = { idx, code: it.code, name: it.name, scentId: it.scentId, formulaCode: it.formulaCode, action: act };
+    }
     const now = new Date(), old = ex.eval || {};
-    const ev = { submittedAt: now.toISOString(), email, note: str(body.note, 2000), items: evItems, produce: evItems.some((x: Any) => x.decision === "produce"),
+    const ev = { submittedAt: now.toISOString(), email, note: str(body.note, 2000), items: evItems, pick, produce: evItems.some((x: Any) => x.decision === "produce"),
       history: (Array.isArray(old.history) ? old.history : []).concat(old.submittedAt ? [{ submittedAt: old.submittedAt, email: old.email, items: old.items }] : []).slice(-10) };
     const evalDocNo = String(ex.eval_doc_no || "") || await nextDocNo(db, "FM-RD-05", now);
     await db`update costing.samples set status = 'evaluated', eval = ${db.json(ev)}, eval_doc_no = ${evalDocNo}, updated_at = now(), updated_by = ${"customer:" + email} where id = ${String(ex.id)}`;
     const pr = (await db`select * from costing.projects where id = ${String(ex.project_id)}`)[0];
-    if (pr) { const key = String(ex.kind) === "mockup" ? "s5eval" : "s3eval", actual = { ...(pr.actual || {}) }; actual[key] = now.toISOString(); await db`update costing.projects set actual = ${db.json(actual)}, updated_at = now() where id = ${String(pr.id)}`; }
-    await log(db, "customer:" + email, "evalSubmit", String(ex.doc_no) + " → " + evalDocNo + (ev.produce ? " · เลือกผลิตจริง" : ""));
+    if (pr) { const key = String(ex.kind) === "mockup" ? "s5eval" : "s3eval", actual = { ...(pr.actual || {}) }, data = { ...(pr.data || {}) }; actual[key] = now.toISOString();
+      if (pick) data.chosenScent = { ...pick, sampleId: String(ex.id), sampleDocNo: String(ex.doc_no || ""), evalDocNo, at: now.toISOString(), email };
+      await db`update costing.projects set actual = ${db.json(actual)}, data = ${db.json(data)}, updated_at = now() where id = ${String(pr.id)}`; }
+    if (pick && pick.action === "produce" && pick.scentId) await db`update costing.scents set status = 'approved', updated_at = now(), updated_by = ${"customer:" + email} where id = ${String(pick.scentId)} and status in ('draft', 'trial', 'sent')`;
+    await log(db, "customer:" + email, "evalSubmit", String(ex.doc_no) + " → " + evalDocNo + (pick ? " · เลือก " + (pick.code || pick.name) + (pick.action === "produce" ? " ไปต่อ" : " นำไปแก้ไข") : ev.produce ? " · เลือกผลิตจริง" : ""));
     return { ok: true, docNo: evalDocNo };
   });
 }

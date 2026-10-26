@@ -1628,7 +1628,7 @@ const PD_STATUS: Record<string, number> = { draft: 1, testing: 1, approved: 1, r
 /** ส่วนประกอบหนึ่งแถว: รหัส RM (ราคาดึงจากฐานราคาตอนแสดงผล) · price = ราคาที่บันทึกไว้กับเบส · override = ราคาที่ผู้ใช้กำหนดเองในสูตร · frag = ช่องน้ำหอม */
 function pdLines(v: Any) {
   if (!Array.isArray(v)) return [];
-  return v.slice(0, 80).map((x: Any) => ({ code: str(x && x.code, 40), name: str(x && x.name, 200), fn: str(x && x.fn, 120), pct: numOrNull(x && x.pct), price: numOrNull(x && x.price), override: numOrNull(x && x.override), frag: !!(x && x.frag), note: str(x && x.note, 200) }))
+  return v.slice(0, 80).map((x: Any) => ({ part: str(x && x.part, 20), code: str(x && x.code, 40), name: str(x && x.name, 200), fn: str(x && x.fn, 120), pct: numOrNull(x && x.pct), price: numOrNull(x && x.price), override: numOrNull(x && x.override), frag: !!(x && x.frag), note: str(x && x.note, 200) }))
     .filter((x: Any) => x.name || x.code || x.frag);
 }
 function pdBaseData(b: Any) {

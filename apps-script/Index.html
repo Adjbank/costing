@@ -5060,15 +5060,27 @@ function pdStkFoot(f, c, m, batch){
   return `<span title="พอ ${ok} · ไม่พอ ${short} · ไม่มีในคลัง ${none}">พอ ${ok}${short?` · <span style="color:var(--bad)">ขาด ${short}</span>`:''}${none?` · ไม่มี ${none}`:''}</span>`;
 }
 /* น้ำหอมในสูตรผลิตภัณฑ์: แจกแจงเป็นส่วนประกอบจากสูตรต้นทุนของกลิ่น (ถ้าเปิดสูตรนั้นได้ในเครื่องนี้) · % ในผลิตภัณฑ์ = % น้ำหอม × สัดส่วนของสารในสูตรกลิ่น */
+/* สูตรต้นทุนของกลิ่น: เลือกเองในฟอร์ม → สูตรที่ผูกกับกลิ่นในคลังกลิ่น → จับคู่อัตโนมัติจากชื่อกลิ่น/รหัสตัวอย่างในสูตรต้นทุนของผู้ใช้ */
+function pdFragFormula(f){
+  const sc=(PF.scents||[]).find(x=>x.id===f.fragranceScentId), id=f.fragranceFormulaId||(sc&&sc.formulaId)||'';
+  if(id) return {id, auto:false};
+  const nm=String(f.fragranceName||(sc&&sc.name)||'').trim().toLowerCase(), cd=String(f.fragranceCode||'').trim().toLowerCase();
+  if(!nm&&!cd) return null;
+  const hit=pfFormulas().find(x=>x.p&&((nm&&String(x.name||'').trim().toLowerCase()===nm)||(cd&&String(metaOf(x.p).sampleCode||'').trim().toLowerCase()===cd)));
+  return hit?{id:hit.id, auto:true}:null;
+}
+function pdFragFormulaOpts(){ let out=[]; try{ out=pfFormulas().filter(x=>x.p).map(x=>{ let c=null; try{ c=compute(x.p).total; }catch(e){} return [x.id, x.name+(c?' · '+fmt(c,0)+' ฿/กก.':'')]; }); }catch(e){} return out.sort((p,q)=>String(p[1]).localeCompare(String(q[1]),'th')); }
+/* น้ำหอมในสูตรผลิตภัณฑ์: แจกแจงเป็นส่วนประกอบ · % ในผลิตภัณฑ์ = % น้ำหอม × สัดส่วนของสารในสูตรกลิ่น · ถ้าไม่มีสูตรให้แจกแจง ใช้โน้ตกลิ่นที่ Perfumer บันทึกไว้ */
 function pdFragParts(f, fragPct){
-  const sc=(PF.scents||[]).find(s=>s.id===f.fragranceScentId), fid=f.fragranceFormulaId||(sc&&sc.formulaId)||'';
-  if(!fid) return {parts:[], why:'ไม่ได้ผูกสูตรต้นทุนของกลิ่น'};
-  const pf=pfFormulas().find(x=>x.id===fid); if(!pf||!pf.p) return {parts:[], why:'เปิดสูตรกลิ่นนี้ไม่ได้ในเครื่องนี้ (เป็นสูตรของผู้อื่น)'};
+  const sc=(PF.scents||[]).find(x=>x.id===f.fragranceScentId), d=(sc&&sc.data)||{}, notes=[['Top',d.top],['Heart',d.heart],['Base',d.base]].filter(x=>String(x[1]||'').trim()).map(x=>[x[0],String(x[1]).trim()]);
+  const fm=pdFragFormula(f);
+  if(!fm) return {parts:[], notes, why:'ยังไม่ได้ผูกสูตรต้นทุนของกลิ่น'};
+  const pf=pfFormulas().find(x=>x.id===fm.id); if(!pf||!pf.p) return {parts:[], notes, why:'เปิดสูตรกลิ่นนี้ไม่ได้ในเครื่องนี้ (เป็นสูตรของผู้อื่น)'};
   try{ const c=compute(pf.p);
     const parts=c.rows.filter(r=>r.amt>0).map(r=>{ const priceKg=r.price!=null?r.price*1000:null, pct=fragPct*r.frac;
       return {code:r.ln.code||'', name:(r.e&&r.e.name)||r.ln.nameIn||r.ln.code||'', pct, priceKg, cost:priceKg!=null?pct/100*priceKg:null}; });
-    return {parts, why:parts.length?'':'สูตรกลิ่นนี้ยังไม่มีรายการวัตถุดิบ'};
-  }catch(e){ return {parts:[], why:'คำนวณสูตรกลิ่นไม่สำเร็จ'}; }
+    return {parts, notes, auto:fm.auto, src:pf.name, total:c.total, why:parts.length?'':'สูตรกลิ่นนี้ยังไม่มีรายการวัตถุดิบ'};
+  }catch(e){ return {parts:[], notes, why:'คำนวณสูตรกลิ่นไม่สำเร็จ'}; }
 }
 const PD_PARTS=['A','B','C','D','E','F'];
 function pdLinesTable(f, c, ed, opts){
@@ -5077,11 +5089,14 @@ function pdLinesTable(f, c, ed, opts){
   const nExtra=1+(showStk?1:0)+1+(isBase?1:0)+1;   /* หน้าที่ · คลัง R&D · ที่มาราคา · น้ำหอม(เบส) · ลบ */
   const subRows=(r,i)=>{ if(isBase||!r.ln.frag) return '';
     const fp=pdFragParts(f, r.pct), pad=`<td colspan="${nExtra}"></td>`;
-    if(!fp.parts.length) return `<tr class="pd-sub"><td></td><td></td><td></td><td colspan="${5+nExtra}">↳ ไม่มีรายการแจกแจง · ${esc(fp.why)} (ใช้ราคาน้ำหอมที่บันทึกไว้)</td></tr>`;
-    let sum=0; const rows=fp.parts.map((x,k)=>{ if(x.cost!=null) sum+=x.cost;
+    if(!fp.parts.length){ const nr=fp.notes.map(([k,v])=>`<tr class="pd-sub"><td></td><td></td><td></td><td colspan="${5+nExtra}">↳ <b>${k}</b> · ${esc(v)}</td></tr>`).join('');
+      return `<tr class="pd-sub"><td></td><td></td><td></td><td colspan="${5+nExtra}">↳ แจกแจงเป็นวัตถุดิบไม่ได้ · ${esc(fp.why)} → เลือกสูตรในช่อง “สูตรต้นทุนของกลิ่น” ด้านล่าง หรือผูกสูตรที่หน้ากลิ่น (Perfumer)${fp.notes.length?' · แสดงโน้ตกลิ่นที่บันทึกไว้แทน':''}</td></tr>${nr}`; }
+    const mism=!!(r.pr&&fp.total>0&&Math.abs(r.pr.price-fp.total)>0.01);
+    const hdr=`<tr class="pd-sub"><td></td><td></td><td></td><td colspan="${5+nExtra}">↳ ส่วนประกอบของกลิ่น จากสูตร “${esc(fp.src||'')}”${fp.auto?' (จับคู่จากชื่อกลิ่นอัตโนมัติ · เปลี่ยนได้ที่ช่อง “สูตรต้นทุนของกลิ่น”)':''}${mism&&ed?` · <span style="color:var(--warn,#8a5200)">ราคาน้ำหอมที่ใช้ ${fmt(r.pr.price,2)} ฿/กก. ไม่ตรงกับต้นทุนสูตรนี้ ${fmt(fp.total,2)} ฿/กก.</span> <button class="btn small" type="button" data-pd-usefrag="${Math.round(fp.total*100)/100}">ใช้ต้นทุนสูตรนี้</button>`:''}</td></tr>`;
+    let sum=0; const rows=hdr+fp.parts.map((x,k)=>{ if(x.cost!=null) sum+=x.cost;
       return `<tr class="pd-sub"><td class="num">${i+1}.${k+1}</td><td></td><td class="mono">${esc(x.code)}</td><td>↳ ${esc(x.name)}</td><td class="num">${fmt(x.pct,3)}</td><td class="num mono">${fmt(x.pct/100*batch,3)}</td><td class="num">${x.priceKg!=null?fmt(x.priceKg,2):'–'}</td><td class="num">${x.cost!=null?fmt(x.cost,2):'–'}</td>${pad}</tr>`; }).join('');
     const diff=r.cost!=null?r.cost-sum:0;
-    return rows+(Math.abs(diff)>0.005?`<tr class="pd-sub"><td></td><td></td><td></td><td>↳ สูญเสีย / ค่าแรง / โสหุ้ยของสูตรกลิ่น</td><td></td><td></td><td></td><td class="num">${fmt(diff,2)}</td>${pad}</tr>`:''); };
+    return rows+(Math.abs(diff)>0.005?`<tr class="pd-sub"><td></td><td></td><td></td><td>${mism?'↳ ผลต่างจากราคาน้ำหอมที่ใช้อยู่ในสูตร':'↳ สูญเสีย / ค่าแรง / โสหุ้ยของสูตรกลิ่น'}</td><td></td><td></td><td></td><td class="num">${fmt(diff,2)}</td>${pad}</tr>`:''); };
   return `<datalist id="pdPartList">${PD_PARTS.map(x=>`<option value="${x}">`).join('')}</datalist><div class="tablebox"><table class="pd-lines"><thead><tr><th class="num">ลำดับ</th><th>Part</th><th>RM Code</th><th>Ingredient</th><th class="num">%</th><th class="num">g / ${fmt(batch,0)} g</th><th class="num">${isBase?'ราคาที่บันทึก ฿/กก.':'ราคา ฿/กก.'}</th><th class="num">ต้นทุน ฿/กก.</th><th>หน้าที่</th>${showStk?'<th class="num" title="ยอดคงเหลือในคลัง R&D เทียบกับปริมาณที่ต้องใช้ต่อ batch">คลัง R&D</th>':''}<th>ที่มาราคา</th>${isBase?'<th>น้ำหอม</th>':''}<th></th></tr></thead><tbody>
     ${c.rows.map((r,i)=>{ const ln=r.ln, fragRow=ln.frag&&!isBase;
       return `<tr data-i="${i}"><td class="num">${i+1}</td>
@@ -5137,6 +5152,7 @@ function pdFormulaPage(f){
       </div></div>
       <div class="pf-group"><h4>กลิ่น (น้ำหอม)</h4><div class="settings">
         ${pdField('ชื่อกลิ่น (แก้เองได้ ใช้เมื่อไม่ผูกคลังกลิ่น)', pdInp('fragranceName', f.fragranceName, ''))}
+        ${pdField('สูตรต้นทุนของกลิ่น (ใช้แจกแจงส่วนประกอบในตารางด้านล่าง)', pdSel('fragranceFormulaId', f.fragranceFormulaId, [['', sel&&sel.formulaId?'ตามกลิ่นที่เลือก (สูตรที่ผูกไว้)':'จับคู่อัตโนมัติจากชื่อกลิ่น / ไม่ระบุ'], ...pdFragFormulaOpts()]), true)}
         ${pdField('ราคาน้ำหอม ฿/กก.', pdInp('fragrancePrice', f.fragrancePrice, '', 'number'))}${pdField('% น้ำหอมในสูตร', `<input data-pk="fragPct" type="number" step="any" min="0" max="100" value="${fr&&fr.pct!=null?esc(fr.pct):''}">`)}
       </div><div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">${sel?`${pfChip(sel.status,PF_SSTAT)}<button class="btn small" type="button" data-pd-scentopen="${esc(sel.id)}">เปิดกลิ่นในคลัง</button>${sel.status==='draft'||sel.status==='trial'?'<span class="chip warn">กลิ่นยังไม่ผ่านการอนุมัติจากลูกค้า</span>':''}${sc?`<span class="muted" style="font-size:12px">ราคาน้ำหอม ${fmt(sc.price,2)} ฿/กก. ${sc.src==='formula'?'จากสูตรต้นทุนของกลิ่น':'จากต้นทุนที่บันทึกไว้กับกลิ่น'+(sc.at?' ('+rdDate(sc.at)+')':'')}${sc.src==='formula'&&!sc.complete?' · ราคาวัตถุดิบในสูตรกลิ่นยังไม่ครบ':''} · ใช้ราคาขายแทนต้นทุนได้โดยแก้ในช่อง "ราคาน้ำหอม"</span>`:'<span class="chip warn">กลิ่นนี้ยังไม่มีต้นทุน</span><span class="muted" style="font-size:12px">ผูกสูตรต้นทุนกับกลิ่นใน Perfumer หรือใส่ราคาน้ำหอมเอง</span>'}`:'<span class="muted" style="font-size:12px">ไม่ได้เลือกกลิ่นจากคลัง? ใส่ชื่อ รหัส และราคาน้ำหอมเอง</span>'}</div></div>
       <div class="pf-group"><h4>ส่วนประกอบ (เบส + น้ำหอม)</h4>${pdLinesTable(f, c, ed&&!lock, {})}${pdSummary(f, c)}</div>
@@ -5201,9 +5217,10 @@ function pdPrintHtml(f){
   const c=pdCost(f), batch=toNum(f.batchG)||1000, p=pdProj(f.projectId), base=PD.bases.find(b=>b.id===f.baseId);
   const rows=c.rows.map((r,i)=>{ const main=`<tr><td style="text-align:center">${i+1}</td><td style="text-align:center">${esc(r.ln.part||'')}</td><td>${esc(r.ln.code||'')}</td><td>${esc(r.ln.frag?(f.fragranceName||'Fragrance'):r.ln.name)}${r.ln.frag&&f.fragranceCode?` <span class="dsmall">(${esc(f.fragranceCode)})</span>`:''}${r.ln.fn?`<div class="dsmall">${esc(r.ln.fn)}</div>`:''}</td><td style="text-align:right">${fmt(r.pct,2)}</td><td style="text-align:right">${fmt(r.pct/100*batch,2)}</td><td style="text-align:right">${r.pr?fmt(r.pr.price,2):'-'}</td><td style="text-align:right">${r.cost!=null?fmt(r.cost,2):'-'}</td></tr>`;
     if(!r.ln.frag) return main; const fp=pdFragParts(f, r.pct); let sum=0;
+    if(!fp.parts.length&&fp.notes.length) return main+fp.notes.map(([k,v])=>`<tr><td></td><td></td><td></td><td class="dsmall" colspan="5">&nbsp;&nbsp;↳ ${k}: ${esc(v)}</td></tr>`).join('');
     const sub=fp.parts.map((x,k)=>{ if(x.cost!=null) sum+=x.cost; return `<tr><td style="text-align:center" class="dsmall">${i+1}.${k+1}</td><td></td><td class="dsmall">${esc(x.code)}</td><td class="dsmall">&nbsp;&nbsp;↳ ${esc(x.name)}</td><td style="text-align:right" class="dsmall">${fmt(x.pct,3)}</td><td style="text-align:right" class="dsmall">${fmt(x.pct/100*batch,3)}</td><td style="text-align:right" class="dsmall">${x.priceKg!=null?fmt(x.priceKg,2):'-'}</td><td style="text-align:right" class="dsmall">${x.cost!=null?fmt(x.cost,2):'-'}</td></tr>`; }).join('');
     const diff=r.cost!=null&&fp.parts.length?r.cost-sum:0;
-    return main+sub+(Math.abs(diff)>0.005?`<tr><td></td><td></td><td></td><td class="dsmall">&nbsp;&nbsp;↳ Loss / labour / overhead of the fragrance formula</td><td></td><td></td><td></td><td style="text-align:right" class="dsmall">${fmt(diff,2)}</td></tr>`:''); }).join('');
+    return main+sub+(Math.abs(diff)>0.005?`<tr><td></td><td></td><td></td><td class="dsmall">&nbsp;&nbsp;↳ ${fp.total>0&&r.pr&&Math.abs(r.pr.price-fp.total)>0.01?'Difference vs. the fragrance price used in this formula':'Loss / labour / overhead of the fragrance formula'}</td><td></td><td></td><td></td><td style="text-align:right" class="dsmall">${fmt(diff,2)}</td></tr>`:''); }).join('');
   return `${docHead('PRODUCT FORMULA SHEET', `Formula No. ${esc(f.code)} · ${f.updatedAt?'Updated '+docDate(f.updatedAt):'Draft'} · Printed ${docDate()}`)}
     ${docSec(1,'Product Information')}${docKv([['Formula code',f.code],['Revision',f.revision!=null?'R'+f.revision:''],['Formula name',f.name],['Project',p?`${p.pdrNo} · ${p.brand||p.company}`:''],['Customer',f.customer],['Brand',f.brand],
       ['Sample name',f.fragranceName],['Sample code',f.fragranceCode],['Product name',f.productName],['Product code (FG)',f.fgCode],['Product type',f.category],['Purpose',f.purpose],
@@ -5243,6 +5260,7 @@ $('#pdView').addEventListener('change', e=>{
   if(PD.open && t.closest('#pdForm')){
     const f=PD.open, k=t.dataset.pk; pdCollect(f);
     if(k==='baseId'){ const b=PD.bases.find(x=>x.id===f.baseId); if(b){ if(!f.lines.some(l=>!l.frag) || confirm(`แทนที่ส่วนประกอบทั้งหมดด้วยเบส "${b.name}" ?`)){ const fr=pdFragLine(f), keep=fr?fr.pct:null; pdApplyBase(f, b); } else { f.baseName=b.name; f.category=b.category; } } }
+    if(k==='fragranceFormulaId'&&f.fragranceFormulaId){ const fc=pfFormulaCost(f.fragranceFormulaId); if(fc&&fc.total>0){ f.fragrancePrice=Math.round(fc.total*100)/100; toast('ใช้ต้นทุนสูตร '+fc.name+' · '+fmt(f.fragrancePrice,2)+' ฿/กก.'); } }
     if(k==='sampScName') f.fragranceScentId=t.value;
     if(k==='fragranceScentId'||k==='sampScName'){ const s=(PF.scents||[]).find(x=>x.id===f.fragranceScentId); if(s){ const c=pdApplyScent(f, s); toast(c?`ใช้กลิ่น ${s.name} · ${fmt(c.price,2)} ฿/กก.`:`กลิ่น ${s.name} ยังไม่มีต้นทุน ใส่ราคาน้ำหอมเอง`); } else pdClearScent(f); }    if(k==='projectId'){ const p=pdProj(f.projectId); if(p){ pdApplyProject(f, p, true);
       const cur=(PF.scents||[]).find(x=>x.id===f.fragranceScentId);
@@ -5267,6 +5285,7 @@ $('#pdView').addEventListener('click', async e=>{
   if(t.id==='pdBack'){ PD.open=null; PD.baseOpen=null; drawPd(); window.scrollTo(0,0); return; }
   if(PD.open){
     const f=PD.open;
+    if(t.dataset.pdUsefrag){ pdCollect(f); f.fragrancePrice=toNum(t.dataset.pdUsefrag); drawPd(); toast('ใช้ต้นทุนสูตรกลิ่น '+fmt(f.fragrancePrice,2)+' ฿/กก.'); return; }
     if(t.id==='pdRowAdd'){ pdCollect(f); const i=f.lines.findIndex(l=>l.frag); const row={part:(f.lines[(i>=0?i:f.lines.length)-1]||{}).part||'', code:'', name:'', fn:'', pct:null, price:null, override:null, frag:false}; if(i>=0) f.lines.splice(i,0,row); else f.lines.push(row); drawPd(); const el=$('#pdForm').querySelector(`tr[data-i="${i>=0?i:f.lines.length-1}"] [data-pl="code"]`); if(el) el.focus(); return; }
     if(t.dataset.plDel!=null){ pdCollect(f); f.lines.splice(Number(t.dataset.plDel),1); drawPd(); return; }
     if(t.id==='pdReloadBase'){ pdCollect(f); const b=PD.bases.find(x=>x.id===f.baseId); if(!b){ toast('เลือกเบสก่อน'); return; } if(!confirm(`แทนที่ส่วนประกอบทั้งหมดด้วยเบส "${b.name}" (ราคาที่ใส่เองจะหาย)?`)) return; const fr=pdFragLine(f), keep=fr?fr.pct:null; pdApplyBase(f, b); if(keep!=null){ const nf=pdFragLine(f); if(nf) nf.pct=keep; } drawPd(); return; }

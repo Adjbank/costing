@@ -863,6 +863,7 @@ main.wrap::after{content:"";display:block;height:52px;margin:36px 0 6px;border-r
 .cd-links{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))!important}
 .cd-ctx{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin:0 0 12px}
 .cd-src{background:var(--card);border-radius:14px;padding:10px 12px;font-size:12.5px;line-height:1.55;color:var(--ink-muted)} .cd-src b{color:var(--ink);font-size:13.5px}
+.pd-pi{grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
 .cd-tl{font-size:13px;font-weight:600;margin:6px 0 8px} .cd-tl .muted{font-weight:400;font-size:12px}
 .cd-chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
 .cd-chip{position:relative;cursor:pointer;margin:0}
@@ -4952,12 +4953,25 @@ function pdApplyScent(f, s){
 function pdClearScent(f){ f.fragranceScentId=''; f.fragranceFormulaId=''; }
 function pdNewFormula(base, project, scent){
   const f={id:'', code:'ใหม่', projectId:project?project.id:'', name:'', baseId:'', baseName:'', category:'', mode:'standard', customer:project?project.company||'':'', brand:project?project.brand||'':'',
-    fragranceFormulaId:'', fragranceScentId:'', fragranceName:'', fragranceCode:'', fragrancePrice:null, batchG:1000, targetPrice:null, note:'', lines:[], status:'draft'};
+    fragranceFormulaId:'', fragranceScentId:'', fragranceName:'', fragranceCode:'', fragrancePrice:null, batchG:1000, targetPrice:null, note:'', lines:[], status:'draft',
+    productName:'', fgCode:'', revision:0, purpose:'', packaging:'', fillQty:'', qty:null, sampleDue:'', designDate:'', mockupDate:'', perfumer:'', designer:'', operator:''};
   if(base) pdApplyBase(f, base);
   if(!scent && project){ const mine=(PF.scents||[]).filter(s=>s.projectId===project.id&&s.status!=='retired'); if(mine.length===1) scent=mine[0]; }   /* โครงการมีกลิ่นเดียว → เลือกให้ */
   if(scent) pdApplyScent(f, scent);
+  if(project) pdApplyProject(f, project);
   if(project) f.name=[(project.brand||project.company||''), scent?scent.name:'', base?base.name:''].filter(Boolean).join(' ');
   return f;
+}
+/* โครงการ → หัวใบสูตร: ลูกค้า/แบรนด์ตามโครงการเสมอ · ผู้ออกแบบกลิ่น/ผลิตภัณฑ์ และขนาด/จำนวน เติมให้เมื่อยังว่าง */
+function pdApplyProject(f, p, over){   /* over = เปลี่ยนโครงการ: ผู้รับผิดชอบและขนาด/จำนวนตามโครงการใหม่ (ถ้ามีข้อมูล) */
+  if(!p) return;
+  f.customer=p.company||f.customer||''; f.brand=p.brand||f.brand||'';
+  const ow=p.owners||{};
+  if((over||!f.perfumer)&&(ow.perfumer||[])[0]) f.perfumer=ow.perfumer[0];
+  if((over||!f.designer)&&ow.pd) f.designer=ow.pd;
+  const txt=String((p.data||{}).products||''), list=typeof calcParseList==='function'?calcParseList(txt):[];
+  if(list.length===1){ const o=list[0], unit=/(?:g\b|กรัม)/i.test(txt)&&!/(?:ml|มล|cc)/i.test(txt)?'g':'ml';
+    if((over||!f.fillQty)&&o.fillMl) f.fillQty=o.fillMl+' '+unit; if((over||f.qty==null)&&o.qty) f.qty=+o.qty; }
 }
 function pdApplyBase(f, base){
   f.baseId=base.id; f.baseName=base.name; f.category=base.category; if(f.targetPrice==null) f.targetPrice=base.targetPrice;
@@ -5068,6 +5082,11 @@ function pdFormulaPage(f){
   const baseOpts=[['','– เลือกเบส –'],...PD.bases.filter(b=>b.active||b.id===f.baseId).map(b=>[b.id, `${b.category} · ${b.name}`])];
   const scents=(PF.scents||[]).filter(s=>s.status!=='retired'||s.id===f.fragranceScentId), sel=scents.find(s=>s.id===f.fragranceScentId), sc=sel?pdScentCost(sel):null;
   const mineS=scents.filter(s=>f.projectId&&s.projectId===f.projectId), otherS=scents.filter(s=>!(f.projectId&&s.projectId===f.projectId));
+  /* ชื่อ/รหัสตัวอย่าง = กลิ่นในโครงการนี้ → กลิ่นของลูกค้า/บริษัทเดียวกัน (โครงการอื่น) → กลิ่นอื่นในคลัง (ซ่อนเมื่อเลือกโครงการแล้ว ยกเว้นกลิ่นที่เลือกอยู่) */
+  const pCust=p?p.customerCode:'', sameCust=s=>{ const sp=s.projectId?pdProj(s.projectId):null; return !!(pCust&&sp&&sp.customerCode===pCust); };
+  const custS=otherS.filter(sameCust), restAll=otherS.filter(s=>!sameCust(s)), restS=f.projectId?restAll.filter(s=>s.id===f.fragranceScentId):restAll;
+  const scOpt=(s,mode)=>`<option value="${esc(s.id)}" ${f.fragranceScentId===s.id?'selected':''}>${mode==='code'?esc((s.formulaCode||s.code)+' · '+s.name):esc(s.name+' · '+(PF_SSTAT[s.status]||[s.status])[0])}</option>`;
+  const scGroups=mode=>`<option value="">– ไม่ผูกคลังกลิ่น (ระบุเองด้านล่าง) –</option>${mineS.length?`<optgroup label="กลิ่นในโครงการนี้">${mineS.map(s=>scOpt(s,mode)).join('')}</optgroup>`:''}${custS.length?`<optgroup label="กลิ่นของลูกค้า/บริษัทนี้ (โครงการอื่น)">${custS.map(s=>scOpt(s,mode)).join('')}</optgroup>`:''}${restS.length?`<optgroup label="${mineS.length||custS.length?'กลิ่นอื่นในคลัง':'กลิ่นในคลัง'}">${restS.map(s=>scOpt(s,mode)).join('')}</optgroup>`:''}`;
   const sOpt=s=>{ const c=pdScentCost(s); return `<option value="${esc(s.id)}" ${f.fragranceScentId===s.id?'selected':''}>${esc(pdScentLabel(s))}${c?' · '+fmt(c.price,0)+' ฿/กก.':''}</option>`; };
   return `<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px"><div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button class="btn small" type="button" id="pdBack">← สูตรผลิตภัณฑ์</button><h3 style="margin:0"><span class="mono">${esc(f.code)}</span> · ${esc(f.name||'(ยังไม่ตั้งชื่อ)')}</h3>${pfChip(f.status,PD_STATUS)}${p?`<button class="btn small" type="button" data-pd-proj="${esc(p.id)}">โครงการ ${esc(p.pdrNo)}</button>`:''}</div>
       ${f.id?`<span class="muted" style="font-size:12px">สร้าง ${rdDate(f.createdAt)} โดย ${rdPerson(f.createdBy)} · แก้ล่าสุด ${fmtSeen(f.updatedAt)}${f.approvedBy?` · อนุมัติโดย ${rdPerson(f.approvedBy)} ${rdDate(f.approvedAt)}`:''}</span>`:''}</div>
@@ -5075,15 +5094,24 @@ function pdFormulaPage(f){
     <form id="pdForm" class="card" style="margin:0 0 14px" novalidate><fieldset ${ro} style="border:0;padding:0;margin:0;min-width:0">
       <div class="pf-group"><h4>ข้อมูลสูตร</h4><div class="settings">
         ${pdField('ชื่อสูตรผลิตภัณฑ์ *', pdInp('name', f.name, 'เช่น Siam Bloom Body Lotion'), true)}
-        ${pdField('โครงการ', pdSel('projectId', f.projectId, projOpts))}${pdField('เบส (สูตรพื้นฐาน) *', pdSel('baseId', f.baseId, baseOpts))}
-        ${pdField('ลูกค้า', pdInp('customer', f.customer, ''))}${pdField('แบรนด์', pdInp('brand', f.brand, ''))}
-        ${pdField('ลักษณะสูตร', pdSel('mode', f.mode, Object.entries(PD_MODE)))}
-        ${pdField('ราคาเป้าหมาย ฿/กก.', pdInp('targetPrice', f.targetPrice, 'จากเบสหรือจากโครงการ', 'number'))}${pdField('ขนาด batch ทดลอง (g)', pdInp('batchG', f.batchG, '1000', 'number'))}
+        ${pdField('เบส (สูตรพื้นฐาน) *', pdSel('baseId', f.baseId, baseOpts))}${pdField('ลักษณะสูตร', pdSel('mode', f.mode, Object.entries(PD_MODE)))}
+        ${pdField('ราคาเป้าหมาย ฿/กก.', pdInp('targetPrice', f.targetPrice, 'จากเบสหรือจากโครงการ', 'number'))}
         ${pdField('บันทึก / ข้อสังเกต (ลักษณะเนื้อ ความหนืด pH ผลทดลอง สิ่งที่ปรับจากเบส)', `<textarea data-pk="note" rows="2" maxlength="3000">${esc(f.note||'')}</textarea>`, true)}
       </div></div>
+      <div class="pf-group"><h4>ข้อมูลผลิตภัณฑ์ (Product Information)</h4><div class="muted" style="font-size:12.5px;margin:-2px 0 10px">ข้อมูลหัวใบสูตร (FM-RD-03) · เลือกโครงการแล้ว ลูกค้า แบรนด์ กลิ่นของโครงการ และผู้รับผิดชอบจะมาให้อัตโนมัติ แก้ไขต่อได้</div><div class="settings pd-pi">
+        ${pdField('โครงการ', pdSel('projectId', f.projectId, projOpts))}${pdField('ชื่อกิจการ/บริษัท (Customer Name)', pdInp('customer', f.customer, ''))}${pdField('ชื่อแบรนด์ (Brand Name)', pdInp('brand', f.brand, ''))}
+        ${pdField('ชื่อตัวอย่าง (Sample Name)', `<select data-pk="sampScName">${scGroups('name')}</select>`)}${pdField('รหัสตัวอย่าง (Sample Code)', `<select data-pk="sampScCode">${scGroups('code')}</select>`)}
+        ${pdField('ชื่อผลิตภัณฑ์ (Product Name)', pdInp('productName', f.productName, 'ชื่อทางการค้าที่ลูกค้าตั้ง'))}${pdField('รหัสผลิตภัณฑ์ (Product Code)', pdInp('fgCode', f.fgCode, 'รหัส FG เมื่อลง BOM / ผลิต'))}
+        ${pdField('ประเภทผลิตภัณฑ์ (Product Type)', `<input data-pk="category" list="pdCatList2" value="${esc(f.category||'')}" maxlength="80" placeholder="เช่น Lotion"><datalist id="pdCatList2">${pdCats().map(x=>`<option value="${esc(x)}">`).join('')}</datalist>`)}${pdField('รอบแก้ไข (Revision)', pdInp('revision', f.revision, '0', 'number'))}
+        ${pdField('Batch size (g)', pdInp('batchG', f.batchG, '1000', 'number'))}
+        ${pdField('จุดประสงค์', `<input data-pk="purpose" list="pdPurposeList" value="${esc(f.purpose||'')}" maxlength="200" placeholder="เช่น ส่งตัวอย่างให้ลูกค้า"><datalist id="pdPurposeList">${['ทดลองสูตรครั้งแรก','ปรับแก้ตามผลประเมินลูกค้า','ส่งตัวอย่างให้ลูกค้า','ต้นแบบก่อนผลิต (Pilot)','ลดต้นทุน','ปรับกลิ่นสินค้าเดิม'].map(x=>`<option value="${esc(x)}">`).join('')}</datalist>`)}
+        ${pdField('บรรจุภัณฑ์ (ประเภท/ขนาด)', pdInp('packaging', f.packaging, 'เช่น ขวดปั๊ม PET 200 ml'))}${pdField('ปริมาณบรรจุ', pdInp('fillQty', f.fillQty, 'เช่น 200 ml'))}${pdField('จำนวน (ชิ้น)', pdInp('qty', f.qty, '', 'number'))}
+        ${pdField('กำหนดส่งตัวอย่าง', pdInp('sampleDue', f.sampleDue, '', 'date'))}${pdField('วันออกแบบสูตร Mock Up', pdInp('designDate', f.designDate, '', 'date'))}${pdField('วันที่ทำ Mock Up', pdInp('mockupDate', f.mockupDate, '', 'date'))}
+        ${pdField('ผู้ออกแบบกลิ่น', `<input data-pk="perfumer" list="pdPeople" value="${esc(f.perfumer||'')}" maxlength="120" placeholder="อีเมลหรือชื่อ">`)}${pdField('ผู้ออกแบบผลิตภัณฑ์', `<input data-pk="designer" list="pdPeople" value="${esc(f.designer||'')}" maxlength="120" placeholder="อีเมลหรือชื่อ">`)}${pdField('ผู้ปฏิบัติการ', `<input data-pk="operator" list="pdPeople" value="${esc(f.operator||'')}" maxlength="120" placeholder="อีเมลหรือชื่อ">`)}
+        <datalist id="pdPeople">${rdEmailList().map(e=>`<option value="${esc(e)}">`).join('')}</datalist>
+      </div></div>
       <div class="pf-group"><h4>กลิ่น (น้ำหอม)</h4><div class="settings">
-        ${pdField('กลิ่นจากคลังกลิ่น (Perfumer)', `<select data-pk="fragranceScentId"><option value="">– ไม่ผูกคลังกลิ่น (ระบุเอง) –</option>${mineS.length?`<optgroup label="กลิ่นในโครงการนี้">${mineS.map(sOpt).join('')}</optgroup>`:''}<optgroup label="${mineS.length?'กลิ่นอื่นในคลัง':'กลิ่นในคลัง'}">${otherS.map(sOpt).join('')}</optgroup></select>`, true)}
-        ${pdField('ชื่อกลิ่น', pdInp('fragranceName', f.fragranceName, ''))}${pdField('รหัสสูตรกลิ่น', pdInp('fragranceCode', f.fragranceCode, 'PF…'))}
+        ${pdField('ชื่อกลิ่น (แก้เองได้ ใช้เมื่อไม่ผูกคลังกลิ่น)', pdInp('fragranceName', f.fragranceName, ''))}${pdField('รหัสสูตรกลิ่น', pdInp('fragranceCode', f.fragranceCode, 'PF…'))}
         ${pdField('ราคาน้ำหอม ฿/กก.', pdInp('fragrancePrice', f.fragrancePrice, '', 'number'))}${pdField('% น้ำหอมในสูตร', `<input data-pk="fragPct" type="number" step="any" min="0" max="100" value="${fr&&fr.pct!=null?esc(fr.pct):''}">`)}
       </div><div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">${sel?`${pfChip(sel.status,PF_SSTAT)}<button class="btn small" type="button" data-pd-scentopen="${esc(sel.id)}">เปิดกลิ่นในคลัง</button>${sel.status==='draft'||sel.status==='trial'?'<span class="chip warn">กลิ่นยังไม่ผ่านการอนุมัติจากลูกค้า</span>':''}${sc?`<span class="muted" style="font-size:12px">ราคาน้ำหอม ${fmt(sc.price,2)} ฿/กก. ${sc.src==='formula'?'จากสูตรต้นทุนของกลิ่น':'จากต้นทุนที่บันทึกไว้กับกลิ่น'+(sc.at?' ('+rdDate(sc.at)+')':'')}${sc.src==='formula'&&!sc.complete?' · ราคาวัตถุดิบในสูตรกลิ่นยังไม่ครบ':''} · ใช้ราคาขายแทนต้นทุนได้โดยแก้ในช่อง "ราคาน้ำหอม"</span>`:'<span class="chip warn">กลิ่นนี้ยังไม่มีต้นทุน</span><span class="muted" style="font-size:12px">ผูกสูตรต้นทุนกับกลิ่นใน Perfumer หรือใส่ราคาน้ำหอมเอง</span>'}`:'<span class="muted" style="font-size:12px">ไม่ได้เลือกกลิ่นจากคลัง? ใส่ชื่อ รหัส และราคาน้ำหอมเอง</span>'}</div></div>
       <div class="pf-group"><h4>ส่วนประกอบ (เบส + น้ำหอม)</h4>${pdLinesTable(f, c, ed&&!lock, {})}${pdSummary(f, c)}</div>
@@ -5113,7 +5141,7 @@ function pdBasePage(b){
 const pdNumOrNull=v=>v===''||v==null?null:toNum(v);
 function pdCollect(f){
   const box=$('#pdForm'); if(!box) return f;
-  box.querySelectorAll('[data-pk]').forEach(i=>{ const k=i.dataset.pk; if(k==='fragPct') return; const v=i.value.trim(); f[k]=['targetPrice','batchG','fragrancePrice'].includes(k)?pdNumOrNull(v):v; });
+  box.querySelectorAll('[data-pk]').forEach(i=>{ const k=i.dataset.pk; if(k==='fragPct'||k==='sampScName'||k==='sampScCode') return; const v=i.value.trim(); f[k]=['targetPrice','batchG','fragrancePrice','qty','revision'].includes(k)?pdNumOrNull(v):v; });
   f.lines=[...box.querySelectorAll('tbody tr[data-i]')].map((tr,i)=>{ const old=f.lines[i]||{}; const g=k=>{ const el=tr.querySelector(`[data-pl="${k}"]`); return el?el.value.trim():null; };
     if(old.frag) return old;
     return {code:g('code')||'', name:g('name')||'', fn:g('fn')||'', pct:pdNumOrNull(g('pct')), price:old.price==null?null:old.price, override:pdNumOrNull(g('override')), frag:false}; });
@@ -5144,11 +5172,15 @@ function pdRedraw(){
 }
 /* ใบสูตรผลิตภัณฑ์สำหรับพิมพ์ (ใช้โครงหน้าพิมพ์เดียวกับเอกสารวัตถุดิบ) */
 function pdPrintHtml(f){
+  const dd=v=>v?docDate(v+'T12:00:00+07:00'):'', who=v=>String(v||'').includes('@')?shortName(v):String(v||'');
   const c=pdCost(f), batch=toNum(f.batchG)||1000, p=pdProj(f.projectId), base=PD.bases.find(b=>b.id===f.baseId);
   const rows=c.rows.map((r,i)=>`<tr><td style="text-align:center">${i+1}</td><td>${esc(r.ln.code||'')}</td><td>${esc(r.ln.frag?(f.fragranceName||'Fragrance'):r.ln.name)}${r.ln.frag&&f.fragranceCode?` <span class="dsmall">(${esc(f.fragranceCode)})</span>`:''}${r.ln.fn?`<div class="dsmall">${esc(r.ln.fn)}</div>`:''}</td><td style="text-align:right">${fmt(r.pct,2)}</td><td style="text-align:right">${fmt(r.pct/100*batch,2)}</td><td style="text-align:right">${r.pr?fmt(r.pr.price,2):'-'}</td><td style="text-align:right">${r.cost!=null?fmt(r.cost,2):'-'}</td></tr>`).join('');
   return `${docHead('PRODUCT FORMULA SHEET', `Formula No. ${esc(f.code)} · ${f.updatedAt?'Updated '+docDate(f.updatedAt):'Draft'} · Printed ${docDate()}`)}
-    ${docSec(1,'Product Information')}${docKv([['Formula code',f.code],['Product',f.name],['Project',p?`${p.pdrNo} · ${p.brand||p.company}`:''],['Customer',f.customer],['Brand',f.brand],['Base formula',f.baseName?`${f.baseName} (${f.category})`:''],
-      ['Formula type',f.mode==='modified'?'Modified base / new formula – stability test and pilot batch required':'Standard base – fragrance changed only (standard stability data applies)'],['Fragrance',[f.fragranceCode,f.fragranceName].filter(Boolean).join(' · ')],['Status',PD_STATUS[f.status]?PD_STATUS[f.status][0]:f.status],['Batch size',fmt(batch,0)+' g']])}
+    ${docSec(1,'Product Information')}${docKv([['Formula code',f.code],['Revision',f.revision!=null?'R'+f.revision:''],['Formula name',f.name],['Project',p?`${p.pdrNo} · ${p.brand||p.company}`:''],['Customer',f.customer],['Brand',f.brand],
+      ['Sample name',f.fragranceName],['Sample code',f.fragranceCode],['Product name',f.productName],['Product code (FG)',f.fgCode],['Product type',f.category],['Purpose',f.purpose],
+      ['Packaging',f.packaging],['Fill volume',f.fillQty],['Quantity (pcs)',f.qty!=null?Number(f.qty).toLocaleString('en-GB'):''],['Sample due date (SA)',dd(f.sampleDue)],['Mock-up design date',dd(f.designDate)],['Mock-up made on',dd(f.mockupDate)],
+      ['Fragrance designer',who(f.perfumer)],['Product designer',who(f.designer)],['Operator',who(f.operator)],['Base formula',f.baseName?`${f.baseName} (${f.category})`:''],
+      ['Formula type',f.mode==='modified'?'Modified base / new formula – stability test and pilot batch required':'Standard base – fragrance changed only (standard stability data applies)'],['Status',PD_STATUS[f.status]?PD_STATUS[f.status][0]:f.status],['Batch size',fmt(batch,0)+' g']])}
     ${docSec(2,'Formula')}<table class="dt"><thead><tr><th>#</th><th>RM code</th><th>Ingredient</th><th>%</th><th>g / batch</th><th>Price ฿/kg</th><th>Cost ฿/kg</th></tr></thead><tbody>${rows}</tbody>
       <tfoot><tr><th colspan="3" style="text-align:right">Total</th><th style="text-align:right">${fmt(c.pctSum,2)}</th><th style="text-align:right">${fmt(c.pctSum/100*batch,2)}</th><th></th><th style="text-align:right">${fmt(c.total,2)}</th></tr></tfoot></table>
     <p class="dsmall">Raw material cost ${fmt(c.total,2)} ฿/kg · fragrance ${fmt(c.fragPct,2)}% = ${fmt(c.fragCost,2)} ฿/kg${toNum(f.targetPrice)>0?` · target ${fmt(f.targetPrice,2)} ฿/kg (${c.total>toNum(f.targetPrice)?'over by '+fmt(c.total-toNum(f.targetPrice),2):'under by '+fmt(toNum(f.targetPrice)-c.total,2)} ฿/kg)`:''}${c.missing?` · ${c.missing} item(s) without price`:''}</p>
@@ -5182,7 +5214,11 @@ $('#pdView').addEventListener('change', e=>{
   if(PD.open && t.closest('#pdForm')){
     const f=PD.open, k=t.dataset.pk; pdCollect(f);
     if(k==='baseId'){ const b=PD.bases.find(x=>x.id===f.baseId); if(b){ if(!f.lines.some(l=>!l.frag) || confirm(`แทนที่ส่วนประกอบทั้งหมดด้วยเบส "${b.name}" ?`)){ const fr=pdFragLine(f), keep=fr?fr.pct:null; pdApplyBase(f, b); } else { f.baseName=b.name; f.category=b.category; } } }
-    if(k==='fragranceScentId'){ const s=(PF.scents||[]).find(x=>x.id===f.fragranceScentId); if(s){ const c=pdApplyScent(f, s); toast(c?`ใช้กลิ่น ${s.name} · ${fmt(c.price,2)} ฿/กก.`:`กลิ่น ${s.name} ยังไม่มีต้นทุน ใส่ราคาน้ำหอมเอง`); } else pdClearScent(f); }    if(k==='projectId'){ const p=pdProj(f.projectId); if(p){ if(!f.customer) f.customer=p.company||''; if(!f.brand) f.brand=p.brand||''; } }
+    if(k==='sampScName'||k==='sampScCode') f.fragranceScentId=t.value;
+    if(k==='fragranceScentId'||k==='sampScName'||k==='sampScCode'){ const s=(PF.scents||[]).find(x=>x.id===f.fragranceScentId); if(s){ const c=pdApplyScent(f, s); toast(c?`ใช้กลิ่น ${s.name} · ${fmt(c.price,2)} ฿/กก.`:`กลิ่น ${s.name} ยังไม่มีต้นทุน ใส่ราคาน้ำหอมเอง`); } else pdClearScent(f); }    if(k==='projectId'){ const p=pdProj(f.projectId); if(p){ pdApplyProject(f, p, true);
+      const cur=(PF.scents||[]).find(x=>x.id===f.fragranceScentId);
+      if(cur&&cur.projectId!==p.id){ const sp=pdProj(cur.projectId); if(!sp||sp.customerCode!==p.customerCode){ pdClearScent(f); f.fragranceName=''; f.fragranceCode=''; f.fragrancePrice=null; } }   /* กลิ่นของโครงการ/ลูกค้าอื่น → ล้างออก */
+      if(!f.fragranceScentId){ const mine=(PF.scents||[]).filter(x=>x.projectId===p.id&&x.status!=='retired'); if(mine.length===1) pdApplyScent(f, mine[0]); } } }
     if(t.id==='pdStatus') return;   /* เปลี่ยนสถานะอย่างเดียว ไม่ต้องวาดใหม่ (กันล็อกฟอร์มก่อนบันทึก) */
     pdRedraw(); return;
   }

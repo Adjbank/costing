@@ -1670,10 +1670,14 @@ async function deletePdBase(ctx: Ctx, id: string) {
     return { ok: true };
   });
 }
+const pdDate = (v: unknown) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || "")) ? String(v) : "");
 function pdFormulaData(f: Any) {
   return { category: str(f.category, 80), baseName: str(f.baseName, 200), mode: PD_MODES[f.mode] ? String(f.mode) : "standard", customer: str(f.customer, 200), brand: str(f.brand, 200),
     fragranceFormulaId: str(f.fragranceFormulaId, 60), fragranceScentId: str(f.fragranceScentId, 60), fragranceName: str(f.fragranceName, 200), fragranceCode: str(f.fragranceCode, 60), fragrancePrice: numOrNull(f.fragrancePrice),
-    batchG: numOrNull(f.batchG), targetPrice: numOrNull(f.targetPrice), note: str(f.note, 3000), lines: pdLines(f.lines), approvedBy: str(f.approvedBy, 120), approvedAt: str(f.approvedAt, 40) };
+    batchG: numOrNull(f.batchG), targetPrice: numOrNull(f.targetPrice), note: str(f.note, 3000), lines: pdLines(f.lines), approvedBy: str(f.approvedBy, 120), approvedAt: str(f.approvedAt, 40),
+    /* หัวใบสูตร FM-RD-03 (Product Information) */
+    productName: str(f.productName, 200), fgCode: str(f.fgCode, 60), revision: numOrNull(f.revision), purpose: str(f.purpose, 200), packaging: str(f.packaging, 200), fillQty: str(f.fillQty, 60), qty: numOrNull(f.qty),
+    sampleDue: pdDate(f.sampleDue), designDate: pdDate(f.designDate), mockupDate: pdDate(f.mockupDate), perfumer: str(f.perfumer, 120), designer: str(f.designer, 120), operator: str(f.operator, 120) };
 }
 const fmOut = (r: Any) => ({ id: String(r.id), code: String(r.code || ""), projectId: String(r.project_id || ""), name: String(r.name), baseId: String(r.base_id || ""), status: String(r.status), ...pdFormulaData(r.data || {}),
   createdAt: iso(r.created_at), createdBy: String(r.created_by || ""), updatedAt: iso(r.updated_at), updatedBy: String(r.updated_by || "") });

@@ -1701,7 +1701,7 @@ function renderEditor(){
       <tfoot><tr><td></td><td colspan="2">รวม ${c.rows.length} รายการ</td><td class="num">${fmtP(c.W)}</td><td class="num">${c.W>0?'100.00':'–'}</td><td></td><td class="num">${c.complete?'':'≥ '}${fmt(c.rm,2)}</td><td></td><td class="num">${fmt(c.inputKg*1000,1)}</td><td></td></tr></tfoot>
     </table></div>
     <div class="row" style="margin-top:12px;justify-content:space-between">
-      <div class="row"><button class="btn small" type="button" id="btnAddRow">+ เพิ่มวัตถุดิบ</button><span class="muted" style="font-size:12.5px">หรือค้นหาในฐานราคาด้านล่างแล้วกด "เพิ่ม"</span></div>
+      <div class="row"><button class="btn small" type="button" id="btnAddRow">+ เพิ่มวัตถุดิบ</button><span class="muted" style="font-size:12.5px">หรือพิมพ์ค้นหาในช่อง "เลือกวัตถุดิบจากฐานข้อมูล" ด้านบนแล้วกด "เพิ่ม"</span></div>
       <button class="btn link" type="button" id="btnDelProd">ลบสูตรนี้</button>
     </div>`;
 }
@@ -1772,7 +1772,7 @@ function renderWork(){ if(!can('calc')) return; renderDesignPanel(); renderTabs(
 function applyPermsToLayout(){
   const calc=can('calc'), view=can('viewDb');
   ['#stepsBar','#s1','#s2','#s4','#summary'].forEach(s=>$(s).hidden=!calc);
-  $('#s5').hidden=!view;
+  $('#s5').hidden=!view||calc;   /* ตารางฐานราคาไม่แสดงในหมวด Perfumer (เลือกวัตถุดิบผ่านช่องค้นหาในตัวออกแบบ) · แสดงเฉพาะผู้ที่มีสิทธิ์ดูราคาอย่างเดียว */
   $('.layout').style.gridTemplateColumns = calc ? '' : 'minmax(0,1fr)';
   let none=$('#noPerm');
   if(!calc && !view){ if(!none){ none=document.createElement('div'); none.id='noPerm'; none.className='empty'; none.textContent='บทบาทของคุณยังไม่มีสิทธิ์ใช้งานส่วนใด ติดต่อแอดมินเพื่อเพิ่มสิทธิ์'; $('.layout .col').prepend(none); } }

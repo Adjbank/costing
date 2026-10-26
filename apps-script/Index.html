@@ -43,6 +43,10 @@
   .doc-sheet tr,.doc-sheet li{break-inside:avoid}
   @page{size:A4;margin:16mm 14mm}
 }
+.fda-fl{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px 12px;margin:12px 0 8px;padding:12px 14px;border:1px solid var(--line);border-radius:18px;background:var(--card,rgba(255,255,255,.7))}
+.fda-fl .field{margin:0;min-width:0}.fda-fl .field label{display:block;font-size:11.5px;margin-bottom:3px;color:var(--muted,#6b7280)}
+.fda-fl select,.fda-fl input{width:100%;min-width:0;box-sizing:border-box}
+@media (max-width:640px){.fda-fl{grid-template-columns:1fr 1fr;padding:10px}}
 </style>
 </head>
 <body>
@@ -5952,7 +5956,7 @@ $('#pdView').addEventListener('click', async e=>{
 $('#pdView').addEventListener('submit', async e=>{ if(e.target.id!=='ptForm') return; e.preventDefault(); const t=PD.trial; if(!t) return; ptCollect(t); const btn=e.target.querySelector('button[type=submit]'); btn.disabled=true; try{ const r=await api('savePdTrial',{...t, status:t.status}); ptUpsert(r); PD.trial=JSON.parse(JSON.stringify(r)); drawPd(); toast(`บันทึก ${r.trialNo} แล้ว`); }catch(err){ $('#ptErr').textContent=errText(err); btn.disabled=false; } });
 
 /* ===== งาน RA: จดแจ้งเครื่องสำอาง (อย.) — ทะเบียนเลขจดแจ้ง (ต่ออายุทุก 3 ปี) + คำขอจดแจ้ง ===== */
-let FDA={alert:null, regs:null, reqs:null, canEdit:false, reqStatus:[], sub:'regs', q:'', f:'', rq:'', rf:'', shown:150, form:null, renew:null, rform:null, open:null};
+let FDA={alert:null, regs:null, reqs:null, canEdit:false, reqStatus:[], sub:'regs', q:'', f:'', x:{dec:'',yr:'',mo:'',trade:'',doc:'',sa:'',within:'',sort:''}, rq:'', rf:'', shown:150, form:null, renew:null, rform:null, open:null};
 const fdaCanView=()=>['projects','perfumer','pd','ra','calc','viewDb'].some(can);
 const FDA_DEC={'':['ยังไม่ตัดสินใจ','info'], renew:['ต่ออายุ','ok'], no:['ไม่ต่ออายุ','bad']};
 const FDA_ST={ok:['ใช้งาน','ok'], soon:['ใกล้หมดอายุ','warn'], urgent:['หมดอายุใน 90 วัน','bad'], expired:['หมดอายุแล้ว','bad'], no:['ไม่ต่ออายุ','info'], cancel:['ยกเลิก','bad']};
@@ -5979,13 +5983,45 @@ function renderFdaView(){
   $('#fdaView').innerHTML=`<div class="bh"><h2>จดแจ้งเครื่องสำอาง (อย.)</h2><span class="hint">งาน RA: ทะเบียนเลขจดแจ้งทั้งหมด (ใบรับจดแจ้งมีอายุ 3 ปี) ติดตามวันหมดอายุ ตัดสินใจต่ออายุ บันทึกการต่ออายุ และคำขอจดแจ้งใหม่จากฝ่ายขาย · เวลาที่ใช้ยื่นจดแจ้ง 7-14 วันทำการ</span></div><div id="fdaBody"><div class="empty">กำลังโหลด…</div></div>`;
   loadFda().then(drawFda).catch(e=>{ $('#fdaBody').innerHTML=`<div class="msg bad">${esc(errText(e))}</div>`; });
 }
+const FDA_MON=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const fdaHasDocs=r=>!!((r.files||[]).length||(r.history||[]).some(h=>(h.files||[]).length));
+const fdaFiltersOn=()=>!!(FDA.q.trim()||FDA.f||Object.values(FDA.x).some(v=>String(v).trim()));
 function fdaRegFiltered(){
-  const q=FDA.q.trim().toLowerCase();
-  return FDA.regs.filter(r=>{ const s=fdaState(r);
+  const q=FDA.q.trim().toLowerCase(), x=FDA.x, tr=x.trade.trim().toLowerCase();
+  const list=FDA.regs.filter(r=>{ const s=fdaState(r), n=fdaDays(r.expiry);
     if(FDA.f==='due'&&!((s==='urgent'||s==='soon')&&r.decision!=='renew')) return false;
-    if(FDA.f==='expired'&&s!=='expired') return false; if(FDA.f==='no'&&s!=='no') return false; if(FDA.f==='renewed'&&!(r.history||[]).length) return false; if(FDA.f==='active'&&!['ok','soon','urgent'].includes(s)) return false;
+    if(FDA.f==='expired'&&s!=='expired') return false; if(FDA.f==='no'&&s!=='no') return false; if(FDA.f==='cancel'&&s!=='cancel') return false; if(FDA.f==='renewed'&&!(r.history||[]).length) return false; if(FDA.f==='active'&&!['ok','soon','urgent'].includes(s)) return false;
+    if(x.dec){ const d=r.decision||''; if(x.dec==='none'?d!=='':d!==x.dec) return false; }
+    if(x.yr&&String(r.expiry||'').slice(0,4)!==x.yr) return false;
+    if(x.mo&&String(r.expiry||'').slice(5,7)!==x.mo) return false;
+    if(tr&&![r.tradeName,r.brand].join(' ').toLowerCase().includes(tr)) return false;
+    if(x.doc&&(x.doc==='has')!==fdaHasDocs(r)) return false;
+    if(x.sa&&(x.sa==='yes')!==!!r.saNotifiedAt) return false;
+    if(x.within){ if(n==null||n<0||n>+x.within||s==='no'||s==='cancel') return false; }
     return !q||[r.regNo,r.tradeName,r.productName,r.brand,r.note].join(' ').toLowerCase().includes(q); });
+  const cmp={exp:(a,b)=>String(a.expiry||'9999').localeCompare(String(b.expiry||'9999')), expd:(a,b)=>String(b.expiry||'').localeCompare(String(a.expiry||'')), notify:(a,b)=>String(b.notifyDate||'').localeCompare(String(a.notifyDate||'')),
+    trade:(a,b)=>String(a.tradeName||'').localeCompare(String(b.tradeName||''),'th'), reg:(a,b)=>String(a.regNo||'').localeCompare(String(b.regNo||''))}[x.sort];
+  return cmp?list.slice().sort(cmp):list;
 }
+function fdaFilterBar(){
+  const x=FDA.x, regs=FDA.regs;
+  const years=[...new Set(regs.map(r=>String(r.expiry||'').slice(0,4)).filter(Boolean))].sort();
+  const trades=[...new Set(regs.map(r=>r.tradeName).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th'));
+  const sel=(k,l,opts,cur)=>`<div class="field"><label>${l}</label><select data-fdax="${k}">${opts.map(([v,t])=>`<option value="${esc(v)}" ${String(cur)===String(v)?'selected':''}>${esc(t)}</option>`).join('')}</select></div>`;
+  return `<div class="fda-fl">
+    ${sel('st','สถานะ',[['','ทั้งหมด'],['active','ใช้งานอยู่'],['due','ใกล้หมดอายุ ≤ 180 วัน (ยังไม่ต่อ)'],['expired','หมดอายุแล้ว'],['no','ไม่ต่ออายุ'],['renewed','ต่ออายุแล้ว'],['cancel','ยกเลิกใบจดแจ้ง']],FDA.f)}
+    ${sel('dec','การตัดสินใจต่ออายุ',[['','ทั้งหมด'],['none','ยังไม่ตัดสินใจ'],['renew','ต่ออายุ'],['no','ไม่ต่ออายุ']],x.dec)}
+    ${sel('within','หมดอายุภายใน',[['','ทั้งหมด'],['30','30 วัน'],['60','60 วัน'],['90','90 วัน'],['180','180 วัน'],['365','1 ปี']],x.within)}
+    ${sel('yr','ปีที่หมดอายุ (พ.ศ.)',[['','ทุกปี'],...years.map(y=>[y,String(+y+543)])],x.yr)}
+    ${sel('mo','เดือนที่หมดอายุ',[['','ทุกเดือน'],...FDA_MON.map((m,i)=>[String(i+1).padStart(2,'0'),m])],x.mo)}
+    <div class="field"><label>ชื่อการค้า / แบรนด์</label><input data-fdax="trade" list="fdaTradeList" placeholder="พิมพ์หรือเลือก…" value="${esc(x.trade)}" autocomplete="off"><datalist id="fdaTradeList">${trades.map(t=>`<option value="${esc(t)}">`).join('')}</datalist></div>
+    ${sel('doc','เอกสารแนบ',[['','ทั้งหมด'],['has','มีไฟล์แนบ'],['none','ยังไม่มีไฟล์']],x.doc)}
+    ${sel('sa','SA แจ้งสถานะ',[['','ทั้งหมด'],['yes','SA แจ้งแล้ว'],['no','ยังไม่แจ้ง']],x.sa)}
+    ${sel('sort','เรียงตาม',[['','ตามที่บันทึก'],['exp','วันหมดอายุ (ใกล้ → ไกล)'],['expd','วันหมดอายุ (ไกล → ใกล้)'],['notify','วันที่จดแจ้ง (ใหม่ → เก่า)'],['trade','ชื่อการค้า (ก → ฮ)'],['reg','เลขที่จดแจ้ง']],x.sort)}
+  </div>
+  <div class="row" style="gap:10px;align-items:center;margin:2px 0 8px"><span class="muted" id="fdaCount" style="font-size:12.5px">แสดง ${fdaRegFiltered().length.toLocaleString('th-TH')} จาก ${regs.length.toLocaleString('th-TH')} รายการ</span>${fdaFiltersOn()?'<button class="btn small" type="button" id="fdaClear">ล้างตัวกรองทั้งหมด ✕</button>':''}</div>`;
+}
+function fdaRefreshMain(){ const list=fdaRegFiltered(), m=$('#fdaMain'), c=$('#fdaCount'); if(m) m.innerHTML=fdaRegTable(list); if(c) c.textContent='แสดง '+list.length.toLocaleString('th-TH')+' จาก '+FDA.regs.length.toLocaleString('th-TH')+' รายการ'; }
 function drawFda(){
   if(!FDA.regs) return;
   const regs=FDA.regs, st=regs.map(fdaState), cnt=k=>st.filter(s=>s===k).length;
@@ -5999,8 +6035,8 @@ function drawFda(){
 function fdaRegView(){
   return `<div class="search" style="flex-wrap:wrap;gap:8px"><input id="fdaQ" type="search" autocomplete="off" placeholder="ค้นหาเลขจดแจ้ง ชื่อการค้า ชื่อผลิตภัณฑ์…" value="${esc(FDA.q)}" style="flex:1;min-width:220px">
       ${FDA.f?`<button class="btn small" type="button" data-fdaf="">ล้างตัวกรอง: ${esc({active:'ใช้งานอยู่',due:'ใกล้หมดอายุ',expired:'หมดอายุแล้ว',no:'ไม่ต่ออายุ',renewed:'ต่ออายุแล้ว'}[FDA.f])} ✕</button>`:''}
-      ${FDA.canEdit?'<button class="btn primary" type="button" id="fdaNew">+ เพิ่มเลขจดแจ้ง</button>':''}<button class="btn small" type="button" id="fdaExport">ส่งออก Excel</button><button class="btn" type="button" id="fdaRefresh">รีเฟรช</button></div>
-    ${FDA.form?fdaRegForm(FDA.form):''}${FDA.renew?fdaRenewForm(FDA.renew):''}<div id="fdaMain">${fdaRegTable(fdaRegFiltered())}</div>`;
+      ${FDA.canEdit?'<button class="btn primary" type="button" id="fdaNew">+ เพิ่มเลขจดแจ้ง</button>':''}<button class="btn small" type="button" id="fdaExport" title="ส่งออกตามตัวกรองที่เลือก">ส่งออก Excel</button><button class="btn" type="button" id="fdaRefresh">รีเฟรช</button></div>
+    ${fdaFilterBar()}${FDA.form?fdaRegForm(FDA.form):''}${FDA.renew?fdaRenewForm(FDA.renew):''}<div id="fdaMain">${fdaRegTable(fdaRegFiltered())}</div>`;
 }
 function fdaRegTable(list){
   if(!list.length) return `<div class="empty">${FDA.regs.length?'ไม่พบเลขจดแจ้ง':'ยังไม่มีเลขจดแจ้ง'}</div>`;
@@ -6113,11 +6149,13 @@ function fdaAlertView(){
 function fdaUpsert(arr, o){ const i=arr.findIndex(x=>x.id===o.id); if(i>=0) arr[i]=o; else arr.push(o); }
 /* ---------- events ---------- */
 $('#fdaView').addEventListener('input', e=>{
-  if(e.target.id==='fdaQ'){ FDA.q=e.target.value; FDA.shown=150; const m=$('#fdaMain'); if(m) m.innerHTML=fdaRegTable(fdaRegFiltered()); }
+  if(e.target.id==='fdaQ'){ FDA.q=e.target.value; FDA.shown=150; fdaRefreshMain(); }
+  if(e.target.dataset&&e.target.dataset.fdax==='trade'){ FDA.x.trade=e.target.value; FDA.shown=150; fdaRefreshMain(); }
   if(e.target.id==='fdaRq'){ FDA.rq=e.target.value; const m=$('#fdaMain'); if(m) m.innerHTML=fdaReqTable(fdaReqFiltered()); }
 });
 $('#fdaView').addEventListener('change', e=>{
   if(e.target.id==='fdaRf'){ FDA.rf=e.target.value; drawFda(); }
+  const fx=e.target.dataset&&e.target.dataset.fdax; if(fx&&fx!=='trade'){ if(fx==='st') FDA.f=e.target.value; else FDA.x[fx]=e.target.value; FDA.shown=150; drawFda(); }
   if(e.target.dataset.ff==='notifyDate'){ const ex=$('#fdaRegForm [data-ff=expiry]'); if(ex&&!ex.value&&e.target.value) ex.value=fdaPlus3y(e.target.value); }
 });
 $('#fdaView').addEventListener('click', async e=>{
@@ -6129,12 +6167,13 @@ $('#fdaView').addEventListener('click', async e=>{
   if(t.id==='fdaResetSecret'){ if(!confirm('สร้างรหัสลับใหม่? สคริปต์ที่ติดตั้งไว้จะหยุดทำงานจนกว่าจะวางโค้ดใหม่')) return; t.disabled=true; try{ FDA.alert=await api('resetFdaAlertSecret'); toast('สร้างรหัสใหม่แล้ว · วางโค้ดใหม่ในสคริปต์'); drawFda(); }catch(err){ toast(errText(err)); t.disabled=false; } return; }
   if(t.id==='fdaRefresh'){ t.disabled=true; try{ await loadFda(true); }catch(err){ toast(errText(err)); } drawFda(); return; }
   if(t.id==='fdaMore'){ FDA.shown+=150; drawFda(); return; }
+  if(t.id==='fdaClear'){ FDA.q=''; FDA.f=''; Object.keys(FDA.x).forEach(k=>{ FDA.x[k]=''; }); FDA.shown=150; drawFda(); return; }
   if(t.id==='fdaExport'){ fdaExport('regs'); return; }
   if(t.id==='fdaReqExport'){ fdaExport('reqs'); return; }
   if(t.id==='fdaNew'){ FDA.form={id:'',regNo:'',notifyDate:'',expiry:'',tradeName:'',productName:'',brand:'',decision:'',saNotifiedAt:'',requestId:'',cancelled:false,note:'',files:[]}; FDA.renew=null; drawFda(); $('#fdaRegForm [data-ff=regNo]').focus(); return; }
   if(t.dataset.fdaedit){ const r=FDA.regs.find(x=>x.id===t.dataset.fdaedit); if(r){ FDA.form=JSON.parse(JSON.stringify(r)); FDA.renew=null; drawFda(); $('#fdaRegForm').scrollIntoView({block:'center'}); } return; }
   if(t.dataset.fdarenew){ FDA.renew=t.dataset.fdarenew; FDA.form=null; drawFda(); $('#fdaRenewForm').scrollIntoView({block:'center'}); return; }
-  if(t.dataset.fdahist){ FDA.open=FDA.open===t.dataset.fdahist?null:t.dataset.fdahist; const m=$('#fdaMain'); if(m) m.innerHTML=fdaRegTable(fdaRegFiltered()); return; }
+  if(t.dataset.fdahist){ FDA.open=FDA.open===t.dataset.fdahist?null:t.dataset.fdahist; fdaRefreshMain(); return; }
   if(t.id==='fdaFormCancel'){ FDA.form=null; drawFda(); return; }
   if(t.id==='fdaRenewCancel'){ FDA.renew=null; drawFda(); return; }
   if(t.id==='fdaReqCancel'){ FDA.rform=null; drawFda(); return; }

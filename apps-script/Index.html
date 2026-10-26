@@ -2139,7 +2139,6 @@ function renderUserBar(){
     + (fdaCanView() ? tab('btnFda','fda','จดแจ้ง อย.') : '')
     + (can('calc') ? `<button type="button" id="btnDoc" class="${v==='doc'||v==='chk'?'on':''}" ${v==='doc'||v==='chk'?'aria-current="page"':''}>${NAV_ICON.doc}<span>เอกสารวัตถุดิบ</span></button>` : '')
     + (can('viewDb') ? tab('btnMsds','msds','MSDS วัตถุดิบ') : '')
-    + (can('editPrices') ? tab('btnRm','rm','ฐานราคาวัตถุดิบ') : '')
     + (adm ? tab('btnAll','all','สูตรทั้งหมด') + tab('btnPrice','price','ทำราคาขาย') : '')
     + (S.me&&S.me.role ? tab('btnCmp','cmp', (adm?'เรื่องร้องเรียน':'แจ้งเรื่องร้องเรียน') + (adm&&S.cNew ? ` <span class="badge">${S.cNew}</span>` : '')) : '')
     + (can('manageUsers') ? tab('btnAdmin','admin','ผู้ใช้และบทบาท') : '');
@@ -2207,7 +2206,7 @@ function homeView(){ if(can('calc')||can('viewDb')) return 'calc'; if(typeof rdC
 async function showView(v){
   if(v==='admin' && !can('manageUsers')) v='calc';
   if((v==='all' || v==='price') && !isAdminRole()) v='calc';
-  if(v==='rm' && !can('editPrices')) v='calc';
+  if(v==='rm') v='calc';   /* ซ่อนหน้าฐานราคาวัตถุดิบออกจากเมนู (ผู้ใช้ขอ 2026-10-26) */
   if(S.view==='price' && v!=='price') flushPrice();
   if(S.view==='rm' && v!=='rm') flushRm();
   if(v==='cmp' && !(S.me && S.me.role)) v='calc';

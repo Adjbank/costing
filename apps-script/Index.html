@@ -3921,7 +3921,7 @@ function drawPfTf(){
 /* แท็บย่อยของ Perfumer: คำนวณต้นทุน (หน้า #calcView เดิม) · บรีฟลูกค้า · คลังกลิ่น */
 function pfSubTabs(active){
   const nb=PF.briefs?PF.briefs.length:'', ns=PF.scents?PF.scents.length:'';
-  return `<div class="pf-tabs" role="tablist">${can('calc')?`<button type="button" data-tab="calc" class="${active==='calc'?'on':''}">กระบวนการออกแบบ</button>`:''}<button type="button" data-tab="brief" class="${active==='brief'?'on':''}">บรีฟลูกค้า <span class="pf-n" id="pfNb">${nb}</span></button><button type="button" data-tab="scent" class="${active==='scent'?'on':''}">คลังกลิ่น <span class="pf-n" id="pfNs">${ns}</span></button></div>`;
+  return `<div class="pf-tabs" role="tablist"><button type="button" data-tab="scent" class="${active==='scent'?'on':''}">คลังกลิ่น <span class="pf-n" id="pfNs">${ns}</span></button><button type="button" data-tab="brief" class="${active==='brief'?'on':''}">บรีฟลูกค้า <span class="pf-n" id="pfNb">${nb}</span></button>${can('calc')?`<button type="button" data-tab="calc" class="${active==='calc'?'on':''}">กระบวนการออกแบบ</button>`:''}</div>`;
 }
 function renderCalcSubTabs(){ const el=$('#calcSubTabs'); if(el) el.innerHTML=pfCanView()?pfSubTabs('calc'):''; }
 $('#calcSubTabs').addEventListener('click', e=>{ const b=e.target.closest('button[data-tab]'); if(!b||b.dataset.tab==='calc') return; pfTab=b.dataset.tab; pfStatus=''; pfEdit=null; showView('perf'); });

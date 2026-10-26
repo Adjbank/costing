@@ -4910,6 +4910,7 @@ async function loadPd(force){
   if(PD.bases && PD.list && !force) return;
   const [b,l]=await Promise.all([api('listPdBases'), api('listPdFormulas')]); PD.bases=b; PD.list=l;
   try{ PD.trials=await api('listPdTrials'); }catch(e){ PD.trials=PD.trials||[]; }
+  if(!RD.list){ try{ const pl=await api('listProjects'); RD.list=pl.items; RD.sla=pl.sla||{}; }catch(e){} }   /* รายการโครงการ ให้ช่อง "โครงการ" ของสูตรมีตัวเลือกครบ */
   try{ await loadPf(false); }catch(e){}   /* คลังกลิ่น (Perfumer) ให้เลือกกลิ่นในสูตรผลิตภัณฑ์ */
   if(isAdminRole()){ try{ await loadAdminForms(false); }catch(e){} }   /* ให้เลือกสูตรน้ำหอมของทุกคนได้ */
 }
@@ -5079,6 +5080,7 @@ function pdLinesTable(f, c, ed, opts){
 function pdFormulaPage(f){
   const lock=f.status==='approved', ed=pdCanEdit(), ro=ed&&!lock?'':'disabled', c=pdCost(f), p=pdProj(f.projectId), fr=pdFragLine(f);
   const projOpts=[['','– ไม่ผูกโครงการ –'],...(RD.list||[]).filter(x=>x.stage!=='lost'||x.id===f.projectId).map(x=>[x.id, `${x.pdrNo} · ${x.brand||x.company}`])];
+  if(f.projectId&&!projOpts.some(o=>o[0]===f.projectId)) projOpts.push([f.projectId,'(โครงการ '+f.projectId+')']);   /* กันค่าโครงการหายตอนบันทึกถ้ารายการโครงการยังไม่โหลด */
   const baseOpts=[['','– เลือกเบส –'],...PD.bases.filter(b=>b.active||b.id===f.baseId).map(b=>[b.id, `${b.category} · ${b.name}`])];
   const scents=(PF.scents||[]).filter(s=>s.status!=='retired'||s.id===f.fragranceScentId), sel=scents.find(s=>s.id===f.fragranceScentId), sc=sel?pdScentCost(sel):null;
   const mineS=scents.filter(s=>f.projectId&&s.projectId===f.projectId), otherS=scents.filter(s=>!(f.projectId&&s.projectId===f.projectId));

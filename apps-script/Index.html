@@ -855,6 +855,20 @@ main.wrap::after{content:"";display:block;height:52px;margin:36px 0 6px;border-r
 .cd-links{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))!important}
 .cd-ctx{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin:0 0 12px}
 .cd-src{background:var(--card);border-radius:14px;padding:10px 12px;font-size:12.5px;line-height:1.55;color:var(--ink-muted)} .cd-src b{color:var(--ink);font-size:13.5px}
+.cd-tl{font-size:13px;font-weight:600;margin:6px 0 8px} .cd-tl .muted{font-weight:400;font-size:12px}
+.cd-chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+.cd-chip{position:relative;cursor:pointer;margin:0}
+.cd-chip input{position:absolute;inset:0;width:100%;height:100%;opacity:0;margin:0;cursor:pointer}
+.cd-chip span{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:999px;border:1px solid var(--line);background:var(--card);font-size:13px;color:var(--ink);transition:background .15s,border-color .15s}
+.cd-chip span i{font-style:normal;font-size:11px;color:var(--ink-muted)}
+.cd-chip:hover span{border-color:#c46d4e}
+.cd-chip.on span{background:#091e4b;color:#fff;border-color:transparent} .cd-chip.on span i{color:#ffffffb8}
+:root[data-theme="dark"] .cd-chip.on span{background:#c46d4e}
+.cd-chip input:focus-visible+span{outline:2px solid #4c8dff;outline-offset:2px}
+.cd-item{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px 14px;margin:0 0 10px}
+.cd-item h4{margin:0 0 10px;font-size:14px;display:flex;justify-content:space-between;align-items:center;gap:8px} .cd-item h4 select{max-width:260px}
+.cd-item .settings{margin:0}
+.cd-tb table{width:100%} .cd-tb .num{text-align:right;white-space:nowrap} .cd-tb tr.cd-sum td{border-top:2px solid var(--line-strong,var(--line))}
 .cd-card .cd-gauge{display:flex;justify-content:space-between;align-items:flex-end;margin:4px 0 6px}
 .cd-gv span{display:block;font-size:12px;color:var(--ink-muted)} .cd-gv b{font-size:24px;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums} .cd-gv.r{text-align:right}
 .cd-card .meter.bad i{background:var(--bad)}
@@ -1442,7 +1456,7 @@ function renderTabs(){
 function chip(status){ const s=STATUS[status]; return `<span class="chip ${s.c}">${s.t}</span>`; }
 /* ===== งานออกแบบกลิ่น: ผูกบรีฟ / PDR · ตั้งงบหัวน้ำหอม ===== */
 const CALC_APPS=[['','— เลือกประเภทสินค้า —',0],['edp','Eau de Parfum (EDP)',18],['edt','Eau de Toilette (EDT)',10],['edc','Eau de Cologne / Splash',4],['mist','Body mist / Hair mist',5],['room','Room / Linen spray',8],['reed','Reed diffuser',20],['candle','เทียนหอม',8],['soap','สบู่ก้อน',1.5],['wash','เจลอาบน้ำ / แชมพู',1],['lotion','โลชั่น / ครีม',0.5],['other','อื่น ๆ',0]];
-const CALC_APP_RX=[['edp',/\bEDP\b|parfum|เพอร์ฟูม|น้ำหอม/i],['edt',/\bEDT\b|toilette/i],['edc',/cologne|\bEDC\b|splash/i],['mist',/mist|มิสท์|สเปรย์ฉีดตัว/i],['room',/room|linen|ปรับอากาศ|สเปรย์ห้อง/i],['reed',/reed|diffuser|ก้านไม้/i],['candle',/candle|เทียน/i],['soap',/soap|สบู่/i],['wash',/shampoo|wash|แชมพู|เจลอาบ/i],['lotion',/lotion|cream|โลชั่น|ครีม/i]];
+const CALC_APP_RX=[['mist',/mist|มิสท์|มิสต์|สเปรย์ฉีดตัว/i],['room',/room|linen|ปรับอากาศ|สเปรย์ห้อง/i],['reed',/reed|diffuser|ก้านไม้/i],['candle',/candle|เทียน/i],['soap',/soap|สบู่/i],['wash',/shampoo|wash|แชมพู|เจลอาบ/i],['lotion',/lotion|cream|โลชั่น|ครีม/i],['edt',/\bEDT\b|toilette/i],['edc',/cologne|\bEDC\b|splash/i],['edp',/\bEDP\b|parfum|เพอร์ฟูม|น้ำหอม/i]];
 const CALC_LINK={briefs:null, projects:null, loading:false, err:''};
 async function calcLoadLinks(){
   if(CALC_LINK.loading||CALC_LINK.briefs) return; CALC_LINK.loading=true;
@@ -1459,27 +1473,54 @@ function calcParseProducts(t){ t=String(t||''); const o={};
   const a=CALC_APP_RX.find(([k,rx])=>rx.test(t)); if(a) o.app=a[0];
   return o; }
 const calcBrief=id=>(CALC_LINK.briefs||[]).find(b=>b.id===id), calcProj=id=>(CALC_LINK.projects||[]).find(x=>x.id===id);
+/* ประเภทสินค้าได้หลายอย่างต่อหนึ่งกลิ่น: design.items = [{app, dosage, fillMl, density, qty, targetPrice, budgetUnit, budgetKg}] (ข้อมูลเดิมที่เก็บเป็นฟิลด์เดี่ยว design.app/dosage/… ถูกแปลงเป็นรายการเดียวอัตโนมัติ) */
+const CALC_ITEM_KEYS=['dosage','fillMl','density','qty','targetPrice','budgetUnit','budgetKg'];
+const calcAppRow=a=>CALC_APPS.find(x=>x[0]===(a||''));
+const calcAppName=a=>{ const r=calcAppRow(a); return a&&r?r[1]:(a||'ยังไม่เลือกประเภท'); };
+function calcItems(d){ d=d||{}; if(Array.isArray(d.items)) return d.items;
+  const has=d.app||CALC_ITEM_KEYS.some(k=>d[k]!==undefined&&d[k]!==''); if(!has) return [];
+  const it={app:d.app||''}; CALC_ITEM_KEYS.forEach(k=>{ if(d[k]!==undefined&&d[k]!=='') it[k]=d[k]; }); return [it]; }
+/* คืน array ที่แก้ไขได้ของสูตร p (แปลงข้อมูลเดิมให้เป็นรูปแบบใหม่ ณ จุดนี้) */
+function calcEnsureItems(p){ const d=Object.assign({}, p.design);
+  if(!Array.isArray(d.items)){ d.items=calcItems(d).map(x=>Object.assign({},x)); ['app',...CALC_ITEM_KEYS].forEach(k=>{ delete d[k]; }); }
+  else d.items=d.items.map(x=>Object.assign({},x));
+  p.design=d; return d.items; }
+function calcAddItem(p, app){ const its=calcEnsureItems(p); let it=its.find(x=>(x.app||'')===(app||'')); if(!it){ it={app:app||''}; const r=calcAppRow(app); if(r&&r[2]) it.dosage=String(r[2]); its.push(it); } return it; }
+const calcSetEmpty=(it,k,v)=>{ if(v!==undefined&&v!==''&&(it[k]===undefined||it[k]==='')) it[k]=String(v); };
+/* "EDP 30 ml × 1,000, Body mist 100 ml × 500" → หลายประเภท */
+function calcParseList(t){ const segs=String(t||'').split(/,(?!\d)|[;，\n]+|\s\+\s|\sและ\s/).map(s=>s.trim()).filter(Boolean), out=[];
+  segs.forEach(sg=>{ const o=calcParseProducts(sg); if(o.app) out.push(o); }); return out; }
 function calcApplyLink(p, kind, id){
-  p.link=Object.assign({}, p.link); p.design=Object.assign({}, p.design); p.meta=Object.assign({}, p.meta);
+  p.link=Object.assign({}, p.link); p.meta=Object.assign({}, p.meta); calcEnsureItems(p);
   const fill=(k,v)=>{ if(v&&!String(p.meta[k]||'').trim()) p.meta[k]=String(v).slice(0,120); };
-  const setD=(k,v)=>{ if(v!==undefined&&v!==''&&(p.design[k]===undefined||p.design[k]==='')) p.design[k]=String(v); };
+  const addList=(list)=>{ list.forEach(o=>{ const it=calcAddItem(p,o.app); calcSetEmpty(it,'fillMl',o.fillMl); calcSetEmpty(it,'qty',o.qty); }); };
   if(kind==='pdr'){ p.link.projectId=id; const x=calcProj(id); if(x){
       fill('customer', x.company); fill('brand', x.brand); fill('sampleName', x.title);
-      const d=x.data||{}, pr=calcParseProducts(d.products); setD('app',pr.app); setD('fillMl',pr.fillMl); setD('qty',pr.qty);
-      const tp=String(d.target||'').match(/[\d,]+(?:\.\d+)?/); if(tp) setD('targetPrice', tp[0].replace(/,/g,''));
+      const d=x.data||{}, list=calcParseList(d.products);
+      if(list.length) addList(list);
+      else { const pr=calcParseProducts(d.products), its=p.design.items; if(pr.fillMl||pr.qty){ const it=its.length===1?its[0]:(its.length===0?calcAddItem(p,''):null); if(it){ calcSetEmpty(it,'fillMl',pr.fillMl); calcSetEmpty(it,'qty',pr.qty); } } }
+      const tp=String(d.target||'').match(/[\d,]+(?:\.\d+)?/); if(tp&&p.design.items.length===1) calcSetEmpty(p.design.items[0],'targetPrice', tp[0].replace(/,/g,''));
       if(x.briefId&&!p.link.briefId) p.link.briefId=x.briefId;
       if(/^สูตรใหม่|^สูตรจาก|^งานออกแบบ \d+$/.test(p.name)&&x.pdrNo) p.name=(x.pdrNo+' '+(x.brand||x.company||'')).trim(); } }
   if(kind==='brief'){ p.link.briefId=id; const b=calcBrief(id); if(b){ const d=b.data||{};
       fill('customer', d.company||b.contact); fill('brand', b.brand);
-      const pr=calcParseProducts([].concat(d.products||[]).join(' ')+' '+(d.svProducts||[]).join(' ')); setD('app',pr.app);
+      const parts=[].concat(d.products||[]).concat(d.svProducts||[]), list=[]; parts.forEach(s=>list.push(...calcParseList(s))); addList(list);
       if(/^สูตรใหม่|^สูตรจาก|^งานออกแบบ \d+$/.test(p.name)&&b.brand) p.name=b.brand+' · '+(b.kind||'Brief'); } }
-  const ap=CALC_APPS.find(a=>a[0]===p.design.app); if(ap&&ap[2]&&(p.design.dosage===undefined||p.design.dosage==='')) p.design.dosage=String(ap[2]);
 }
-/* ผลการคำนวณงบ */
-function calcBudget(p,c){ const d=p.design||{}, ml=calcNum(d.fillMl), den=calcNum(d.density)||1, dos=calcNum(d.dosage), qty=calcNum(d.qty), bu=calcNum(d.budgetUnit), bk=calcNum(d.budgetKg), tp=calcNum(d.targetPrice);
+/* ผลการคำนวณงบ: คิดแยกตามประเภทสินค้า แล้วสรุปรวม (งบสูงสุดของสูตร = ของสินค้าที่เข้มที่สุด เพราะสูตรเดียวต้องใช้ได้กับทุกประเภท) */
+function calcBudgetOne(it,c){ const ml=calcNum(it.fillMl), den=calcNum(it.density)||1, dos=calcNum(it.dosage), qty=calcNum(it.qty), bu=calcNum(it.budgetUnit), bk=calcNum(it.budgetKg), tp=calcNum(it.targetPrice);
   const oilG=ml*den*dos/100, costUnit=oilG*c.perG, orderKg=oilG*qty/1000, orderCost=orderKg*c.total;
   const maxKg=bu>0&&oilG>0?bu/oilG*1000:(bk>0?bk:0), gap=maxKg?maxKg-c.total:null;
-  return {ml,den,dos,qty,bu,tp,oilG,costUnit,orderKg,orderCost,maxKg,gap,pctPrice:tp>0&&oilG>0?costUnit/tp*100:null}; }
+  return {app:it.app||'', label:calcAppName(it.app), ml,den,dos,qty,bu,tp,oilG,costUnit,orderKg,orderCost,maxKg,gap,pctPrice:tp>0&&oilG>0?costUnit/tp*100:null}; }
+function calcBudget(p,c){ const list=calcItems(p.design).map(it=>calcBudgetOne(it,c));
+  const tight=list.filter(b=>b.maxKg>0).sort((a,b)=>a.maxKg-b.maxKg)[0]||null;
+  return {list, n:list.length, tight, maxKg:tight?tight.maxKg:0, gap:tight?tight.gap:null,
+    orderKg:list.reduce((s,b)=>s+b.orderKg,0), orderCost:list.reduce((s,b)=>s+b.orderCost,0), hasOil:list.some(b=>b.oilG>0), hasQty:list.some(b=>b.oilG>0&&b.qty>0)}; }
+function calcCopyLines(B){ const out=[];
+  B.list.forEach(b=>{ const t=B.n>1?'['+b.label+'] ':''; if(b.oilG>0) out.push(t+`หัวน้ำหอม ${fmt(b.oilG,2)} ก./ชิ้น · ต้นทุน ${fmt(b.costUnit,2)} บาท/ชิ้น`+(b.qty>0?` · ${b.qty.toLocaleString('th-TH')} ชิ้น = ${fmt(b.orderKg,2)} กก. · ${fmt(b.orderCost,0)} บาท`:'')+(b.maxKg?` · งบสูงสุด ${fmt(b.maxKg,0)} บาท/กก. (${b.gap<0?'เกินงบ '+fmt(-b.gap,0):'อยู่ในงบ เหลือ '+fmt(b.gap,0)})`:'')); });
+  if(B.n>1&&B.hasQty) out.push(`รวมทุกประเภท: ${fmt(B.orderKg,2)} กก. · ${fmt(B.orderCost,0)} บาท`);
+  if(B.n>1&&B.tight) out.push(`งบสูงสุดของสูตร ${fmt(B.maxKg,0)} บาท/กก. (ตามสินค้าที่เข้มสุด: ${B.tight.label}) · ${B.gap<0?'เกินงบ '+fmt(-B.gap,0):'อยู่ในงบ เหลือ '+fmt(B.gap,0)} บาท/กก.`);
+  return out; }
 function calcDesignHtml(p){
   if(!CALC_LINK.briefs&&!CALC_LINK.loading) calcLoadLinks();
   const d=p.design||{}, L=p.link||{}, b=L.briefId?calcBrief(L.briefId):null, x=L.projectId?calcProj(L.projectId):null;
@@ -1489,7 +1530,14 @@ function calcDesignHtml(p){
   if(x){ const dd=x.data||{}; ctx.push(`<div class="cd-src"><b>${esc(x.pdrNo||'PDR')}</b> · ${esc(x.company||'')}${x.brand?' / '+esc(x.brand):''}${dd.products?`<div>สินค้า: ${esc(dd.products)}</div>`:''}${dd.target?`<div>ราคาเป้าหมาย: ${esc(dd.target)}</div>`:''}${dd.launch?`<div>วางตลาด: ${esc(dd.launch)}</div>`:''}${x.kind?`<div>ประเภทงาน: ${esc((typeof RD_KIND!=='undefined'&&RD_KIND[x.kind])||x.kind)}</div>`:''}</div>`); }
   if(b){ const dd=b.data||{}, j=v=>[].concat(v||[]).filter(Boolean).join(', ');
     ctx.push(`<div class="cd-src"><b>บรีฟ ${esc(b.brand||'')}</b> · ${esc(b.kind||'')}${j(dd.products)?`<div>สินค้า: ${esc(j(dd.products))}</div>`:''}${dd.qty||dd.retail||dd.budget?`<div>${[dd.qty?'จำนวน '+dd.qty:'',dd.retail?'ราคาขาย '+dd.retail:'',dd.budget?'งบ '+dd.budget:''].filter(Boolean).map(esc).join(' · ')}</div>`:''}${dd.approach?`<div>แนวทางกลิ่น: ${esc(dd.approach)}</div>`:''}${j(dd.like)?`<div>ชอบ: ${esc(j(dd.like))}</div>`:''}${j(dd.dislike)?`<div>ไม่ชอบ: ${esc(j(dd.dislike))}</div>`:''}${dd.refScent?`<div>กลิ่นอ้างอิง: ${esc(dd.refScent)}</div>`:''}${dd.avoid?`<div>ต้องหลีกเลี่ยง: ${esc(dd.avoid)}</div>`:''}</div>`); }
-  const ap=CALC_APPS.find(a=>a[0]===d.app), f=(k,l,ph,extra)=>`<div class="field"><label for="cd_${k}">${l}</label><input id="cd_${k}" data-design="${k}" type="number" min="0" step="any" value="${esc(d[k]??'')}" placeholder="${esc(ph||'')}" ${extra||''}></div>`;
+  const items=calcItems(d), on=a=>items.some(x=>(x.app||'')===a);
+  const fld=(i,k,l,ph)=>`<div class="field"><label for="cd_${k}_${i}">${l}</label><input id="cd_${k}_${i}" data-ditem="${i}" data-dk="${k}" type="number" min="0" step="any" value="${esc(items[i][k]??'')}" placeholder="${esc(ph||'')}"></div>`;
+  const card=(it,i)=>{ const r=calcAppRow(it.app), rec=r&&r[2]?String(r[2]):'';
+    const head=it.app?`<b>${esc(calcAppName(it.app))}</b>${rec?` <span class="muted">· แนะนำ ${rec}%</span>`:''}`:`<select data-ditem="${i}" data-dk="app" aria-label="เลือกประเภทสินค้า">${CALC_APPS.map(a=>`<option value="${a[0]}">${esc(a[0]?a[1]:'— ยังไม่เลือกประเภท —')}</option>`).join('')}</select>`;
+    return `<div class="cd-item"><h4><span>${head}</span>${it.app?'':`<button type="button" class="btn small" data-ddel="${i}">เอาออก</button>`}</h4><div class="settings cd-spec">
+      ${fld(i,'dosage','% หัวน้ำหอมในสินค้า', rec||'เช่น 18')}${fld(i,'fillMl','ปริมาตรบรรจุ (มล.) / ชิ้น','เช่น 30')}${fld(i,'density','ความหนาแน่น (ก./มล.)','1')}
+      ${fld(i,'qty','จำนวนสั่งผลิต (ชิ้น)','เช่น 1000')}${fld(i,'targetPrice','ราคาเป้าหมาย / ชิ้น (บาท)','จาก PDR')}${fld(i,'budgetUnit','งบหัวน้ำหอม / ชิ้น (บาท)','เช่น 12')}
+      ${fld(i,'budgetKg','หรือ งบหัวน้ำหอม / กก. (บาท)','ถ้าไม่ใส่งบต่อชิ้น')}</div></div>`; };
   return `<div class="cd-box" id="designBox">
     <div class="cd-h"><h3>งานออกแบบกลิ่น</h3><span class="muted">ผูกกับบรีฟหรือ PDR เพื่อดึงลูกค้า แบรนด์ สินค้า และแนวทางกลิ่นมาใช้${CALC_LINK.loading?' · กำลังโหลดรายการ…':''}</span></div>
     <div class="settings cd-links">
@@ -1497,29 +1545,30 @@ function calcDesignHtml(p){
       <div class="field"><label for="lnkBrief">บรีฟลูกค้า</label><select id="lnkBrief"><option value="">— ไม่ผูกบรีฟ —</option>${bl}</select></div>
     </div>
     ${ctx.length?`<div class="cd-ctx">${ctx.join('')}</div>`:''}
-    <div class="settings cd-spec">
-      <div class="field"><label for="cd_app">ประเภทสินค้า</label><select id="cd_app" data-design="app">${CALC_APPS.map(a=>`<option value="${a[0]}" ${a[0]===(d.app||'')?'selected':''}>${esc(a[1])}${a[2]?' · แนะนำ '+a[2]+'%':''}</option>`).join('')}</select></div>
-      ${f('dosage','% หัวน้ำหอมในสินค้า', ap&&ap[2]?String(ap[2]):'เช่น 18')}
-      ${f('fillMl','ปริมาตรบรรจุ (มล.) / ชิ้น','เช่น 30')}
-      ${f('density','ความหนาแน่น (ก./มล.)','1')}
-      ${f('qty','จำนวนสั่งผลิต (ชิ้น)','เช่น 1000')}
-      ${f('targetPrice','ราคาเป้าหมาย / ชิ้น (บาท)','จาก PDR')}
-      ${f('budgetUnit','งบหัวน้ำหอม / ชิ้น (บาท)','เช่น 12')}
-      ${f('budgetKg','หรือ งบหัวน้ำหอม / กก. (บาท)','ถ้าไม่ใส่งบต่อชิ้น')}
-    </div></div>`;
+    <div class="cd-tl">ประเภทสินค้า <span class="muted">เลือกได้หลายประเภท · กลิ่นเดียวใช้กับหลายสินค้าได้ แต่ละประเภทกรอก % ปริมาตร และจำนวนแยกกัน</span></div>
+    <div class="cd-chips" role="group" aria-label="ประเภทสินค้า">${CALC_APPS.filter(a=>a[0]).map(a=>`<label class="cd-chip ${on(a[0])?'on':''}"><input type="checkbox" data-dapp="${a[0]}" ${on(a[0])?'checked':''}><span>${esc(a[1])}${a[2]?` <i>${a[2]}%</i>`:''}</span></label>`).join('')}</div>
+    ${items.length?items.map(card).join(''):'<div class="muted" style="font-size:13px;margin:2px 0 4px">เลือกประเภทสินค้าด้านบน แล้วกรอก % หัวน้ำหอม ปริมาตร และจำนวนของแต่ละประเภท</div>'}
+  </div>`;
 }
 function calcBudgetHtml(p,c){
-  const B=calcBudget(p,c); if(!(B.oilG>0)&&!B.maxKg) return `<div class="card cd-card"><h3>เทียบงบงานออกแบบ</h3><div class="muted" style="font-size:13px">ใส่ประเภทสินค้า % หัวน้ำหอม และปริมาตรบรรจุในส่วน "งานออกแบบกลิ่น" เพื่อดูต้นทุนหัวน้ำหอมต่อชิ้น ต่อออร์เดอร์ และเทียบงบ</div></div>`;
-  const over=B.gap!=null&&B.gap<0, pct=B.maxKg?Math.min(100,c.total/B.maxKg*100):0;
-  return `<div class="card cd-card ${over?'over':B.maxKg?'ok':''}"><h3>เทียบงบงานออกแบบ</h3>
-    ${B.maxKg?`<div class="cd-gauge"><div class="cd-gv"><span>ต้นทุนสูตร</span><b>${c.complete?'':'≥ '}${fmt(c.total,0)}</b></div><div class="cd-gv r"><span>งบสูงสุด</span><b>${fmt(B.maxKg,0)}</b></div></div>
+  const B=calcBudget(p,c); if(!B.hasOil&&!B.maxKg) return `<div class="card cd-card"><h3>เทียบงบงานออกแบบ</h3><div class="muted" style="font-size:13px">เลือกประเภทสินค้า ใส่ % หัวน้ำหอม และปริมาตรบรรจุในส่วน "งานออกแบบกลิ่น" เพื่อดูต้นทุนหัวน้ำหอมต่อชิ้น ต่อออร์เดอร์ และเทียบงบ</div></div>`;
+  const over=B.gap!=null&&B.gap<0, pct=B.maxKg?Math.min(100,c.total/B.maxKg*100):0, multi=B.n>1;
+  const gauge=B.maxKg?`<div class="cd-gauge"><div class="cd-gv"><span>ต้นทุนสูตร</span><b>${c.complete?'':'≥ '}${fmt(c.total,0)}</b></div><div class="cd-gv r"><span>งบสูงสุด${multi?' · '+esc(B.tight.label):''}</span><b>${fmt(B.maxKg,0)}</b></div></div>
       <div class="meter ${over?'bad':''}"><i style="width:${pct.toFixed(1)}%"></i></div>
-      <div class="alert ${over?'bad':'ok'}">${over?`เกินงบ ${fmt(-B.gap,0)} บาท/กก. (${fmt(-B.gap/B.maxKg*100,1)}%) · ลองลดสัดส่วนหรือเปลี่ยนวัตถุดิบที่ดันต้นทุนด้านล่าง`:`อยู่ในงบ · เหลือ ${fmt(B.gap,0)} บาท/กก. (${fmt(B.gap/B.maxKg*100,1)}%)`}</div>`:'<div class="muted" style="font-size:12.5px;margin-bottom:6px">ใส่งบหัวน้ำหอมต่อชิ้นหรือต่อ กก. เพื่อเทียบงบ</div>'}
-    <dl class="kv">
-      ${B.oilG>0?`<dt>หัวน้ำหอมต่อชิ้น</dt><dd>${fmt(B.oilG,2)} ก.</dd><dt>ต้นทุนหัวน้ำหอม / ชิ้น</dt><dd>${fmt(B.costUnit,2)} บาท</dd>`:''}
-      ${B.pctPrice!=null?`<dt>คิดเป็นของราคาเป้าหมาย</dt><dd>${fmt(B.pctPrice,1)}%</dd>`:''}
-      ${B.qty>0&&B.oilG>0?`<dt>หัวน้ำหอมทั้งออร์เดอร์ ${B.qty.toLocaleString('th-TH')} ชิ้น</dt><dd>${fmt(B.orderKg,2)} กก.</dd><dt class="sum">ต้นทุนหัวน้ำหอมทั้งออร์เดอร์</dt><dd class="sum">${fmt(B.orderCost,0)} บาท</dd>`:''}
-    </dl></div>`;
+      <div class="alert ${over?'bad':'ok'}">${over?`เกินงบ ${fmt(-B.gap,0)} บาท/กก. (${fmt(-B.gap/B.maxKg*100,1)}%)${multi?` ตามสินค้าที่เข้มสุด (${esc(B.tight.label)})`:''} · ลองลดสัดส่วนหรือเปลี่ยนวัตถุดิบที่ดันต้นทุนด้านล่าง`:`อยู่ในงบ · เหลือ ${fmt(B.gap,0)} บาท/กก. (${fmt(B.gap/B.maxKg*100,1)}%)${multi?' ทุกประเภทที่ใส่งบไว้':''}`}</div>`
+    :'<div class="muted" style="font-size:12.5px;margin-bottom:6px">ใส่งบหัวน้ำหอมต่อชิ้นหรือต่อ กก. เพื่อเทียบงบ</div>';
+  const one=b=>`<dl class="kv">
+      ${b.oilG>0?`<dt>หัวน้ำหอมต่อชิ้น</dt><dd>${fmt(b.oilG,2)} ก.</dd><dt>ต้นทุนหัวน้ำหอม / ชิ้น</dt><dd>${fmt(b.costUnit,2)} บาท</dd>`:''}
+      ${b.pctPrice!=null?`<dt>คิดเป็นของราคาเป้าหมาย</dt><dd>${fmt(b.pctPrice,1)}%</dd>`:''}
+      ${b.qty>0&&b.oilG>0?`<dt>หัวน้ำหอมทั้งออร์เดอร์ ${b.qty.toLocaleString('th-TH')} ชิ้น</dt><dd>${fmt(b.orderKg,2)} กก.</dd><dt class="sum">ต้นทุนหัวน้ำหอมทั้งออร์เดอร์</dt><dd class="sum">${fmt(b.orderCost,0)} บาท</dd>`:''}
+    </dl>`;
+  const dash='–', ok=(b,f)=>b.oilG>0?f:dash;
+  const table=()=>`<div class="tablebox cd-tb"><table><thead><tr><th>ประเภทสินค้า</th><th>หัวน้ำหอม / ชิ้น</th><th>ต้นทุน / ชิ้น</th><th>จำนวน</th><th>หัวน้ำหอมรวม</th><th>ต้นทุนรวม</th><th>งบสูงสุด / กก.</th></tr></thead><tbody>
+    ${B.list.map(b=>`<tr><td>${esc(b.label)}</td><td class="num">${ok(b,fmt(b.oilG,2)+' ก.')}</td><td class="num">${ok(b,fmt(b.costUnit,2))}</td><td class="num">${b.qty>0?b.qty.toLocaleString('th-TH'):dash}</td><td class="num">${b.qty>0&&b.oilG>0?fmt(b.orderKg,2)+' กก.':dash}</td><td class="num">${b.qty>0&&b.oilG>0?fmt(b.orderCost,0):dash}</td><td class="num">${b.maxKg?fmt(b.maxKg,0)+(b.gap<0?` <span style="color:var(--bad);font-weight:600">(เกิน ${fmt(-b.gap,0)})</span>`:''):dash}</td></tr>`).join('')}
+    ${B.hasQty?`<tr class="cd-sum"><td><b>รวมทุกประเภท</b></td><td></td><td></td><td></td><td class="num"><b>${fmt(B.orderKg,2)} กก.</b></td><td class="num"><b>${fmt(B.orderCost,0)}</b></td><td></td></tr>`:''}</tbody></table></div>`;
+  return `<div class="card cd-card ${over?'over':B.maxKg?'ok':''}"><h3>เทียบงบงานออกแบบ${multi?` <span class="muted" style="font-weight:400;font-size:13px">· ${B.n} ประเภทสินค้า</span>`:''}</h3>
+    ${gauge}
+    ${multi?table():one(B.list[0])}</div>`;
 }
 /* ===== กระบวนการออกแบบ: โปรเจค · ตัวเลือกวัตถุดิบ · Feedback / Version ===== */
 function calcNewProduct(){ const p={id:newId(),name:'งานออกแบบ '+(state.products.length+1),unit:'pct',src:'ออกแบบในระบบ',...defaults(),ver:1,lines:[{code:'',nameIn:'',amt:''}]}; state.products.push(p); state.activeId=p.id; return p; }
@@ -1736,8 +1785,19 @@ $('#editor').addEventListener('change',e=>{
 $('#designPanel').addEventListener('change',e=>{
   const t=e.target; let p=active(); if(p&&p.sample) p=null; /* สูตรตัวอย่างไม่ถูกแก้ทับ: เริ่มงานใหม่แทน */
   if(t.id==='lnkPdr'||t.id==='lnkBrief'){ if(!p){ if(!t.value) return; p=calcNewProduct(); } const k=t.id==='lnkPdr'?'pdr':'brief'; if(t.value) calcApplyLink(p,k,t.value); else p.link=Object.assign({},p.link,{[k==='pdr'?'projectId':'briefId']:''}); p.sample=false; save(); renderWork(); return; }
-  if(t.dataset.design){ if(!p){ if(!t.value.trim()) return; p=calcNewProduct(); } p.design=Object.assign({}, p.design, {[t.dataset.design]: t.value.trim()}); if(t.dataset.design==='app'){ const ap=CALC_APPS.find(a=>a[0]===t.value); if(ap&&ap[2]) p.design.dosage=String(ap[2]); } p.sample=false; save(); renderWork(); }
+  if(t.dataset.dapp){ if(!p){ if(!t.checked) return; p=calcNewProduct(); }
+    const a=t.dataset.dapp, its=calcEnsureItems(p), i=its.findIndex(x=>(x.app||'')===a);
+    if(t.checked&&i<0) calcAddItem(p,a);
+    else if(!t.checked&&i>=0){ const it=its[i], rec=String((calcAppRow(a)||[])[2]||''), typed=CALC_ITEM_KEYS.some(k=>it[k]!==undefined&&it[k]!==''&&!(k==='dosage'&&String(it[k])===rec));
+      if(typed&&!confirm('เอาประเภท "'+calcAppName(a)+'" ออก? ค่าที่กรอกไว้ของประเภทนี้จะหายไป')){ renderWork(); return; } its.splice(i,1); }
+    p.sample=false; save(); renderWork(); return; }
+  if(t.dataset.ditem!==undefined&&t.dataset.dk){ if(!p){ if(!t.value.trim()) return; p=calcNewProduct(); }
+    const its=calcEnsureItems(p), it=its[+t.dataset.ditem]; if(!it) return;
+    if(t.dataset.dk==='app'){ const a=t.value; if(!a) return; if(its.some((x,j)=>j!==+t.dataset.ditem&&(x.app||'')===a)){ toast('มีประเภทนี้อยู่แล้ว'); renderWork(); return; } it.app=a; const r=calcAppRow(a); if(r&&r[2]&&(it.dosage===undefined||it.dosage==='')) it.dosage=String(r[2]); }
+    else it[t.dataset.dk]=t.value.trim();
+    p.sample=false; save(); renderWork(); return; }
 });
+$('#designPanel').addEventListener('click',e=>{ const b=e.target.closest('[data-ddel]'); if(!b) return; const p=active(); if(!p||p.sample) return; calcEnsureItems(p).splice(+b.dataset.ddel,1); save(); renderWork(); });
 $('#btnNewDesign').addEventListener('click',()=>{ calcNewProduct(); save(); renderWork(); $('#designPanel').scrollIntoView({behavior:'smooth',block:'start'}); });
 $('#editor').addEventListener('input',e=>{ if(e.target.id==='rmPick'){ const l=$('#rmPickList'); if(l) l.innerHTML=rmPickHtml(e.target.value); } });
 $('#versionPanel').addEventListener('click',async e=>{
@@ -1771,7 +1831,7 @@ $('#summary').addEventListener('click',e=>{
   if(e.target.id==='btnCopy'){
     const c=compute(p);
     const B=calcBudget(p,c), L=p.link||{}, X=L.projectId?calcProj(L.projectId):null;
-    const txt=[`ต้นทุนหัวน้ำหอม: ${p.name} (v${p.ver||1})`, X?`PDR: ${X.pdrNo} · ${X.brand||X.company||''}`:'', B.oilG>0?`หัวน้ำหอม ${fmt(B.oilG,2)} ก./ชิ้น · ต้นทุน ${fmt(B.costUnit,2)} บาท/ชิ้น`:'', B.maxKg?`งบสูงสุด ${fmt(B.maxKg,0)} บาท/กก. · ${B.gap<0?'เกินงบ '+fmt(-B.gap,0):'อยู่ในงบ เหลือ '+fmt(B.gap,0)} บาท/กก.`:'', B.qty>0&&B.oilG>0?`ทั้งออร์เดอร์ ${B.qty} ชิ้น: ${fmt(B.orderKg,2)} กก. · ${fmt(B.orderCost,0)} บาท`:'',`ต้นทุน RM: ${fmt(c.rm,2)} บาท/กก.`,`เผื่อสูญเสีย ${fmtP(c.loss*100)}%: ${fmt(c.lossCost,2)} บาท/กก.`,`ค่าแรง+โสหุ้ย: ${fmt(c.overhead,2)} บาท/กก.`,`ต้นทุนรวม: ${c.complete?'':'≥ '}${fmt(c.total,2)} บาท/กก. (${fmt(c.perG,4)} บาท/กรัม)`,`ต้นทุนต่อ batch ${fmtP(c.batchKg)} กก.: ${fmt(c.batchCost,2)} บาท`, c.complete?'ราคาครบทุกรายการ':`ยังขาดราคา ${c.missing} รายการ`,`ฐานราคา: ${DB.source.file} (อัปเดต ${DB.source.updated})`].filter(Boolean).join('\n');
+    const txt=[`ต้นทุนหัวน้ำหอม: ${p.name} (v${p.ver||1})`, X?`PDR: ${X.pdrNo} · ${X.brand||X.company||''}`:'', ...calcCopyLines(B),`ต้นทุน RM: ${fmt(c.rm,2)} บาท/กก.`,`เผื่อสูญเสีย ${fmtP(c.loss*100)}%: ${fmt(c.lossCost,2)} บาท/กก.`,`ค่าแรง+โสหุ้ย: ${fmt(c.overhead,2)} บาท/กก.`,`ต้นทุนรวม: ${c.complete?'':'≥ '}${fmt(c.total,2)} บาท/กก. (${fmt(c.perG,4)} บาท/กรัม)`,`ต้นทุนต่อ batch ${fmtP(c.batchKg)} กก.: ${fmt(c.batchCost,2)} บาท`, c.complete?'ราคาครบทุกรายการ':`ยังขาดราคา ${c.missing} รายการ`,`ฐานราคา: ${DB.source.file} (อัปเดต ${DB.source.updated})`].filter(Boolean).join('\n');
     const fallback=()=>{ let ta=$('#copyBox'); if(!ta){ ta=document.createElement('textarea'); ta.id='copyBox'; ta.readOnly=true; ta.style.cssText='width:100%;min-height:150px;border:1px solid var(--line-strong);border-radius:8px;padding:8px;background:var(--input-bg);font-size:12.5px'; e.target.after(ta); } ta.value=txt; ta.focus(); ta.select(); toast('เลือกข้อความไว้แล้ว กด Ctrl+C เพื่อคัดลอก'); };
     try{ navigator.clipboard.writeText(txt).then(()=>toast('คัดลอกสรุปแล้ว'), fallback); }catch(err){ fallback(); }
   }

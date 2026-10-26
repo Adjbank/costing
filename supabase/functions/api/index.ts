@@ -1682,7 +1682,7 @@ function pdFormulaData(f: Any) {
     batchG: numOrNull(f.batchG), targetPrice: numOrNull(f.targetPrice), note: str(f.note, 3000), lines: pdLines(f.lines), approvedBy: str(f.approvedBy, 120), approvedAt: str(f.approvedAt, 40),
     /* หัวใบสูตร FM-RD-03 (Product Information) */
     productName: str(f.productName, 200), fgCode: str(f.fgCode, 60), revision: numOrNull(f.revision), purpose: str(f.purpose, 200), packaging: str(f.packaging, 200), fillQty: str(f.fillQty, 60), qty: numOrNull(f.qty),
-    sampleDue: pdDate(f.sampleDue), designDate: pdDate(f.designDate), mockupDate: pdDate(f.mockupDate), perfumer: str(f.perfumer, 120), designer: str(f.designer, 120), operator: str(f.operator, 120),
+    sampleDue: pdDate(f.sampleDue), designDate: pdDate(f.designDate), mockupRequest: pdDate(f.mockupRequest), mockupDate: pdDate(f.mockupDate), appearance: str(f.appearance, 120), colour: str(f.colour, 60), odor: str(f.odor, 120), perfumer: str(f.perfumer, 120), designer: str(f.designer, 120), operator: str(f.operator, 120),
     steps: pdSteps(f.steps), spec: pdSpec(f.spec), stab: pdStab(f.stab), concl: pdConcl(f.concl) };
 }
 const fmOut = (r: Any) => ({ id: String(r.id), code: String(r.code || ""), projectId: String(r.project_id || ""), name: String(r.name), baseId: String(r.base_id || ""), status: String(r.status), ...pdFormulaData(r.data || {}),

@@ -864,6 +864,23 @@ main.wrap::after{content:"";display:block;height:52px;margin:36px 0 6px;border-r
 .cd-ctx{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin:0 0 12px}
 .cd-src{background:var(--card);border-radius:14px;padding:10px 12px;font-size:12.5px;line-height:1.55;color:var(--ink-muted)} .cd-src b{color:var(--ink);font-size:13.5px}
 .pd-lines tr.pd-sub td{font-size:12.5px;color:var(--ink-muted);background:rgba(196,109,78,.06);padding-top:5px;padding-bottom:5px}.pd-lines tr.pd-sub td:nth-child(4){padding-left:18px}.pd-lines td.num{white-space:nowrap}
+.doc-sheet .fm3{font-size:11px;color:#111}
+.doc-sheet .fm3-top{text-align:right;font-size:10px;color:#333;margin:0 0 30px}
+.doc-sheet .fm3-title{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;border-bottom:1px solid #444;padding-bottom:14px;margin-bottom:12px}
+.doc-sheet .fm3-title h1{font-size:19px;font-weight:500;margin:0;line-height:1.3}.doc-sheet .fm3-title .th{font-size:13px;font-weight:500;margin-top:2px}
+.doc-sheet .fm3-doc{font-size:11.5px;margin:6px 0 4px}.doc-sheet .fm3-doc u{text-underline-offset:3px}
+.doc-sheet .fm3 h2{font-size:14.5px;font-weight:500;margin:22px 0 10px;letter-spacing:.01em}
+.doc-sheet .fm3 table{border-collapse:collapse;width:100%;font-size:10.5px}
+.doc-sheet .fm3 td,.doc-sheet .fm3 th{border:1px solid #111;padding:5px 7px;vertical-align:middle;height:27px;font-weight:400;text-align:left;background:none}
+.doc-sheet .fm3 th{text-align:center;line-height:1.35;color:#111}
+.doc-sheet .fm3 td.lab{width:21%;font-size:10px}
+.doc-sheet .fm3 td.ctr{text-align:center}.doc-sheet .fm3 td.num{text-align:right;white-space:nowrap}
+.doc-sheet .fm3 tr.sub td{color:#444;font-size:9.5px;height:auto;padding-top:2px;padding-bottom:2px}
+.doc-sheet .fm3 tr.tot td{font-weight:600}
+.doc-sheet .fm3-c .cl{margin:8px 0 8px 22px;font-size:11.5px}.doc-sheet .fm3-c .ul{display:inline-block;border-bottom:1px solid #111;vertical-align:bottom;padding:0 4px}
+.doc-sheet .fm3-page+.fm3-page{margin-top:34px;padding-top:26px;border-top:1px dashed #bbb}
+@media print{.doc-sheet .fm3-page+.fm3-page{break-before:page;margin-top:0;padding-top:0;border-top:0}
+  html,body.doc-open{background:#fff!important}body.doc-open::before,body.doc-open::after{display:none!important}}
 .pd-ck{display:inline-flex;align-items:center;gap:6px;margin:0 14px 0 0;font-size:13px;cursor:pointer}.pd-ck input{width:auto;margin:0}
 #pdExtra .pd-lines td .x{opacity:.7}
 .pd-pi{grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
@@ -4958,7 +4975,7 @@ function pdClearScent(f){ f.fragranceScentId=''; f.fragranceFormulaId=''; }
 function pdNewFormula(base, project, scent){
   const f={id:'', code:'ใหม่', projectId:project?project.id:'', name:'', baseId:'', baseName:'', category:'', mode:'standard', customer:project?project.company||'':'', brand:project?project.brand||'':'',
     fragranceFormulaId:'', fragranceScentId:'', fragranceName:'', fragranceCode:'', fragrancePrice:null, batchG:1000, targetPrice:null, note:'', lines:[], status:'draft',
-    steps:[], spec:[], stab:[], concl:{}, productName:'', fgCode:'', revision:0, purpose:'', packaging:'', fillQty:'', qty:null, sampleDue:'', designDate:'', mockupDate:'', perfumer:'', designer:'', operator:''};
+    steps:[], spec:[], stab:[], concl:{}, mockupRequest:'', appearance:'', colour:'', odor:'', productName:'', fgCode:'', revision:0, purpose:'', packaging:'', fillQty:'', qty:null, sampleDue:'', designDate:'', mockupDate:'', perfumer:'', designer:'', operator:''};
   if(base) pdApplyBase(f, base);
   if(!scent && project){ const mine=(PF.scents||[]).filter(s=>s.projectId===project.id&&s.status!=='retired'); if(mine.length===1) scent=mine[0]; }   /* โครงการมีกลิ่นเดียว → เลือกให้ */
   if(scent) pdApplyScent(f, scent);
@@ -5177,7 +5194,8 @@ function pdFormulaPage(f){
         ${pdField('Batch size (g)', pdInp('batchG', f.batchG, '1000', 'number'))}
         ${pdField('จุดประสงค์', `<input data-pk="purpose" list="pdPurposeList" value="${esc(f.purpose||'')}" maxlength="200" placeholder="เช่น ส่งตัวอย่างให้ลูกค้า"><datalist id="pdPurposeList">${['ทดลองสูตรครั้งแรก','ปรับแก้ตามผลประเมินลูกค้า','ส่งตัวอย่างให้ลูกค้า','ต้นแบบก่อนผลิต (Pilot)','ลดต้นทุน','ปรับกลิ่นสินค้าเดิม'].map(x=>`<option value="${esc(x)}">`).join('')}</datalist>`)}
         ${pdField('บรรจุภัณฑ์ (ประเภท/ขนาด)', pdInp('packaging', f.packaging, 'เช่น ขวดปั๊ม PET 200 ml'))}${pdField('ปริมาณบรรจุ', pdInp('fillQty', f.fillQty, 'เช่น 200 ml'))}${pdField('จำนวน (ชิ้น)', pdInp('qty', f.qty, '', 'number'))}
-        ${pdField('กำหนดส่งตัวอย่าง', pdInp('sampleDue', f.sampleDue, '', 'date'))}${pdField('วันออกแบบสูตร Mock Up', pdInp('designDate', f.designDate, '', 'date'))}${pdField('วันที่ทำ Mock Up', pdInp('mockupDate', f.mockupDate, '', 'date'))}
+        ${pdField('กำหนดส่งตัวอย่าง (SA)', pdInp('sampleDue', f.sampleDue, '', 'date'))}${pdField('วันออกแบบสูตร', pdInp('designDate', f.designDate, '', 'date'))}${pdField('วันที่ขอ Mock Up (RD)', pdInp('mockupRequest', f.mockupRequest, '', 'date'))}
+        ${pdField('วันที่ทำ Mock Up', pdInp('mockupDate', f.mockupDate, '', 'date'))}${pdField('ลักษณะเนื้อ (Appearance)', pdInp('appearance', f.appearance, 'เช่น ครีมข้นสีขาว'))}${pdField('สี (Colour)', pdInp('colour', f.colour, ''))}${pdField('โทนกลิ่น (Odor)', pdInp('odor', f.odor, ''))}
         ${pdField('ผู้ออกแบบกลิ่น', `<input data-pk="perfumer" list="pdPeople" value="${esc(f.perfumer||'')}" maxlength="120" placeholder="อีเมลหรือชื่อ">`)}${pdField('ผู้ออกแบบผลิตภัณฑ์', `<input data-pk="designer" list="pdPeople" value="${esc(f.designer||'')}" maxlength="120" placeholder="อีเมลหรือชื่อ">`)}${pdField('ผู้ปฏิบัติการ', `<input data-pk="operator" list="pdPeople" value="${esc(f.operator||'')}" maxlength="120" placeholder="อีเมลหรือชื่อ">`)}
         <datalist id="pdPeople">${rdEmailList().map(e=>`<option value="${esc(e)}">`).join('')}</datalist>
       </div></div>
@@ -5250,31 +5268,57 @@ function pdRedraw(){
   drawPd(); if(key){ const el=$('#pdView').querySelector(key); if(el) el.focus(); }
 }
 /* ใบสูตรผลิตภัณฑ์สำหรับพิมพ์ (ใช้โครงหน้าพิมพ์เดียวกับเอกสารวัตถุดิบ) */
+/* ใบสูตรพิมพ์ = แบบฟอร์ม FM-RD-03 Rev.01 "Prototype Product Formulation Record"
+   หน้า 1 ข้อมูลโครงการ + รายการสูตร (ไม่มีราคา/ต้นทุน เพราะเป็นเอกสารหน้างาน มีช่อง drop และ ชั่งจริง ให้เขียน) · หน้า 2 วิธีทำ ข้อกำหนด ประเมินความคงตัว · หน้า 3 สรุปผล */
+const FM3_REV='FM-RD-03: Rev. No.01. 18/03/2569';
 function pdPrintHtml(f){
-  const dd=v=>v?docDate(v+'T12:00:00+07:00'):'', who=v=>String(v||'').includes('@')?shortName(v):String(v||'');
-  const c=pdCost(f), batch=toNum(f.batchG)||1000, p=pdProj(f.projectId), base=PD.bases.find(b=>b.id===f.baseId);
-  const rows=c.rows.map((r,i)=>{ const main=`<tr><td style="text-align:center">${i+1}</td><td style="text-align:center">${esc(r.ln.part||'')}</td><td>${esc(r.ln.code||'')}</td><td>${esc(r.ln.frag?(f.fragranceName||'Fragrance'):r.ln.name)}${r.ln.frag&&f.fragranceCode?` <span class="dsmall">(${esc(f.fragranceCode)})</span>`:''}${r.ln.fn?`<div class="dsmall">${esc(r.ln.fn)}</div>`:''}</td><td style="text-align:right">${fmt(r.pct,2)}</td><td style="text-align:right">${fmt(r.pct/100*batch,2)}</td><td style="text-align:right">${r.pr?fmt(r.pr.price,2):'-'}</td><td style="text-align:right">${r.cost!=null?fmt(r.cost,2):'-'}</td></tr>`;
-    if(!r.ln.frag) return main; const fp=pdFragParts(f, r.pct); let sum=0;
-    if(!fp.parts.length&&fp.notes.length) return main+fp.notes.map(([k,v])=>`<tr><td></td><td></td><td></td><td class="dsmall" colspan="5">&nbsp;&nbsp;↳ ${k}: ${esc(v)}</td></tr>`).join('');
-    const sub=fp.parts.map((x,k)=>{ if(x.cost!=null) sum+=x.cost; return `<tr><td style="text-align:center" class="dsmall">${i+1}.${k+1}</td><td></td><td class="dsmall">${esc(x.code)}</td><td class="dsmall">&nbsp;&nbsp;↳ ${esc(x.name)}</td><td style="text-align:right" class="dsmall">${fmt(x.pct,3)}</td><td style="text-align:right" class="dsmall">${fmt(x.pct/100*batch,3)}</td><td style="text-align:right" class="dsmall">${x.priceKg!=null?fmt(x.priceKg,2):'-'}</td><td style="text-align:right" class="dsmall">${x.cost!=null?fmt(x.cost,2):'-'}</td></tr>`; }).join('');
-    const diff=r.cost!=null&&fp.parts.length?r.cost-sum:0;
-    return main+sub+(Math.abs(diff)>0.005?`<tr><td></td><td></td><td></td><td class="dsmall">&nbsp;&nbsp;↳ ${fp.total>0&&r.pr&&Math.abs(r.pr.price-fp.total)>0.01?'Difference vs. the fragrance price used in this formula':'Loss / labour / overhead of the fragrance formula'}</td><td></td><td></td><td></td><td style="text-align:right" class="dsmall">${fmt(diff,2)}</td></tr>`:''); }).join('');
-  return `${docHead('PRODUCT FORMULA SHEET', `Formula No. ${esc(f.code)} · ${f.updatedAt?'Updated '+docDate(f.updatedAt):'Draft'} · Printed ${docDate()}`)}
-    ${docSec(1,'Product Information')}${docKv([['Formula code',f.code],['Revision',f.revision!=null?'R'+f.revision:''],['Formula name',f.name],['Project',p?`${p.pdrNo} · ${p.brand||p.company}`:''],['Customer',f.customer],['Brand',f.brand],
-      ['Sample name',f.fragranceName],['Sample code',f.fragranceCode],['Product name',f.productName],['Product code (FG)',f.fgCode],['Product type',f.category],['Purpose',f.purpose],
-      ['Packaging',f.packaging],['Fill volume',f.fillQty],['Quantity (pcs)',f.qty!=null?Number(f.qty).toLocaleString('en-GB'):''],['Sample due date (SA)',dd(f.sampleDue)],['Mock-up design date',dd(f.designDate)],['Mock-up made on',dd(f.mockupDate)],
-      ['Fragrance designer',who(f.perfumer)],['Product designer',who(f.designer)],['Operator',who(f.operator)],['Base formula',f.baseName?`${f.baseName} (${f.category})`:''],
-      ['Formula type',f.mode==='modified'?'Modified base / new formula – stability test and pilot batch required':'Standard base – fragrance changed only (standard stability data applies)'],['Status',PD_STATUS[f.status]?PD_STATUS[f.status][0]:f.status],['Batch size',fmt(batch,0)+' g']])}
-    ${docSec(2,'Formula')}<table class="dt"><thead><tr><th>No.</th><th>Part</th><th>RM code</th><th>Ingredient</th><th>%</th><th>g / batch</th><th>Price ฿/kg</th><th>Cost ฿/kg</th></tr></thead><tbody>${rows}</tbody>
-      <tfoot><tr><th colspan="4" style="text-align:right">Total</th><th style="text-align:right">${fmt(c.pctSum,2)}</th><th style="text-align:right">${fmt(c.pctSum/100*batch,2)}</th><th></th><th style="text-align:right">${fmt(c.total,2)}</th></tr></tfoot></table>
-    <p class="dsmall">Raw material cost ${fmt(c.total,2)} ฿/kg · fragrance ${fmt(c.fragPct,2)}% = ${fmt(c.fragCost,2)} ฿/kg${toNum(f.targetPrice)>0?` · target ${fmt(f.targetPrice,2)} ฿/kg (${c.total>toNum(f.targetPrice)?'over by '+fmt(c.total-toNum(f.targetPrice),2):'under by '+fmt(toNum(f.targetPrice)-c.total,2)} ฿/kg)`:''}${c.missing?` · ${c.missing} item(s) without price`:''}</p>
-    ${docSec(3,'Manufacturing Instructions')}<table class="dt"><thead><tr><th>No.</th><th>Step</th><th>Time (min)</th><th>Temp. (°C)</th><th>Speed (rpm)</th><th>Equipment</th><th>Remarks</th></tr></thead><tbody>${(f.steps||[]).filter(x=>x.step||x.min||x.temp||x.rpm||x.equip||x.note).map((x,i)=>`<tr><td style="text-align:center">${i+1}</td><td>${esc(x.step)}</td><td style="text-align:center">${esc(x.min)}</td><td style="text-align:center">${esc(x.temp)}</td><td style="text-align:center">${esc(x.rpm)}</td><td>${esc(x.equip)}</td><td>${esc(x.note)}</td></tr>`).join('')||'<tr><td colspan="7" style="height:44px">&nbsp;</td></tr>'}</tbody></table>
-    ${docSec(4,'Product Specification Summary')}<table class="dt"><thead><tr><th>Test Parameter</th><th>Target Value</th><th>Method / Instrument</th><th>Spec Limit (if any)</th><th>Result</th></tr></thead><tbody>${pdSpecRows(f).map(r=>`<tr><td>${esc(r.name)}</td><td>${esc(r.target)}</td><td>${esc(r.method)}</td><td>${esc(r.limit)}</td><td>${esc(r.result)}</td></tr>`).join('')}</tbody></table>
-    ${docSec(5,'Product Stability Evaluation After Fragrance Addition')}<table class="dt"><thead><tr><th>Evaluation item</th><th>Observation</th><th>Pass/Fail</th><th>Note</th></tr></thead><tbody>${PD_STAB.map(([lab,opts],i)=>{ const s=(f.stab||[])[i]||{}; return `<tr><td>${esc(lab)}</td><td>${opts.map((o,k)=>(String(s.obs)===String(k)?'☑ ':'☐ ')+esc(o)).join('&nbsp;&nbsp;')}</td><td style="text-align:center">${s.pf==='pass'?'Pass':s.pf==='fail'?'Fail':''}</td><td>${esc(s.note||'')}</td></tr>`; }).join('')}</tbody></table>
-    ${docSec(6,'Conclusion &amp; Recommendation')}<div style="line-height:1.9">R&amp;D evaluation summary<br>${PD_CONCL.map(([k,l])=>`${(f.concl||{}).result===k?'☑':'☐'} ${esc(l)}${k==='cond'&&(f.concl||{}).cond?': '+esc(f.concl.cond):''}${k==='fail'&&(f.concl||{}).fail?': '+esc(f.concl.fail):''}`).join('<br>')}</div>
-    ${docSec(7,'Base Requirements and Notes')}${docKv([['Shelf life',base&&base.shelfLife],['Stability requirement',base&&base.stability],['Benchmark',base&&base.benchmark],['Notes',f.note]])}
-    ${docSign([['Prepared by (Product Development)',''],['Approved by',f.approvedBy?shortName(f.approvedBy):'']])}
-    <p class="dsmall dfoot">Product Formula Sheet ${esc(f.code)} · Internal document · Prices are current purchase prices at the time of printing</p>`;
+  const batch=toNum(f.batchG)||1000, c=pdCost(f), e=esc;
+  const th=v=>{ if(!v) return ''; const m=String(v).match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return `${+m[3]}/${+m[2]}/${+m[1]+543}`; const d=new Date(v); return isNaN(d)?'':`${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()+543}`; };
+  const who=v=>String(v||'').includes('@')?shortName(v):String(v||'');
+  const sample=[f.fragranceName, f.fragranceCode?'('+f.fragranceCode+')':''].filter(Boolean).join(' ');
+  const kv=(l1,v1,l2,v2,tall)=>`<tr${tall?' style="height:46px"':''}><td class="lab">${l1}</td><td>${e(v1==null?'':v1)}</td><td class="lab">${l2}</td><td>${e(v2==null?'':v2)}</td></tr>`;
+  const info=[
+    kv('ชื่อสินค้า/กลิ่น',sample,'วันออกแบบสูตร',th(f.designDate)),
+    kv('ชื่อกิจการ (บริษัท/ลูกค้า)',f.customer,'วันที่ขอ Mock Up (RD)',th(f.mockupRequest)),
+    kv('ชื่อแบรนด์ (Brand)',f.brand,'วันที่ทำ Mock Up',th(f.mockupDate)),
+    kv('Product',f.productName,'ลักษณะเนื้อ(Appearance)',f.appearance),
+    kv('รหัส Product',f.fgCode,'สี (Colour)',f.colour),
+    kv('จุดประสงค์',f.purpose,'โทนกลิ่น (Odor)',f.odor),
+    kv('บรรจุภัณฑ์<br>(ประเภท/ขนาด)',f.packaging,'ผู้ออกแบบกลิ่น',who(f.perfumer),true),
+    kv('ปริมาณบรรจุ',f.fillQty,'ผู้ออกแบบผลิตภัณฑ์',who(f.designer)),
+    kv('จำนวน (ชิ้น)',f.qty!=null?Number(f.qty).toLocaleString('en-GB'):'','ผู้ปฏิบัติการ',who(f.operator)),
+    kv('กำหนดส่งตัวอย่าง (SA)',th(f.sampleDue),'Batch size',fmt(batch,0)+' g')
+  ].join('');
+  const blank8='<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
+  const rows=[];
+  c.rows.forEach((r,i)=>{ const ln=r.ln, g=r.pct/100*batch;
+    rows.push(`<tr><td class="ctr">${e(ln.part||'')}</td><td class="ctr">${i+1}</td><td>${e(ln.frag?(f.fragranceCode||''):(ln.code||''))}</td><td>${e(ln.frag?(f.fragranceName||'Fragrance'):(ln.name||''))}</td><td></td><td class="num">${r.pct?fmt(r.pct,2):''}</td><td class="num">${g?fmt(g,2):''}</td><td></td></tr>`);
+    if(ln.frag){ pdFragParts(f, r.pct).parts.forEach((x,k)=>rows.push(`<tr class="sub"><td></td><td class="ctr">${i+1}.${k+1}</td><td>${e(x.code)}</td><td>&nbsp;&nbsp;↳ ${e(x.name)}</td><td></td><td class="num">${fmt(x.pct,3)}</td><td class="num">${fmt(x.pct/100*batch,3)}</td><td></td></tr>`)); } });
+  while(rows.length<9) rows.push(blank8);
+  const steps=(f.steps||[]).filter(x=>x.step||x.min||x.temp||x.rpm||x.equip||x.note), stepRows=steps.map((x,i)=>`<tr><td class="ctr">${i+1}</td><td>${e(x.step)}</td><td class="ctr">${e(x.min)}</td><td class="ctr">${e(x.temp)}</td><td class="ctr">${e(x.rpm)}</td><td>${e(x.equip)}</td><td>${e(x.note)}</td></tr>`);
+  while(stepRows.length<6) stepRows.push('<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>');
+  const hdrTarget=[f.appearance,f.colour,f.odor];
+  const specRows=pdSpecRows(f).map((r,i)=>`<tr><td>${e(r.name)}</td><td>${e(r.target||hdrTarget[i]||'')}</td><td>${e(r.method)}</td><td>${e(r.limit)}</td><td>${e(r.result)}</td></tr>`).join('');
+  const stabRows=PD_STAB.map(([lab,opts],i)=>{ const s=(f.stab||[])[i]||{}; return `<tr><td><b>${e(lab)}</b></td><td>${opts.map((o,k)=>(String(s.obs)===String(k)?'☑':'☐')+' '+e(o)).join('&nbsp;&nbsp;&nbsp;')}</td><td class="ctr">${s.pf==='pass'?'Pass':s.pf==='fail'?'Fail':''}</td><td>${e(s.note||'')}</td></tr>`; }).join('');
+  const cc=f.concl||{}, ul=(t,min)=>`<span class="ul" style="min-width:${min}px">${t?e(t):'&nbsp;'}</span>`;
+  const concl=[`${cc.result==='pass'?'☑':'☐'} ผ่าน เหมาะสำหรับการพัฒนาในสูตรนี้`, `${cc.result==='cond'?'☑':'☐'} ผ่านแบบมีเงื่อนไข (โปรดปรับสูตร / สารช่วยกระจายกลิ่น) ${ul(cc.cond,260)}`, `${cc.result==='fail'?'☑':'☐'} ไม่ผ่าน เนื่องจาก ${ul(cc.fail,420)}`].map(x=>`<div class="cl">${x}</div>`).join('');
+  const top=`<div class="fm3-top">${FM3_REV}</div>`;
+  return `<div class="fm3">
+    <div class="fm3-page">${top}
+      <div class="fm3-title"><div><h1>Prototype Product Formulation Record</h1><div class="th">แบบฟอร์มบันทึกสูตรต้นแบบและการทดลองผลิตภัณฑ์</div></div><img src="${LOGO.h}" alt="Scent &amp; Sense" style="height:56px;width:auto"></div>
+      <div class="fm3-doc">Document No: <u>&nbsp;${e(f.code&&f.code!=='ใหม่'?f.code:'')}&nbsp;&nbsp;&nbsp;</u> | Reversion No.: <u>&nbsp;${f.revision!=null?e(String(f.revision)):''}&nbsp;&nbsp;&nbsp;</u> | Date Created: <u>&nbsp;${e(th(f.createdAt))}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</u></div>
+      <h2>Project Information</h2><table class="fm3-info"><tbody>${info}</tbody></table>
+      <h2>Formulation Details</h2><table class="fm3-f"><thead><tr><th style="width:7%">PART</th><th style="width:7%">ลำดับ</th><th style="width:17%">รหัสวัตถุดิบ</th><th>ชื่อสาร</th><th style="width:7%">drop</th><th style="width:10%">% (w/w)</th><th style="width:11%">ปริมาณ(g)</th><th style="width:11%">ชั่งจริง (g)</th></tr></thead><tbody>${rows.join('')}<tr class="tot"><td colspan="4" class="ctr">ยอดรวม</td><td></td><td class="num">${fmt(c.pctSum,2)}</td><td class="num">${fmt(c.pctSum/100*batch,2)}</td><td></td></tr></tbody></table>
+    </div>
+    <div class="fm3-page">${top}
+      <h2>Manufacturing Instructions</h2><table class="fm3-m"><thead><tr><th style="width:7%">ลำดับ</th><th>ขั้นตอน</th><th style="width:10%">เวลาที่ใช้<br>(นาที)</th><th style="width:9%">อุณหภูมิ<br>(°C)</th><th style="width:11%">ความ<br>เร็วรอบ<br>(ถ้ามี)</th><th style="width:16%">อุปกรณ์ที่ใช้</th><th style="width:19%">หมายเหตุ</th></tr></thead><tbody>${stepRows.join('')}</tbody></table>
+      <h2>Product Specification Summary</h2><table class="fm3-s"><thead><tr><th>Test Parameter</th><th>Target Value</th><th>Method / Instrument</th><th>Spec Limit<br>(if any)</th><th>Result</th></tr></thead><tbody>${specRows}</tbody></table>
+      <h2>Product Stability Evaluation After Fragrance Addition</h2><table class="fm3-s fm3-st"><thead><tr><th>หัวข้อประเมิน</th><th>สังเกต / รายละเอียด</th><th style="width:12%">Pass/Fail</th><th style="width:22%">Note</th></tr></thead><tbody>${stabRows}</tbody></table>
+    </div>
+    <div class="fm3-page">${top}
+      <h2>Conclusion &amp; Recommendation</h2><div class="fm3-c"><div style="margin-bottom:8px">สรุปผลการประเมินโดยทีม R&amp;D</div>${concl}</div>
+    </div>
+  </div>`;
 }
 function pdPrint(f){ $('#docPrint').innerHTML=pdPrintHtml(f); $('#docTitle').textContent='ใบสูตรผลิตภัณฑ์ · '+f.code; $('#docOverlay').hidden=false; document.body.classList.add('doc-open'); $('#docPrint').scrollTop=0; }
 /* บล็อกในหน้าโครงการ: สูตรผลิตภัณฑ์ของโครงการนั้น */

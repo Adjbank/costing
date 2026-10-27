@@ -1569,8 +1569,7 @@ function calcCopyLines(B){ const out=[];
 function calcDesignHtml(p){
   if(!CALC_LINK.briefs&&!CALC_LINK.loading) calcLoadLinks();
   const d=p.design||{}, L=p.link||{}, b=L.briefId?calcBrief(L.briefId):null, x=L.projectId?calcProj(L.projectId):null;
-  const bl=(CALC_LINK.briefs||[]).map(v=>`<option value="${esc(v.id)}" ${v.id===L.briefId?'selected':''}>${esc((v.brand||(v.data&&v.data.company)||'(ไม่มีชื่อ)')+' · '+(v.kind||'')+' · '+((typeof PF_BSTAT!=='undefined'&&PF_BSTAT[v.status])?PF_BSTAT[v.status][0]:v.status))}</option>`).join('');
-  const pl=(CALC_LINK.projects||[]).filter(v=>v.stage!=='lost').map(v=>`<option value="${esc(v.id)}" ${v.id===L.projectId?'selected':''}>${esc((v.pdrNo||'(ไม่มีเลข PDR)')+' · '+(v.brand||v.company||'')+(v.title?' · '+v.title:''))}</option>`).join('');
+  const lo=calcLinkOpts(L, CALC_LINK.q||''), bl=lo.bl, pl=lo.pl;
   const ctx=[];
   if(x){ const dd=x.data||{}; ctx.push(`<div class="cd-src"><b>${esc(x.pdrNo||'PDR')}</b> · ${esc(x.company||'')}${x.brand?' / '+esc(x.brand):''}${dd.products?`<div>สินค้า: ${esc(dd.products)}</div>`:''}${dd.target?`<div>ราคาเป้าหมาย: ${esc(dd.target)}</div>`:''}${dd.launch?`<div>วางตลาด: ${esc(dd.launch)}</div>`:''}${x.kind?`<div>ประเภทงาน: ${esc((typeof RD_KIND!=='undefined'&&RD_KIND[x.kind])||x.kind)}</div>`:''}</div>`); }
   if(b){ const dd=b.data||{}, j=v=>[].concat(v||[]).filter(Boolean).join(', ');
@@ -1586,14 +1585,22 @@ function calcDesignHtml(p){
   return `<div class="cd-box" id="designBox">
     <div class="cd-h"><h3>งานออกแบบกลิ่น</h3><span class="muted">ผูกกับบรีฟหรือ PDR เพื่อดึงลูกค้า แบรนด์ สินค้า และแนวทางกลิ่นมาใช้${CALC_LINK.loading?' · กำลังโหลดรายการ…':''}</span></div>
     <div class="settings cd-links">
-      <div class="field"><label for="lnkPdr">PDR จากฝ่ายขาย</label><select id="lnkPdr"><option value="">— ไม่ผูก PDR —</option>${pl}</select></div>
-      <div class="field"><label for="lnkBrief">บรีฟลูกค้า</label><select id="lnkBrief"><option value="">— ไม่ผูกบรีฟ —</option>${bl}</select></div>
+      <div class="field" style="grid-column:1/-1"><label for="lnkQ">ค้นหา PDR / บรีฟ</label><input id="lnkQ" type="search" autocomplete="off" placeholder="พิมพ์เลข PDR ชื่อลูกค้า แบรนด์ ชื่องาน หรือสินค้า" value="${esc(CALC_LINK.q||'')}"></div>
+      <div class="field"><label for="lnkPdr">PDR จากฝ่ายขาย</label><select id="lnkPdr">${pl}</select></div>
+      <div class="field"><label for="lnkBrief">บรีฟลูกค้า</label><select id="lnkBrief">${bl}</select></div>
     </div>
     ${ctx.length?`<div class="cd-ctx">${ctx.join('')}</div>`:''}
     <div class="cd-tl">ประเภทสินค้า <span class="muted">เลือกได้หลายประเภท · กลิ่นเดียวใช้กับหลายสินค้าได้ แต่ละประเภทกรอก % ปริมาตร และจำนวนแยกกัน</span></div>
     <div class="cd-chips" role="group" aria-label="ประเภทสินค้า">${CALC_APPS.filter(a=>a[0]).map(a=>`<label class="cd-chip ${on(a[0])?'on':''}"><input type="checkbox" data-dapp="${a[0]}" ${on(a[0])?'checked':''}><span>${esc(a[1])}${a[2]?` <i>${a[2]}%</i>`:''}</span></label>`).join('')}</div>
     ${items.length?items.map(card).join(''):'<div class="muted" style="font-size:13px;margin:2px 0 4px">เลือกประเภทสินค้าด้านบน แล้วกรอก % หัวน้ำหอม ปริมาตร และจำนวนของแต่ละประเภท</div>'}
   </div>`;
+}
+/* รายการ PDR / บรีฟ ในช่องผูก · กรองด้วยคำค้น (เลขที่ PDR ลูกค้า แบรนด์ ชื่องาน สินค้า / ชนิดบรีฟ) · ตัวที่ผูกอยู่แสดงเสมอ */
+function calcLinkOpts(L, q){
+  const t=String(q||'').trim().toLowerCase(), hit=(...xs)=>!t||xs.some(x=>String(x||'').toLowerCase().includes(t));
+  const bl=(CALC_LINK.briefs||[]).filter(v=>v.id===L.briefId||hit(v.brand,v.data&&v.data.company,v.kind,v.code,v.data&&v.data.contact)).map(v=>`<option value="${esc(v.id)}" ${v.id===L.briefId?'selected':''}>${esc((v.brand||(v.data&&v.data.company)||'(ไม่มีชื่อ)')+' · '+(v.kind||'')+' · '+((typeof PF_BSTAT!=='undefined'&&PF_BSTAT[v.status])?PF_BSTAT[v.status][0]:v.status))}</option>`).join('');
+  const pl=(CALC_LINK.projects||[]).filter(v=>v.stage!=='lost'&&(v.id===L.projectId||hit(v.pdrNo,v.brand,v.company,v.title,v.data&&v.data.products))).map(v=>`<option value="${esc(v.id)}" ${v.id===L.projectId?'selected':''}>${esc((v.pdrNo||'(ไม่มีเลข PDR)')+' · '+(v.brand||v.company||'')+(v.title?' · '+v.title:''))}</option>`).join('');
+  return {bl:'<option value="">— ไม่ผูกบรีฟ —</option>'+bl, pl:'<option value="">— ไม่ผูก PDR —</option>'+pl};
 }
 function calcBudgetHtml(p,c){
   const B=calcBudget(p,c); if(!B.hasOil&&!B.maxKg) return `<div class="card cd-card"><h3>เทียบงบงานออกแบบ</h3><div class="muted" style="font-size:13px">เลือกประเภทสินค้า ใส่ % หัวน้ำหอม และปริมาตรบรรจุในส่วน "งานออกแบบกลิ่น" เพื่อดูต้นทุนหัวน้ำหอมต่อชิ้น ต่อออร์เดอร์ และเทียบงบ</div></div>`;
@@ -1827,9 +1834,13 @@ $('#editor').addEventListener('change',e=>{
   else return;
   save(); renderWork();
 });
+$('#designPanel').addEventListener('input',e=>{
+  if(e.target.id!=='lnkQ') return; CALC_LINK.q=e.target.value;
+  const p=active(), L=(p&&p.link)||{}, lo=calcLinkOpts(L, CALC_LINK.q), a=$('#lnkPdr'), b=$('#lnkBrief'); if(a) a.innerHTML=lo.pl; if(b) b.innerHTML=lo.bl;
+});
 $('#designPanel').addEventListener('change',e=>{
   const t=e.target; let p=active(); if(p&&p.sample) p=null; /* สูตรตัวอย่างไม่ถูกแก้ทับ: เริ่มงานใหม่แทน */
-  if(t.id==='lnkPdr'||t.id==='lnkBrief'){ if(!p){ if(!t.value) return; p=calcNewProduct(); } const k=t.id==='lnkPdr'?'pdr':'brief'; if(t.value) calcApplyLink(p,k,t.value); else p.link=Object.assign({},p.link,{[k==='pdr'?'projectId':'briefId']:''}); p.sample=false; save(); renderWork(); return; }
+  if(t.id==='lnkPdr'||t.id==='lnkBrief'){ CALC_LINK.q=''; if(!p){ if(!t.value) return; p=calcNewProduct(); } const k=t.id==='lnkPdr'?'pdr':'brief'; if(t.value) calcApplyLink(p,k,t.value); else p.link=Object.assign({},p.link,{[k==='pdr'?'projectId':'briefId']:''}); p.sample=false; save(); renderWork(); return; }
   if(t.dataset.dapp){ if(!p){ if(!t.checked) return; p=calcNewProduct(); }
     const a=t.dataset.dapp, its=calcEnsureItems(p), i=its.findIndex(x=>(x.app||'')===a);
     if(t.checked&&i<0) calcAddItem(p,a);

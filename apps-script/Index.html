@@ -5218,7 +5218,7 @@ adm.addEventListener('submit', e=>{
 let PD={bases:null, list:null, tab:'formulas', q:'', cat:'', statusF:'', open:null, baseOpen:null, imp:null, impQ:'', impTotal:null, impSeq:0, impT:null};
 const pdCanView=()=>rdCanView(), pdCanEdit=()=>can('pd')||isAdminRole();
 const PD_STATUS={draft:['ร่าง','info'], testing:['ทดสอบ / Stability','warn'], approved:['อนุมัติ','ok'], retired:['เลิกใช้','bad']};
-const PD_MODE={standard:'เบสเดิม (เปลี่ยนแค่น้ำหอม)', modified:'ปรับเบส / สูตรใหม่ (ต้อง Stability + Pilot Batch)'};
+const PD_MODE={standard:'สูตรมาตรฐาน', modified:'สูตรพัฒนาใหม่ (NPD)'};
 const PD_SRC={db:['ฐานราคา','ok'], base:['จากเบส','info'], manual:['กำหนดเอง','warn'], formula:['สูตรน้ำหอม','ok']};
 async function loadPd(force){
   if(PD.bases && PD.list && !force) return;
@@ -5500,16 +5500,15 @@ function pdFormulaPage(f){
         <datalist id="pdPeople">${rdEmailList().map(e=>`<option value="${esc(e)}">`).join('')}</datalist>
       </div></div>
       <div class="pf-group"><h4>ข้อมูลสูตร</h4><div class="settings">
-        ${pdField('ชื่อสูตรผลิตภัณฑ์ *', pdInp('name', f.name, 'เช่น Siam Bloom Body Lotion'), true)}
         ${pdField('เบส (สูตรพื้นฐาน) *', pdSel('baseId', f.baseId, baseOpts))}${pdField('ลักษณะสูตร', pdSel('mode', f.mode, Object.entries(PD_MODE)))}
         ${pdField('ราคาเป้าหมาย ฿/กก.', pdInp('targetPrice', f.targetPrice, 'จากเบสหรือจากโครงการ', 'number'))}
-        ${pdField('บันทึก / ข้อสังเกต (ลักษณะเนื้อ ความหนืด pH ผลทดลอง สิ่งที่ปรับจากเบส)', `<textarea data-pk="note" rows="2" maxlength="3000">${esc(f.note||'')}</textarea>`, true)}
+        ${pdField('ความต้องการลูกค้า / ลักษณะผลิตภัณฑ์ที่ต้องการ', `<textarea data-pk="note" rows="3" maxlength="3000" placeholder="เช่น ลักษณะเนื้อ ความหนืด pH ที่ลูกค้าต้องการ">${esc(f.note||'')}</textarea>`, true)}
       </div></div>
       <div class="pf-group"><h4>ข้อมูลกลิ่น</h4><div class="settings">
         ${pdField('ชื่อกลิ่น (แก้เองได้ ใช้เมื่อไม่ผูกคลังกลิ่น)', pdInp('fragranceName', f.fragranceName, ''))}
         ${pdField('สูตรต้นทุนของกลิ่น (ใช้แจกแจงส่วนประกอบในตารางด้านล่าง)', pdSel('fragranceFormulaId', f.fragranceFormulaId, [['', sel&&sel.formulaId?'ตามกลิ่นที่เลือก (สูตรที่ผูกไว้)':'จับคู่อัตโนมัติจากชื่อกลิ่น / ไม่ระบุ'], ...pdFragFormulaOpts()]), true)}
-        ${pdField('ราคาน้ำหอม ฿/กก.', pdInp('fragrancePrice', f.fragrancePrice, '', 'number'))}${pdField('% น้ำหอมในสูตร', `<input data-pk="fragPct" type="number" step="any" min="0" max="100" value="${fr&&fr.pct!=null?esc(fr.pct):''}">`)}
-      </div><div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">${sel?`${pfChip(sel.status,PF_SSTAT)}<button class="btn small" type="button" data-pd-scentopen="${esc(sel.id)}">เปิดกลิ่นในคลัง</button>${sel.status==='draft'||sel.status==='trial'?'<span class="chip warn">กลิ่นยังไม่ผ่านการอนุมัติจากลูกค้า</span>':''}${sc?`<span class="muted" style="font-size:12px">ราคาน้ำหอม ${fmt(sc.price,2)} ฿/กก. ${sc.src==='formula'?'จากสูตรต้นทุนของกลิ่น':'จากต้นทุนที่บันทึกไว้กับกลิ่น'+(sc.at?' ('+rdDate(sc.at)+')':'')}${sc.src==='formula'&&!sc.complete?' · ราคาวัตถุดิบในสูตรกลิ่นยังไม่ครบ':''} · ใช้ราคาขายแทนต้นทุนได้โดยแก้ในช่อง "ราคาน้ำหอม"</span>`:'<span class="chip warn">กลิ่นนี้ยังไม่มีต้นทุน</span><span class="muted" style="font-size:12px">ผูกสูตรต้นทุนกับกลิ่นใน Perfumer หรือใส่ราคาน้ำหอมเอง</span>'}`:'<span class="muted" style="font-size:12px">ไม่ได้เลือกกลิ่นจากคลัง? ใส่ชื่อ รหัส และราคาน้ำหอมเอง</span>'}</div></div>
+        ${pdField('ราคารวมหัวน้ำหอม ฿/กก. (ต้นทุนสูตรกลิ่นเท่านั้น ไม่ใช่ราคาขาย)', pdInp('fragrancePrice', f.fragrancePrice, 'ผูกสูตรต้นทุนของกลิ่นเพื่อดึงราคารวม', 'number'))}${pdField('% น้ำหอมในสูตร', `<input data-pk="fragPct" type="number" step="any" min="0" max="100" value="${fr&&fr.pct!=null?esc(fr.pct):''}">`)}
+      </div><div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px">${sel?`${pfChip(sel.status,PF_SSTAT)}<button class="btn small" type="button" data-pd-scentopen="${esc(sel.id)}">เปิดกลิ่นในคลัง</button>${sel.status==='draft'||sel.status==='trial'?'<span class="chip warn">กลิ่นยังไม่ผ่านการอนุมัติจากลูกค้า</span>':''}${sc?`<span class="muted" style="font-size:12px">ราคาน้ำหอม ${fmt(sc.price,2)} ฿/กก. ${sc.src==='formula'?'จากสูตรต้นทุนของกลิ่น':'จากต้นทุนที่บันทึกไว้กับกลิ่น'+(sc.at?' ('+rdDate(sc.at)+')':'')}${sc.src==='formula'&&!sc.complete?' · ราคาวัตถุดิบในสูตรกลิ่นยังไม่ครบ':''}</span>`:'<span class="chip warn">กลิ่นนี้ยังไม่มีต้นทุน</span><span class="muted" style="font-size:12px">ผูกสูตรต้นทุนกับกลิ่นใน Perfumer หรือใส่ราคารวมหัวน้ำหอมเอง</span>'}`:'<span class="muted" style="font-size:12px">ไม่ได้เลือกกลิ่นจากคลัง? ใส่ชื่อ รหัส และราคาน้ำหอมเอง</span>'}</div></div>
       <div class="pf-group"><h4>ส่วนประกอบ (เบส + น้ำหอม)</h4>${pdLinesTable(f, c, ed&&!lock, {})}${pdSummary(f, c)}</div>
       ${pdSecHtml(f)}
       </fieldset>
@@ -5539,6 +5538,7 @@ const pdNumOrNull=v=>v===''||v==null?null:toNum(v);
 function pdCollect(f){
   const box=$('#pdForm'); if(!box) return f;
   box.querySelectorAll('[data-pk]').forEach(i=>{ const k=i.dataset.pk; if(k==='fragPct'||k==='sampScName') return; const v=i.value.trim(); f[k]=['targetPrice','batchG','fragrancePrice','qty','revision'].includes(k)?pdNumOrNull(v):v; });
+  f.name=f.fragranceName||f.productName||f.name||'';   /* ชื่อสูตร = ชื่อตัวอย่าง (Sample Name) */
   f.lines=[...box.querySelectorAll('tbody tr[data-i]')].map((tr,i)=>{ const old=f.lines[i]||{}; const g=k=>{ const el=tr.querySelector(`[data-pl="${k}"]`); return el?el.value.trim():null; };
     if(old.frag) return Object.assign({}, old, {part:g('part')||''});
     return {part:g('part')||'', code:g('code')||'', name:g('name')||'', fn:g('fn')||'', pct:pdNumOrNull(g('pct')), price:old.price==null?null:old.price, override:pdNumOrNull(g('override')), frag:false}; });
@@ -5657,7 +5657,7 @@ $('#pdView').addEventListener('change', e=>{
     if(k==='baseId'){ const b=PD.bases.find(x=>x.id===f.baseId); if(b){ if(!f.lines.some(l=>!l.frag) || confirm(`แทนที่ส่วนประกอบทั้งหมดด้วยเบส "${b.name}" ?`)){ const fr=pdFragLine(f), keep=fr?fr.pct:null; pdApplyBase(f, b); } else { f.baseName=b.name; f.category=b.category; } } }
     if(k==='fragranceFormulaId'&&f.fragranceFormulaId){ const fc=pfFormulaCost(f.fragranceFormulaId); if(fc&&fc.total>0){ f.fragrancePrice=Math.round(fc.total*100)/100; toast('ใช้ต้นทุนสูตร '+fc.name+' · '+fmt(f.fragrancePrice,2)+' ฿/กก.'); } }
     if(k==='sampScName') f.fragranceScentId=t.value;
-    if(k==='fragranceScentId'||k==='sampScName'){ const s=(PF.scents||[]).find(x=>x.id===f.fragranceScentId); if(s){ const c=pdApplyScent(f, s); toast(c?`ใช้กลิ่น ${s.name} · ${fmt(c.price,2)} ฿/กก.`:`กลิ่น ${s.name} ยังไม่มีต้นทุน ใส่ราคาน้ำหอมเอง`); } else pdClearScent(f); }    if(k==='projectId'){ const p=pdProj(f.projectId); if(p){ pdApplyProject(f, p, true);
+    if(k==='fragranceScentId'||k==='sampScName'){ const s=(PF.scents||[]).find(x=>x.id===f.fragranceScentId); if(s){ const c=pdApplyScent(f, s); toast(c?`ใช้กลิ่น ${s.name} · ${fmt(c.price,2)} ฿/กก.`:`กลิ่น ${s.name} ยังไม่มีต้นทุน ใส่ราคารวมหัวน้ำหอมเอง`); } else pdClearScent(f); }    if(k==='projectId'){ const p=pdProj(f.projectId); if(p){ pdApplyProject(f, p, true);
       const cur=(PF.scents||[]).find(x=>x.id===f.fragranceScentId);
       if(cur&&cur.projectId!==p.id){ const sp=pdProj(cur.projectId); if(!sp||sp.customerCode!==p.customerCode){ pdClearScent(f); f.fragranceName=''; f.fragranceCode=''; f.fragrancePrice=null; } }   /* กลิ่นของโครงการ/ลูกค้าอื่น → ล้างออก */
       if(!f.fragranceScentId){ const mine=(PF.scents||[]).filter(x=>x.projectId===p.id&&x.status!=='retired'), ch=p.data&&p.data.chosenScent?mine.find(x=>x.id===p.data.chosenScent.scentId):null; if(ch) pdApplyScent(f, ch); else if(mine.length===1) pdApplyScent(f, mine[0]); } } }
@@ -5703,7 +5703,7 @@ $('#pdView').addEventListener('submit', async e=>{
   e.preventDefault(); const errEl=$('#pdErr'), btn=e.target.querySelector('button[type=submit]');
   if(e.target.id==='pdForm' && PD.open){
     const f=pdCollect(PD.open), c=pdCost(f);
-    const err=!f.name?'ใส่ชื่อสูตรผลิตภัณฑ์':!f.baseId?'เลือกเบส':!f.lines.length?'ใส่ส่วนประกอบอย่างน้อย 1 รายการ':f.lines.some(l=>!l.frag&&!l.name&&!l.code)?'มีแถวที่ยังไม่ใส่ชื่อสาร (ลบแถวว่างออก)'
+    const err=!f.name?'ใส่ชื่อตัวอย่าง (Sample Name)':!f.baseId?'เลือกเบส':!f.lines.length?'ใส่ส่วนประกอบอย่างน้อย 1 รายการ':f.lines.some(l=>!l.frag&&!l.name&&!l.code)?'มีแถวที่ยังไม่ใส่ชื่อสาร (ลบแถวว่างออก)'
       :f.status==='approved'&&Math.abs(c.pctSum-100)>0.01?'อนุมัติไม่ได้: ผลรวมต้องเท่ากับ 100%':f.status==='approved'&&c.missing?'อนุมัติไม่ได้: มีรายการที่ไม่มีราคา':null;
     if(err){ errEl.textContent=err; return; }
     if(btn) btn.disabled=true; errEl.textContent='';

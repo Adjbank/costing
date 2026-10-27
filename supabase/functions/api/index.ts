@@ -718,7 +718,7 @@ async function saveRmMap(ctx: Ctx, items: Any) {
 }
 
 /* ===== เอกสารวัตถุดิบต่อสูตร + ทะเบียนสูตร: Stability · Packaging Compatibility · SDS (MSDS) · IFRA · Specification ===== */
-const DOC_TYPES: Record<string, number> = { STAB: 1, PACK: 1, SDS: 1, IFRA: 1, SPEC: 1 }, DOC_DATA_MAX = 45000;
+const DOC_TYPES: Record<string, number> = { STAB: 1, PACK: 1, SDS: 1, IFRA: 1, SPEC: 1, ALG26: 1, ALG83: 1 }, DOC_DATA_MAX = 45000;
 const docOut = (r: Any, withData: boolean) => {
   const o: Any = { id: String(r.id), docNo: String(r.doc_no), type: String(r.type), formulaId: String(r.formula_id), owner: String(r.owner).toLowerCase(), product: String(r.product),
     customer: String(r.customer), brand: String(r.brand), status: String(r.status || "issued"), issuedAt: iso(r.issued_at), issuedBy: String(r.issued_by) };

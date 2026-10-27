@@ -18,6 +18,17 @@
 .doc-sheet .dtitle{text-align:right}
 .doc-sheet .dtitle h1{font-size:24px}
 .doc-sheet .dsub{font-size:11.5px;color:#444;margin-top:4px}
+.doc-sheet .alg{font-family:Arial,"Noto Sans Thai","Anuphan",sans-serif;font-size:11.5px;color:#111}
+.doc-sheet .alg-title{margin:0 0 16px 10px;font-size:12.5px}
+.doc-sheet .alg-box{width:100%;border-collapse:collapse;margin-bottom:22px}
+.doc-sheet .alg-box td{border:1px solid #111;padding:6px 8px;vertical-align:top;font-size:11px;line-height:1.45}
+.doc-sheet .alg-logo{width:26%;text-align:center;vertical-align:middle!important}
+.doc-sheet .alg-half{width:64%}
+.doc-sheet .alg-v{color:#e0201b}
+.doc-sheet .alg-tb{width:100%;border-collapse:collapse}
+.doc-sheet .alg-tb th{background:#f1f1f1;border:1px solid #111;padding:5px 8px;font-weight:400;text-align:left;font-size:11px}
+.doc-sheet .alg-tb td{border:1px solid #111;padding:5px 8px;vertical-align:top;font-size:11px;line-height:1.4}
+.doc-sheet .alg-tb tr{break-inside:avoid}
 .doc-sheet .dh.dh-sds{align-items:center;gap:24px;margin-bottom:26px}
 .doc-sheet .dh-sds .dtitle{text-align:left;width:48%;flex:0 0 48%}
 .doc-sheet .dh-sds .dtitle h1{font-family:"Times New Roman",Times,"Liberation Serif",serif;font-size:21px;font-weight:700;line-height:1.25;letter-spacing:0}
@@ -3016,8 +3027,100 @@ function docIfraMax(p){
     out[k]=m; });
   return out;
 }
+/* ===== Allergen Report (26 / 83 สาร): ฟอร์มตามแบบของบริษัท · ปริมาณ (%) คำนวณจากสูตรด้วยฐานส่วนประกอบ INCI · แก้ไขได้ก่อนออกเอกสาร ===== */
+const ALG_TYPES={ALG26:26, ALG83:83};
+/* รายการตามแบบฟอร์ม: 'ชื่อ|ชื่อ|… :: CAS|CAS|…' (ชื่อ/CAS แยกบรรทัดตามฟอร์ม) · ข้อ 1–26 ใช้ร่วมกันทั้งสองฟอร์ม */
+const ALG_BASE=[
+ 'Amyl Cinnamal :: 122-40-7','Amyl Cinnamyl Alcohol :: 101-85-9','Benzyl Alcohol :: 100-51-6','Benzyl Salicylate :: 118-58-1','Cinnamyl Alcohol :: 104-54-1','Cinnamal :: 104-55-2',
+ 'Citral, Geranial, Neral :: 5392-40-5','Coumarin :: 91-64-5','Eugenol :: 97-53-0','Geraniol :: 106-24-1','Hydroxy citronellal :: 107-75-5',
+ '3-and4-(4-Hydroxy-4-methylpentyl)cyclohex-3-ene-1-carbaldehyde(HICC) :: 31906-04-4','Iso Eugenol :: 97-54-1','Anisyl Alcohol :: 105-13-5','Benzyl Benzoate :: 120-51-4','Benzyl Cinnamate :: 103-41-3',
+ 'Citronellol :: 106-22-9','Farnesol :: 4602-84-0','Hexyl Cinnamal :: 101-86-0','Butylphenyl Methylpropional :: 80-54-6','Limonene :: 5989-27-5','Linalool :: 78-70-6','Methyl 2-octynoate :: 111-12-6',
+ 'Alpha-Isomethyl Ionone :: 127-51-5','Evernia Prunastri Extract :: 90028-68-5','Evernia Furfuracea Extract :: 90028-67-4'];
+const ALG_MORE=[
+ 'Pinus Mugo Leaf Oil|Pinus Mugo Twig Leaf Extract|Pinus Mugo Twig Oil :: 90082-72-7',
+ 'Pinus Pumila Needle extract|Pinus Pumila Twig Leaf Extract|Pinus Pumila Twig Leaf Oil :: 97676-05-6',
+ 'Cedrus Atlantica Bark Extract|Cedrus Atlantica Bark Oil|Cedrus Atlantica Bark Water|Cedrus Atlantica Leaf Extract|Cedrus Atlantica Wood Extract|Cedrus Atlantica Wood Oil :: 92201-55-3|8023-85-6',
+ 'Turpentine :: 9005-90-7;8006-64-2;8052-14-0','Alpha-Terpinene :: 99-86-5','Terpinolene :: 586-62-9',
+ 'Myroxylon Balsamum Pereirae Balsam Extract;|Myroxylon Balsamum Pereirae Balsam Oil|Myroxylon Pereirae Oil|Myroxylon Pereirae Resin Extract|Myroxylon Pereirae Resin :: 8007-00-9',
+ 'Alpha-Damascone;|cis-Rose ketone 1|trans-Rose ketone 1|Rose ketone 4 (Damascone)|Rose ketone 3 (delta- Damascone)|trans-Rose ketone 3|cis-Rose ketone 2|(cis-beta-Damascone)|trans-Rose ketone 2|(trans-beta-Damascone) :: 43052-87-5|23726-94-5|24720-09-0|23696-85-7|57378-68-4|71048-82-3|23726-92-3|23726-91-2',
+ '3-Propylidenephthalide :: 17369-59-4','Lippia citriodora absolute :: 8024-12-2/ 85116-63-8','Methyl Salicylate :: 119-36-8','Acetyl Cedrene :: 32388-55-9','Amyl Salicylate :: 2050-08-0',
+ 'Anethole :: 104-46-1/ 4180-23-8','Benzaldehyde :: 100-52-7','Camphor :: 76-22-2|21368-68-3|464-49-3|464-48-2','Beta-Caryophyllene :: 87-44-5','Carvone :: 99-49-0/ 6485-40-1/ 2244-16-8',
+ 'Dimethyl Phenethyl Acetate :: 151-05-3','Hexadecanolactone :: 109-29-5','Hexamethylindanopyran :: 1222-05-5','Linalyl Acetate :: 115-95-7','Menthol :: 89-78-1',
+ 'Trimethylcyclopentenyl|Methylisopentenol :: 67801-20-1','Salicylaldehyde :: 90-02-8','Santalol :: 11031-45-1/ 115-71-9/ 77-42-9','Sclareol :: 515-03-7','Terpineol :: 8000-41-7/ 98-55-5/|138-87-4/|586-81-2',
+ 'Tetramethyl acetyloctahydronaphthalenes :: 54464-57-2/ 54464-59-4/|68155-66-8/ 68155-67-9/','Trimethylbenzenepropanol :: 103694-68-4','Vanillin :: 121-33-5',
+ 'Cananga Odorata Flower Extract|Cananga Odorata Flower Oil :: 83863-30-3 8006-81-3|68606-83-7/ 93686-30-7','Cinnamomum cassia leaf oil :: 8007-80-5/ 84961-46-6','Cinnamomum Zeylanicum Bark oil :: 8015-91-6/ 84649-98-9',
+ 'Citrus Aurantium Amara Flower Oil|Citrus Aurantium Dulcis Flower oil :: 72968-50-4|8016-38-4|8028-48-6',
+ 'Citrus Aurantium Amara Peel oil|Citrus Aurantium Dulcis Peel oil|Citrus Sinensis Peel Oil :: 68916-04-1/ 72968-50-4|97766-30-8/ 8028-48-6/|8008-57-9',
+ 'Citrus Aurantium Bergamia Peel Oil :: 8007-75-8|89957-91-5|68648-33-9/ 8007-75-8/|85049-52-1','Citrus Limon Peel Oil :: 84929-31-7/ 8008-56-8',
+ 'Cymbopogon Schoenanthus Oil|Cymbopogon Flexuosus Oil|Cymbopogon Citratus Leaf Oil :: 8007-02-1/ 89998-16-3 /|91844-92-7','Eucalyptus Globulus Leaf Oil|Eucalyptus Globulus Leaf/Twig Oil :: 97926-40-4/ 8000-48-4/',
+ 'Eugenia Caryophyllus Leaf Oil|Eugenia Caryophyllus Flower Oil|Eugenia Caryophyllus Stem Oil|Eugenia Caryophyllus Bud Oil :: 8000-34-8/ 8015-97-2/|84961-50-2|84961-50-2|84961-50-2|84961-50-2',
+ 'Jasminum Grandiflorum Flower Extract|Jasminum Officinale Oil|Jasminum Officinale Flower Extract :: 84776-64-7/ 90045-94-6/|8022-96-6/ 8024-43-9','Juniperus Virginiana Oil|Juniperus Virginiana Wood Oil :: 8000-27-9/ 85085-41-2',
+ 'Laurus Nobilis Leaf Oil :: 8002-41-3/ 8007-48-5/|84603-73-6',
+ 'Lavandula Hybrida Oil|Lavandula Hybrida Extract|Lavandula Hybrida Flower Extract|Lavandula Intermedia Flower/Leaf/Stem Extract|Lavandula Intermedia Flower/Leaf/Stem Oil|Lavandula Intermedia Oil|Lavandula Angustifolia Oil|Lavandula Angustifolia Flower/Leaf/Stem Extract :: 91722-69-9/ 8022-15-9/|93455-96-0/ 93455-97-1/|92623-76-2|84776-65-8/ 8000-28-0/|90063-37-9|84776-65-8/ 8000-28-0/|90063-37-9',
+ 'Mentha Piperita oil :: 8006-90-4/ 84082-70-2','Mentha Viridis Leaf Oil :: 8008-79-5/ 84696-51-5',
+ 'Narcissus Tazetta Extract|Narcissus Poeticus Extract|Narcissus Pseudonarcissus Flower Extract|Narcissus Jonquilla Extract :: 90064-26-9/ 68917-12-4|90064-27-0|90064-25-8',
+ 'Pelargonium Graveolens Flower Oil :: 90082-51-2/ 8000-46-2','Pogostemon Cablin Oil :: 8014-09-3/ 84238-39-1',
+ 'Rosa Damascena Flower Oil|Rosa Damascena Flower Extract|Rosa Alba Flower Oil|Rosa Alba Flower Extract|Rosa Canina Flower Oil|Rosa Centifolia Flower Oil|Rosa Centifolia Flower Extract|Rosa Gallica Flower Oil|Rosa Moschata Flower Oil|Rosa Rugosa Flower Oil :: 8007-01-0/ 90106-38-0/|93334-48-6|84696-47-9|84604-12-6|84604-13-7|92347-25-6',
+ 'Santalum Album oil :: 8006-87-9/ 84787-70-2','Eugenyl Acetate :: 93-28-7','Geranyl Acetate :: 105-87-3','Isoeugenyl Acetate :: 93-29-8','Pinene :: 80-56-8/ 7785-70-8/|127-91-3/|18172-67-3','6-Methyl Coumarin :: 92-48-8'];
+const ALG_FORM={};
+const algTok=s=>(String(s||'').match(/\d{1,7}-\d{2}-\d/g)||[]).map(t=>t.replace(/^0+(?=\d)/,'')), algNm=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+function algEntries(n){
+  if(ALG_FORM[n]) return ALG_FORM[n];
+  const src=n===26?ALG_BASE:ALG_BASE.concat(ALG_MORE);
+  return ALG_FORM[n]=src.map((t,i)=>{ const [a,b]=t.split(' :: '), names=a.split('|'), cas=b.split('|');
+    return {no:i+1, names, cas, toks:new Set(algTok(b)), nms:new Set(names.map(algNm).filter(Boolean))}; });
+}
+/* สูตร → บรรทัดวัตถุดิบ [{code,name,pct}] (% ในผลิตภัณฑ์) */
+function algLines(f){
+  if(f.pd) return incPdLines(f.pd);
+  const c=compute(f.p);
+  return c.rows.filter(r=>r.pct>0).map(r=>({code:r.e?r.e.code:normCode(r.ln.code||''), name:r.ln.nameIn||(r.e&&r.e.name)||'', pct:r.pct}));
+}
+const algFmt=v=>!(v>0)?'-':v>=0.0001?String(+v.toFixed(4)):'<0.0001';
+/* ปริมาณของ allergen แต่ละข้อตามฟอร์ม = ผลรวม % ของสารที่ตรงชื่อ INCI หรือเลข CAS (ใช้ผลคำนวณเดียวกับหน้าส่วนประกอบฉลาก) */
+function algCompute(type, f){
+  const n=ALG_TYPES[type], E=algEntries(n);
+  if(!INC.items) return {items:E.map(()=>''), missing:0, lineSum:0, noInci:true};
+  const calc=incCalc(algLines(f), {list:n===26?'a26':'a83', type:'leave', fragName:'FRAGRANCE'}), out=E.map(()=>0);
+  [...calc.rows, ...calc.below].filter(a=>a.al).forEach(a=>{
+    const toks=[...new Set([...algTok(a.cas), ...algTok(a.al.cas)])], nms=[algNm(a.inci), algNm(a.al.inci)];
+    let k=E.findIndex(e=>nms.some(x=>x&&e.nms.has(x)));
+    if(k<0) k=E.findIndex(e=>toks.some(t=>e.toks.has(t)));
+    if(k>=0) out[k]+=a.pct; });
+  return {items:out.map(algFmt), missing:calc.missing.length, lineSum:calc.lineSum, noInci:false};
+}
+function algDefaults(type, f, base){
+  const r=algCompute(type, f), m=metaOf(f.p);
+  return Object.assign(base, {productCode:(f.pd&&(f.pd.fgCode||''))||m.sampleCode||'', fda:'N/A', revision:'00', items:r.items, missing:r.missing, lineSum:r.lineSum, noInci:r.noInci});
+}
+function algBody(type, d, inp){
+  const E=algEntries(ALG_TYPES[type]), items=d.items||[];
+  return `<div class="settings" style="margin-top:4px">
+      <div class="field"><label>รหัสสินค้า (Product Code)</label><input data-d="productCode" value="${esc(d.productCode)}" maxlength="60"></div>
+      <div class="field"><label>เลข อย. (FDA)</label><input data-d="fda" value="${esc(d.fda)}" maxlength="40"></div>
+      <div class="field"><label>Reversion No.</label><input data-d="revision" value="${esc(d.revision)}" maxlength="10"></div></div>
+    <h3 style="font-size:14px;margin-top:14px">ปริมาณสารก่อภูมิแพ้ (Content %) · ${E.length} รายการ</h3>
+    <div class="muted" style="font-size:12.5px;margin:4px 0 8px">คำนวณจากสูตรด้วยฐานส่วนประกอบ INCI (% ในสูตร) · "-" = ไม่พบ · แก้ตัวเลขในช่องได้ก่อนออกเอกสาร${d.noInci?' · <b style="color:var(--bad)">ยังโหลดฐาน INCI ไม่สำเร็จ ปริมาณจึงว่างทั้งหมด</b>':''}${d.missing?` · <b style="color:var(--bad)">มีวัตถุดิบ ${d.missing} รายการที่ยังไม่มีข้อมูล INCI จึงไม่ถูกนับ ตรวจที่แท็บ "ฐานข้อมูล INCI"</b>`:''}</div>
+    <div class="tablebox"><table><thead><tr><th class="num">#</th><th>Ingredient</th><th>CAS No.</th><th class="num" style="width:140px">Content (%)</th></tr></thead><tbody>
+      ${E.map((e,i)=>`<tr data-i="${i}"><td class="num muted">${e.no}</td><td style="font-size:12.5px">${e.names.map(esc).join('<br>')}</td><td class="mono" style="font-size:12px">${e.cas.map(esc).join('<br>')}</td>
+        <td class="num"><input data-alg="c" value="${esc(items[i]==null?'':items[i])}" maxlength="20" style="${inp};width:110px;text-align:right"></td></tr>`).join('')}</tbody></table></div>
+    <div class="row" style="margin-top:8px"><button class="btn small" type="button" id="algRecalc">คำนวณใหม่จากสูตร</button><span class="muted" style="font-size:12.5px">สูตรรวม ${fmt(d.lineSum||0,2)}%</span></div>`;
+}
+const algDateTH=v=>{ const m=String(v||'').match(/^(\d{4})-(\d{2})-(\d{2})/); return m?`${m[3]}/${m[2]}/${+m[1]+543}`:''; };
+function algHtml(type, d, meta){
+  const n=ALG_TYPES[type], E=algEntries(n), items=d.items||[], v=x=>`<span class="alg-v">${esc(x||'')}</span>`;
+  return `<div class="alg"><div class="alg-title">${n} Allergen Report</div>
+    <table class="alg-box"><tr><td class="alg-logo"><img src="${LOGO.h}" alt="Scent &amp; Sense" style="height:62px;width:auto;display:block"></td>
+      <td class="alg-co">Scent And Sense Laboratory Co., Ltd.<br>2/4 Phetkasem 35/1 Alley, Phetkasem Road, Bangwa, Phasi Charoen, Bangkok 10160<br>Thailand<br>Email: rd@scentandsense.co.th<br>Tel: +66(0) 2000 7722</td></tr>
+      <tr><td class="alg-half">Customer: ${v(d.customer)}<br>Brand: ${v(d.brand)}</td><td class="alg-half2">Issue Date: ${v(algDateTH(d.date))}<br>Reversion No. : ${v(d.revision)}</td></tr>
+      <tr><td class="alg-half">Product Name: ${v(d.product)}<br>Product Code: ${v(d.productCode)}</td><td class="alg-half2" style="vertical-align:bottom">FDA: ${v(d.fda)}</td></tr></table>
+    <table class="alg-tb"><thead><tr><th>Ingredient</th><th style="width:30%">CAS No.</th><th style="width:16%;text-align:center">Content (%)</th></tr></thead><tbody>
+      ${E.map((e,i)=>`<tr><td>${e.no}.${e.names.map(esc).join('<br>')}</td><td>${e.cas.map(esc).join('<br>')}</td><td style="text-align:center">${esc((items[i]||'').trim()||'-')}</td></tr>`).join('')}</tbody></table>
+    ${docFoot(type, meta)}</div>`;
+}
 function docDefaults(type, f){
   const p=f.p, m=metaOf(p), base={product:(m.sampleName||p.name)+(/fragrance oil/i.test(m.sampleName||p.name)?'':' Fragrance Oil'), customer:m.customer, brand:m.brand, sampleCode:m.sampleCode, address:'', date:new Date().toISOString().slice(0,10)};
+  if(ALG_TYPES[type]) return algDefaults(type, f, base);
   if(type==='IFRA') return Object.assign(base, {amendment:'51st Amendment to the IFRA Standards (July 2023)', cats:[{cls:'9', level:''},{cls:'7B', level:''}], maxByCat:docIfraMax(p), preparedBy:'', approvedBy:''});
   if(DOC_GEN[type]) return docGenDefaults(type, base, f);
   return Object.assign(base, {preparedBy:'', approvedBy:'', application:'For blending into various finished products', hazards:['H226','H315','H319'], comp:docComposition(p), coverage:docLevels(p).coverage,
@@ -3058,7 +3161,8 @@ const picto=k=>`<svg viewBox="0 0 100 100" width="64" height="64" aria-hidden="t
    SDS และ IFRA มีฟอร์มเฉพาะ (ด้านบน) ส่วน STAB / PACK / SPEC ใช้โครงเดียวกัน: ช่องข้อมูล (fields) + ตารางผล (cols/rows) + หน้าพิมพ์ภาษาอังกฤษ */
 const DOC_META={STAB:{t:'Stability Test Report', th:'รายงานทดสอบความคงตัว', s:'Stability'}, PACK:{t:'Packaging Compatibility Test Report', th:'รายงานความเข้ากันได้กับบรรจุภัณฑ์', s:'Packaging'},
   SDS:{t:'Safety Data Sheet (MSDS)', th:'เอกสารข้อมูลความปลอดภัย', s:'MSDS'}, IFRA:{t:'IFRA Certificate of Conformity', th:'ใบรับรองตามมาตรฐาน IFRA', s:'IFRA'}, SPEC:{t:'Specification Report', th:'รายงานข้อกำหนดผลิตภัณฑ์', s:'Spec'}};
-const DOC_ORDER=['STAB','PACK','SDS','IFRA','SPEC'];
+const DOC_ORDER=['STAB','PACK','SDS','IFRA','SPEC','ALG26','ALG83'];
+DOC_META.ALG26={t:'26 Allergen Report', th:'รายงานสารก่อภูมิแพ้ 26 สาร', s:'Allergen 26'}; DOC_META.ALG83={t:'83 Allergen Report', th:'รายงานสารก่อภูมิแพ้ 83 สาร', s:'Allergen 83'};
 const RES_OPTS=[['Pass','ผ่าน','Pass'],['Fail','ไม่ผ่าน','Fail'],['Observe','เฝ้าระวัง','Observe']];
 /* field: k=คีย์, l=ชื่อในฟอร์ม, e=ชื่อในเอกสาร, t=text|date|long|select, o=[ค่า, ไทย, อังกฤษ], w=กว้างเต็มแถว */
 const DOC_GEN={
@@ -3208,6 +3312,7 @@ function drawDocs(){
 /* --- ฟอร์มออกเอกสาร --- */
 async function openDocForm(type, fid){
   if(PDDOCF.some(x=>x.id===fid)){ try{ await pdDocFull(fid); }catch(e){ toast(errText(e)); return; } }
+  if(ALG_TYPES[type]){ try{ await Promise.all([INC.items?null:loadInci(), loadPf(false).catch(()=>{})]); }catch(e){ toast(errText(e)); } }   /* ต้องมีฐาน INCI และสูตรน้ำหอมก่อนคำนวณปริมาณ allergen */
   const f=docFormulas().find(x=>x.id===fid); if(!f) return;
   DOCF={type, f, d:docDefaults(type, f)}; drawDocForm(); $('#docForm').scrollIntoView({behavior:'smooth', block:'start'});
 }
@@ -3235,6 +3340,7 @@ function drawDocForm(){
   const signBox=`${h3('ผู้รับผิดชอบ')}<div class="settings" style="margin-top:4px">${DOC_SIGN_FIELDS.map(x=>docGenField(x, d[x.k], inp)).join('')}</div>`;
   let body='';
   if(DOC_GEN[type]) body=docGenBody(type, d, inp);
+  else if(ALG_TYPES[type]) body=algBody(type, d, inp);
   else if(type==='IFRA'){
     const mx=d.maxByCat||{}, hasRules=CHK && CHK.rules.some(r=>r.source==='IFRA'), cov=docLevels(f.p).coverage;
     body=`<div class="settings" style="margin-top:4px">${[{k:'amendment',l:'IFRA Amendment ที่อ้างอิง',w:1},{k:'address',l:'ที่อยู่ลูกค้า (Customer Address)',w:1,ph:'เช่น 58 Soi Saranakhom 10, Saranakhom Road, Si Kan, Don Mueang, Bangkok 10210, Thailand'}].map(x=>docGenField(x, d[x.k], inp)).join('')}</div>
@@ -3365,7 +3471,7 @@ function sdsHtml(d, meta){
     ${docFoot('SDS', meta)}`;
 }
 function showDoc(type, d, meta){
-  const html = DOC_GEN[type] ? docGenHtml(type, d, meta) : type==='IFRA' ? ifraHtml(d, meta) : sdsHtml(d, meta);
+  const html = ALG_TYPES[type] ? algHtml(type, d, meta) : DOC_GEN[type] ? docGenHtml(type, d, meta) : type==='IFRA' ? ifraHtml(d, meta) : sdsHtml(d, meta);
   $('#docPrint').innerHTML = html + (meta.docNo ? '' : '<div class="ddraft">DRAFT</div>');
   $('#docTitle').textContent = (DOC_META[type]?DOC_META[type].t:type)+' · '+(meta.docNo||'ฉบับร่าง');
   $('#docOverlay').hidden=false; document.body.classList.add('doc-open'); $('#docPrint').scrollTop=0;
@@ -3375,6 +3481,7 @@ function collectDocForm(){
   const {type, d}=DOCF, box=$('#docForm');
   box.querySelectorAll('[data-d]').forEach(i=>{ d[i.dataset.d]=i.value.trim(); });
   if(DOC_GEN[type]) docGenCollect(type, box);
+  else if(ALG_TYPES[type]){ d.items=[...box.querySelectorAll('tbody tr[data-i] [data-alg=c]')].map(i=>i.value.trim()); }
   else if(type==='IFRA'){ d.cats=[...box.querySelectorAll('tbody tr[data-i]')].map(tr=>({cls:tr.querySelector('[data-cat=cls]').value, level:tr.querySelector('[data-cat=level]').value.trim()})); }
   else { d.hazards=[...box.querySelectorAll('[data-h]:checked')].map(i=>i.dataset.h);
     d.comp=[...box.querySelectorAll('tbody tr[data-i]')].map(tr=>({name:tr.querySelector('[data-comp=name]').value.trim(), cas:tr.querySelector('[data-comp=cas]').value.trim(), ec:tr.querySelector('[data-comp=ec]').value.trim()||'-', range:tr.querySelector('[data-comp=range]').value.trim()})).filter(r=>r.name);
@@ -3383,6 +3490,7 @@ function collectDocForm(){
 function validateDoc(draft){
   const {type, d}=DOCF;
   if(!d.product) return 'ใส่ชื่อผลิตภัณฑ์';
+  if(ALG_TYPES[type]) return (d.items||[]).length===ALG_TYPES[type] ? null : 'ข้อมูลตารางไม่ครบ ลองกด "คำนวณใหม่จากสูตร"';
   if(DOC_GEN[type]) return docGenValidate(type, d, draft);
   if(type==='IFRA'){
     if(!d.cats.length) return 'เพิ่มหมวดการใช้งานอย่างน้อย 1 หมวด';
@@ -3436,6 +3544,7 @@ docv.addEventListener('click', async e=>{
   if(t.id==='docCatFill'){ collectDocForm(); DOCF.d.cats.forEach(c=>{ const m=DOCF.d.maxByCat[c.cls]; c.level = m==null ? c.level : String(Math.floor(m*100)/100); }); drawDocForm(); return; }
   if(t.id==='docRowAdd'){ collectDocForm(); DOCF.d.rows.push(Object.fromEntries(DOC_GEN[DOCF.type].cols.map(c=>[c.k, c.t==='select'?c.o[0][0]:'']))); drawDocForm(); return; }
   if(t.dataset.growdel!=null){ collectDocForm(); DOCF.d.rows.splice(+t.dataset.growdel,1); drawDocForm(); return; }
+  if(t.id==='algRecalc'){ collectDocForm(); const r=algCompute(DOCF.type, DOCF.f); Object.assign(DOCF.d, {items:r.items, missing:r.missing, lineSum:r.lineSum, noInci:r.noInci}); drawDocForm(); toast('คำนวณใหม่จากสูตรแล้ว'); return; }
   if(t.id==='docCompAdd'){ collectDocForm(); DOCF.d.comp.push({name:'', cas:'', ec:'-', range:'0.1-1'}); drawDocForm(); return; }
   if(t.dataset.compdel!=null){ collectDocForm(); DOCF.d.comp.splice(+t.dataset.compdel,1); drawDocForm(); return; }
   if(t.id==='docCompReset'){ collectDocForm(); DOCF.d.comp=docComposition(DOCF.f.p); DOCF.d.coverage=docLevels(DOCF.f.p).coverage; drawDocForm(); return; }
@@ -6666,6 +6775,10 @@ function incLabLines(){
   if(L.src==='manual') return String(L.manual||'').split('\n').map(s=>s.trim()).filter(Boolean).map(s=>{ const m=s.match(/(RM-[0-9A-Z]+-[0-9A-Z]+-[0-9A-Z]+)/i), n=s.replace(/RM-[0-9A-Z]+-[0-9A-Z]+-[0-9A-Z]+/i,' ').match(/(\d+(?:[.,]\d+)?)\s*%?\s*$/); return {code:m?m[1]:'', name:m?'':s.replace(/[\d.,%\s]+$/,''), pct:n?toNum(n[1].replace(',','.')):0}; });
   if(L.src==='pf'){ const pf=pfFormulas().find(x=>x.id===L.pfId); return pf?incPfLines(pf, toNum(L.pfPct)||100):[]; }
   const f=(PD.list||[]).find(x=>x.id===L.pdId)||INCPD.full[L.pdId]; if(!f) return [];
+  return incPdLines(f);
+}
+/* สูตร PD → บรรทัดวัตถุดิบ (แตกน้ำหอมที่ผูกกับสูตร Perfumer ให้) ใช้ร่วมกับหน้าออก Allergen Report */
+function incPdLines(f){
   const out=[];
   (f.lines||[]).forEach(ln=>{ const pct=toNum(ln.pct)||0; if(!(pct>0)) return;
     if(!ln.frag){ out.push({code:ln.code||'', name:ln.name||'', pct}); return; }

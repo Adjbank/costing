@@ -731,7 +731,9 @@ const docVisible = (m: Me, r: Any) => isAdmin(m) || String(r.owner).toLowerCase(
 /** สูตร Product Development ที่อนุมัติแล้ว ให้หมวด "เอกสารวัตถุดิบ" ใช้ออกเอกสาร (Stability · Packaging · MSDS · IFRA · Spec) */
 async function listPdDocFormulas(ctx: Ctx) {
   const m = await need(ctx, "calc");
-  return (await ctx.db`select * from costing.pd_formulas where status = 'approved' order by updated_at desc limit 3000`).map((x: Any) => maskPd(m, fmOut(x)));
+  /* แบบย่อ (ไม่ส่งส่วนประกอบ) เพราะอาจมีหลายพันสูตร · เปิดเต็มรายสูตรด้วย getPdFormula ตอนออกเอกสาร */
+  const rows = await ctx.db`select id, code, name, data->>'customer' as customer, data->>'brand' as brand, data->>'fragranceCode' as fragrance_code, data->>'fgCode' as fg_code, data->>'productName' as product_name, jsonb_array_length(coalesce(data->'lines', '[]'::jsonb)) as n_lines, updated_by, updated_at from costing.pd_formulas where status = 'approved' order by updated_at desc, code limit 6000`;
+  return rows.map((x: Any) => ({ id: String(x.id), code: String(x.code || ""), name: String(x.name), customer: String(x.customer || ""), brand: String(x.brand || ""), fragranceCode: String(x.fragrance_code || ""), fgCode: String(x.fg_code || ""), productName: String(x.product_name || ""), nLines: Number(x.n_lines) || 0, updatedBy: String(x.updated_by || ""), updatedAt: iso(x.updated_at) }));
 }
 async function listDocs(ctx: Ctx) {
   const m = await need(ctx, "calc");

@@ -2964,9 +2964,14 @@ const docDate=d=>{ const x=d?new Date(d):new Date(); return isNaN(x)?'':x.toLoca
 let DOCS=null, DOCF=null, docQ='', PDDOCF=[];
 /* สูตร Product Development ที่อนุมัติแล้ว → รูปแบบสูตรของหน้าเอกสาร (หน่วย %) */
 function pdAsProduct(x){
-  return {id:x.id, name:x.name, unit:'pct', lossPct:0, overhead:0, batchKg:1, sell:0,
+  return {id:x.id, name:x.name, unit:'pct', lossPct:0, overhead:0, batchKg:1, sell:0, nLines:x.nLines||0,
     lines:(x.lines||[]).map(l=>({code:l.code||'', nameIn:l.name||'', amt:l.pct==null?'':String(l.pct)})),
     meta:{customer:x.customer||'', brand:x.brand||'', sampleCode:x.fragranceCode||x.fgCode||'', sampleName:x.name||''}};
+}
+/* รายการ PD ที่โหลดมาเป็นแบบย่อ (ไม่มีส่วนประกอบ) · โหลดสูตรเต็มตอนจะออกเอกสาร */
+async function pdDocFull(id){
+  const i=PDDOCF.findIndex(x=>x.id===id); if(i<0) return null; if(PDDOCF[i].lines) return PDDOCF[i];
+  const full=await api('getPdFormula', id); PDDOCF[i]=Object.assign({}, PDDOCF[i], full, {nLines:(full.lines||[]).length}); return PDDOCF[i];
 }
 function docFormulas(){
   const pd=PDDOCF.map(x=>({id:x.id, owner:String(x.updatedBy||'').toLowerCase(), p:pdAsProduct(x), pd:x}));
@@ -3167,6 +3172,7 @@ function drawDocs(){
   const rows=fs.map(f=>{ const m=metaOf(f.p), dd=byF.get(f.id)||{}; return {f, m, dd}; })
     .filter(r=>!q || r.f.p.name.toLowerCase().includes(q) || Object.values(r.m).some(v=>v.toLowerCase().includes(q)) || r.f.owner.includes(q) || Object.values(r.dd).some(x=>x.docNo.toLowerCase().includes(q)))
     .sort((a,b)=>(a.m.customer||'').localeCompare(b.m.customer||'','th') || a.f.p.name.localeCompare(b.f.p.name,'th'));
+  const DOC_SHOW=200, allRows=rows.length, shown=rows.slice(0,DOC_SHOW);
   const dash='<span class="muted">–</span>';
   /* ป้ายเอกสาร 5 ประเภทต่อสูตร: มีแล้ว = กดเพื่อพิมพ์ฉบับล่าสุด · ยังไม่มี = กดเพื่อออก (ถ้ามีสิทธิ์) */
   const pills=r=>DOC_ORDER.map(k=>{ const x=r.dd[k]; return x?`<button class="doc-pill on" type="button" data-docopen="${esc(x.id)}" title="${esc(DOC_META[k].t)} ${esc(x.docNo)} · ${fmtSeen(x.issuedAt)} · กดเพื่อพิมพ์">${DOC_META[k].s}</button>`
@@ -3177,11 +3183,12 @@ function drawDocs(){
     <div class="search"><input id="docQ" type="search" autocomplete="off" placeholder="ค้นหาชื่อสูตร ลูกค้า แบรนด์ รหัสตัวอย่าง หรือเลขที่เอกสาร…" value="${esc(docQ)}">
       <button class="btn small" type="button" id="docRefresh">รีเฟรช</button><button class="btn small" type="button" id="docXls">ดาวน์โหลดทะเบียน Excel</button></div>
     <div class="tablebox"><table><thead><tr><th>ชื่อสูตร / ผลิตภัณฑ์</th><th>ลูกค้า</th><th>แบรนด์</th><th>รหัสตัวอย่าง</th>${isAdminRole()?'<th>เจ้าของสูตร</th>':''}<th>เอกสาร <span class="muted" style="font-weight:400;font-size:11.5px">(สีเข้ม = ออกแล้ว กดเพื่อพิมพ์)</span></th>${canIssue?'<th>ออกฉบับใหม่</th>':''}</tr></thead><tbody>
-      ${rows.map(r=>`<tr data-fid="${esc(r.f.id)}"><td><b>${esc(r.m.sampleName||r.f.p.name)}</b>${r.f.pd?` <span class="chip info" style="font-size:11px" title="สูตรจาก Product Development ที่อนุมัติแล้ว">Product Development · ${esc(r.f.pd.code)}</span>`:''}${r.m.sampleName&&r.m.sampleName!==r.f.p.name?`<div class="muted" style="font-size:12px">${esc(r.f.p.name)}</div>`:''}</td><td>${esc(r.m.customer)||dash}</td><td>${esc(r.m.brand)||dash}</td><td class="mono">${esc(r.m.sampleCode)||dash}</td>${isAdminRole()?`<td class="muted" style="font-size:12.5px">${esc(shortName(r.f.owner))}</td>`:''}
+      ${shown.map(r=>`<tr data-fid="${esc(r.f.id)}"><td><b>${esc(r.m.sampleName||r.f.p.name)}</b>${r.f.pd?` <span class="chip info" style="font-size:11px" title="สูตรจาก Product Development ที่อนุมัติแล้ว">Product Development · ${esc(r.f.pd.code)}</span>`:''}${r.m.sampleName&&r.m.sampleName!==r.f.p.name?`<div class="muted" style="font-size:12px">${esc(r.f.p.name)}</div>`:''}</td><td>${esc(r.m.customer)||dash}</td><td>${esc(r.m.brand)||dash}</td><td class="mono">${esc(r.m.sampleCode)||dash}</td>${isAdminRole()?`<td class="muted" style="font-size:12.5px">${esc(shortName(r.f.owner))}</td>`:''}
         <td><div class="doc-pills">${pills(r)}</div></td>
         ${canIssue?`<td><select class="doc-new" aria-label="ออกเอกสารฉบับใหม่"><option value="">ออกเอกสาร…</option>${DOC_ORDER.map((k,i)=>`<option value="${k}">${i+1}. ${esc(DOC_META[k].t)}</option>`).join('')}</select></td>`:''}</tr>`).join('')
       || `<tr><td colspan="9" class="empty">${fs.length?'ไม่พบสูตรที่ตรงกับคำค้น':'ยังไม่มีสูตรในทะเบียน นำเข้าสูตรที่ Perfumer › คำนวณต้นทุน หรืออนุมัติสูตรที่ Product Development ก่อน'}</td></tr>`}
     </tbody></table></div>
+    ${allRows>DOC_SHOW?`<div class="muted" style="font-size:12.5px;margin-top:8px">แสดง ${DOC_SHOW} จาก ${allRows.toLocaleString('en-US')} สูตร · พิมพ์ชื่อสูตร ลูกค้า แบรนด์ หรือเลขที่เอกสารในช่องค้นหาเพื่อกรอง</div>`:''}
     <div id="docForm"></div>
     <details class="card" style="margin-top:16px"><summary style="cursor:pointer;font-weight:700">ประวัติเอกสารทั้งหมด (${DOCS.length})</summary>
       <div class="tablebox" style="margin-top:10px"><table><thead><tr><th>เลขที่</th><th>ประเภท</th><th>ผลิตภัณฑ์</th><th>ลูกค้า</th><th>ออกเมื่อ</th><th>โดย</th><th>สถานะ</th><th></th></tr></thead><tbody>
@@ -3191,7 +3198,8 @@ function drawDocs(){
     <div class="note-box" style="margin-top:14px">ทะเบียนนี้รวมสูตรที่บันทึกในระบบ${isAdminRole()?'ของทุกคน':'ของคุณ'} · ชื่อผลิตภัณฑ์ ลูกค้า แบรนด์ มาจากข้อมูลหัวฟอร์มของสูตร แก้ได้ที่ Perfumer › คำนวณต้นทุน (ขั้นตอนที่ 2) · สูตรจาก Product Development จะแสดงในทะเบียนนี้เมื่อสถานะเป็น "อนุมัติ" (แก้ที่หน้า Product Development) · เอกสารที่ออกแล้วแก้ไม่ได้ ถ้าต้องแก้ให้ออกฉบับใหม่ (เลขที่ใหม่ Rev ถัดไป) และผู้ดูแลระบบยกเลิกฉบับเดิมได้</div>`;
 }
 /* --- ฟอร์มออกเอกสาร --- */
-function openDocForm(type, fid){
+async function openDocForm(type, fid){
+  if(PDDOCF.some(x=>x.id===fid)){ try{ await pdDocFull(fid); }catch(e){ toast(errText(e)); return; } }
   const f=docFormulas().find(x=>x.id===fid); if(!f) return;
   DOCF={type, f, d:docDefaults(type, f)}; drawDocForm(); $('#docForm').scrollIntoView({behavior:'smooth', block:'start'});
 }
@@ -3366,7 +3374,7 @@ function docRegistryXlsx(){
   if(typeof XLSX==='undefined'){ toast('โหลดตัวเขียน Excel ไม่สำเร็จ'); return; }
   const byF=new Map(); DOCS.forEach(d=>{ if(d.status!=='issued') return; const o=byF.get(d.formulaId)||{}; if(!o[d.type]) o[d.type]=d; byF.set(d.formulaId,o); });
   const a1=[['ชื่อสูตร','ชื่อผลิตภัณฑ์ (Sample Name)','ลูกค้า','แบรนด์','รหัสตัวอย่าง','เจ้าของสูตร','จำนวนรายการ', ...DOC_ORDER.flatMap(k=>[DOC_META[k].s+' เลขที่', DOC_META[k].s+' ออกเมื่อ'])]];
-  docFormulas().forEach(f=>{ const m=metaOf(f.p), o=byF.get(f.id)||{}; a1.push([f.p.name, m.sampleName, m.customer, m.brand, m.sampleCode, f.owner, f.p.lines.length, ...DOC_ORDER.flatMap(k=>[o[k]?o[k].docNo:'', o[k]?o[k].issuedAt:''])]); });
+  docFormulas().forEach(f=>{ const m=metaOf(f.p), o=byF.get(f.id)||{}; a1.push([f.p.name, m.sampleName, m.customer, m.brand, m.sampleCode, f.owner, f.p.nLines||f.p.lines.length, ...DOC_ORDER.flatMap(k=>[o[k]?o[k].docNo:'', o[k]?o[k].issuedAt:''])]); });
   const a2=[['เลขที่','ประเภท','ผลิตภัณฑ์','ลูกค้า','แบรนด์','เจ้าของสูตร','ออกเมื่อ','ออกโดย','สถานะ']].concat(DOCS.map(d=>[d.docNo,d.type,d.product,d.customer,d.brand,d.owner,d.issuedAt,d.issuedBy,d.status]));
   const wb=XLSX.utils.book_new(); const w1=XLSX.utils.aoa_to_sheet(a1); w1['!cols']=a1[0].map(()=>({wch:22})); const w2=XLSX.utils.aoa_to_sheet(a2); w2['!cols']=a2[0].map(()=>({wch:22}));
   XLSX.utils.book_append_sheet(wb,w1,'ทะเบียนสูตร'); XLSX.utils.book_append_sheet(wb,w2,'ประวัติเอกสาร');

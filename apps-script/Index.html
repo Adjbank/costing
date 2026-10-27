@@ -1191,7 +1191,7 @@ function sampleProducts(){
     ].map(([code,amt])=>({code,nameIn:'',amt}))}
   ];
 }
-function active(){ const p=state.products.find(p=>p.id===state.activeId) || state.products[0]; if(p && !(p.unitMig>=2)){ p.unitMig=2; if(p.unit==='pct' && !p.sample){ p.unit='drop'; save(); } }   /* ผู้ปรุงใส่เป็น Drops → ระบบคำนวณ % สูตร (ค่าเดิมในช่องคงเดิม % สูตรไม่เปลี่ยน) */ return p; }
+function active(){ const p=state.products.find(p=>p.id===state.activeId) || state.products[0]; if(p && !(p.unitMig>=2)){ let ch=false; state.products.forEach(q=>{ if(!(q.unitMig>=2)){ q.unitMig=2; if(q.unit==='pct' && !q.sample){ q.unit='drop'; ch=true; } } }); if(ch) save(); }   /* ผู้ปรุงใส่เป็น Drops → ระบบคำนวณ % สูตร (ค่าเดิมในช่องคงเดิม % สูตรไม่เปลี่ยน) */ return p; }
 function save(){ if(S.me){ store.set('ss-cost-state:'+S.me.email, state); scheduleSync(); } }
 
 /* ===== calculation ===== */

@@ -1989,20 +1989,26 @@ function sdFormulaProfile(p){
   if(known<=0) return {cover:0, unknown:nUnk};
   const t=lay.top+lay.heart+lay.base||1, ratio=[lay.top,lay.heart,lay.base].map(v=>Math.round(v/t*100));
   const order=SC_AX.map((ax,k)=>[ax,prof[k]]).sort((x,y)=>y[1]-x[1]), W=items.reduce((x,i)=>x+i.w,0)||1;
-  const intensity=Math.max(1,Math.min(5,Math.round(3+Math.log2(W/known))));   /* ค่าเฉลี่ยพลังกลิ่นต่อ % ของสารหอม */
+  const lvl=3+Math.log2(W/known), intensity=Math.max(1,Math.min(5,Math.round(lvl)));   /* ความแรงของหัวน้ำหอม: ค่าเฉลี่ยพลังกลิ่นต่อ % ของสารหอม */
   const ten=items.reduce((x,i)=>x+i.w*Math.log10(Math.max(1,i.life)),0)/W/Math.log10(400), dif=Math.min(1,items.filter(i=>i.life<=12).reduce((x,i)=>x+i.w,0)/W*1.6);
-  return {prof, ratio, order, cover:Math.round(known/(known+unknown)*100), unknown:nUnk, none:Math.round(none), intensity, ext:{ten, dif}, evap:sdEvap(items), dflt};
+  return {prof, ratio, order, cover:Math.round(known/(known+unknown)*100), unknown:nUnk, none:Math.round(none), intensity, lvl, ext:{ten, dif}, evap:sdEvap(items), dflt};
 }
+const SD_DOSE_REF=15;
+function sdProductDoses(p){
+  return calcItems((p&&p.design)||{}).filter(it=>it.app).map(it=>{ const rw=calcAppRow(it.app), d=calcNum(it.dosage)||(rw?+rw[2]:0); return {name:calcAppName(it.app), d}; }).filter(x=>x.d>0);
+}
+const sdDoseLevel=(lvl,d)=>Math.max(1,Math.min(5,Math.round(lvl+0.6*Math.log2(d/SD_DOSE_REF))));
 function sdChartsHtml(sd){
   const o=sdCompose(sd); if(!o) return '';
   const p=active(), pid=calcCtxPid(), mine=p&&!p.sample&&!CALC_LINK.pendingPid&&p.link&&p.link.projectId===pid, a=mine?sdFormulaProfile(p):null, has=a&&a.cover>0;
-  const series=[{vals:sdAxVals(o.prof,o.ratio,o.intensity), color:'var(--ink-muted)', dash:has}]; if(has) series.push({vals:sdAxVals(a.prof,a.ratio,a.intensity,a.ext), color:'var(--accent,#b8864b)'});
+  const series=[{vals:sdAxVals(o.prof,o.ratio,o.intensity), color:'var(--ink-muted)', dash:has}]; const doses=has?sdProductDoses(p):[], pInt=has&&doses.length?sdDoseLevel(a.lvl,doses[0].d):(has?a.intensity:0);
+  if(has) series.push({vals:sdAxVals(a.prof,a.ratio,pInt,a.ext), color:'var(--accent,#b8864b)'});
   const L={top:'Top',heart:'Heart',base:'Base'};
   const leg=has?`<div class="sd-leg"><span><i style="border-top:2px dashed var(--ink-muted)"></i>เป้าหมาย (Archetype + Mood)</span><span><i style="border-top:2px solid var(--accent,#b8864b)"></i>สูตร ${esc(p.name)}</span></div>`:'';
   const cov=mine?(!RMOLF?'กำลังโหลดข้อมูลกลิ่นของวัตถุดิบ…':has?`ข้อมูลกลิ่นวัตถุดิบครอบคลุม ${a.cover}% ของสูตร${a.unknown?` · ยังไม่มีข้อมูล ${a.unknown} ตัว (กดป้ายในตารางสารประกอบเพื่อใส่)`:''}${a.dflt?` · ${a.dflt} ตัวยังไม่มีค่าความแรง/ความติดทน (ใช้ค่ากลางตามชั้นโน้ต)`:''}`:'วัตถุดิบในสูตรยังไม่มีข้อมูลตระกูลกลิ่น แสดงเฉพาะเป้าหมาย'):'ยังไม่ได้เปิดสูตรของโปรเจคนี้ แสดงเฉพาะเป้าหมาย';
   const wheel=has?{prof:a.prof, order:a.order}:o;
   return `<div class="sd-charts"><div class="sd-chart"><h5>Perfume Engineer · ลักษณะกลิ่น</h5>${sdRadar(series)}${leg}
-      <div class="muted" style="font-size:12px">Top / Heart / Base · เป้าหมาย ${o.ratio.join(' / ')}${has?` · สูตรจริง <b>${a.ratio.join(' / ')}</b>`:''} · ความแรง ${has?`เป้าหมาย ${o.intensity}/5 · สูตรจริง <b>${a.intensity}/5</b> (${esc(SC_INT[a.intensity])})`:`${o.intensity}/5 (${esc(SC_INT[o.intensity])}, ประมาณจาก Archetype)`}</div></div>
+      <div class="muted" style="font-size:12px">Top / Heart / Base · เป้าหมาย ${o.ratio.join(' / ')}${has?` · สูตรจริง <b>${a.ratio.join(' / ')}</b>`:''} · ความแรง ${has?`เป้าหมาย ${o.intensity}/5 · หัวน้ำหอม ${a.intensity}/5${doses.length?' · '+doses.map(x=>{ const v=sdDoseLevel(a.lvl,x.d); return `ใน${esc(x.name)} ${fmt(x.d,x.d<1?2:1)}% <b>${v}/5</b> (${esc(SC_INT[v])})`; }).join(' · '):` (${esc(SC_INT[a.intensity])}) · ใส่ % หัวน้ำหอมในขั้นตอนที่ 1 เพื่อดูความแรงในสินค้า`}`:`${o.intensity}/5 (${esc(SC_INT[o.intensity])}, ประมาณจาก Archetype)`}</div></div>
     <div class="sd-chart"><h5>Fragrance Wheel · ${has?'จากสูตรจริง':'เป้าหมาย'}</h5>${sdWheel(wheel)}<div class="muted" style="font-size:12px">${has?'':['top','heart','base'].map(l=>`<b>${L[l]}</b> ${o.layers[l].map(n=>esc(n.en)).join(', ')}`).join(' · ')}</div></div>
     ${has?`<div class="sd-chart"><h5>การระเหยตามเวลา · สูตรจริง</h5>${sdEvapSvg(a.evap)}<div class="muted" style="font-size:12px">กลิ่นลดเหลือครึ่งหนึ่งใน ~${sdHrs(a.evap.half)} · เหลือ 10% ใน ~${sdHrs(a.evap.tenth)}</div></div>`:''}</div>
     <div class="muted" style="font-size:11.5px;margin-top:4px">${cov}</div>`;

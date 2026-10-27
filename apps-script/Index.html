@@ -2390,6 +2390,56 @@ function openForm(id, owner){
   box.dataset.id=id; box.dataset.owner=owner; box.scrollIntoView({behavior:'smooth', block:'start'});
 }
 /* --- ทำราคาขาย: เฉพาะเจ้าของระบบและบทบาท admin (เซิร์ฟเวอร์ตรวจสิทธิ์ซ้ำทุกครั้ง) --- */
+/* ---------- ประวัติขอราคา (แท็บในหน้า "ทำราคาขาย") ---------- */
+let PQ={on:false, list:null, q:'', ra:'', prod:'', shown:150};
+const prcTabs=a=>`<div class="pf-tabs" role="tablist" style="margin:0 0 12px"><button type="button" data-prctab="sell" class="${a==='sell'?'on':''}">ทำราคาขาย</button><button type="button" data-prctab="quotes" class="${a==='quotes'?'on':''}">ประวัติขอราคา${PQ.list?` <span class="pf-n">${PQ.list.length}</span>`:''}</button></div>`;
+async function pqLoad(force){ if(PQ.list&&!force) return; PQ.list=await api('listPriceQuotes'); }
+function pqFiltered(){
+  const q=PQ.q.trim().toLowerCase();
+  return (PQ.list||[]).filter(x=>(!PQ.ra||x.raBy===PQ.ra)&&(!PQ.prod||x.product===PQ.prod)&&(!q||[x.customer,x.scentName,x.scentCode,x.product,x.rdBy,x.raBy,x.note,x.remark,x.priceRaw].join(' ').toLowerCase().includes(q)));
+}
+const pqDate=v=>{ const m=String(v||'').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m?`${+m[3]}/${m[2]}/${m[1]}`:'–'; };
+function renderPriceQuotes(){
+  const box=$('#priceView'); if(!box) return;
+  if(!PQ.list){ box.innerHTML=`${prcTabs('quotes')}<div class="empty">กำลังโหลดประวัติขอราคา…</div>`; pqLoad().then(()=>{ if(S.view==='price'&&PQ.on) renderPriceQuotes(); }).catch(e=>{ box.innerHTML=`${prcTabs('quotes')}<div class="msg bad">${esc(errText(e))}</div>`; }); return; }
+  const L=PQ.list, ras=[...new Set(L.map(x=>x.raBy).filter(Boolean))].sort(), prods=[...new Set(L.map(x=>x.product).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const withP=L.filter(x=>x.price!=null).length, custN=new Set(L.map(x=>x.customer).filter(Boolean)).size;
+  const stat=(k,v)=>`<div class="card" style="padding:12px 18px;min-width:130px"><div class="muted" style="font-size:12.5px">${k}</div><div style="font-family:var(--f-display);font-size:28px;font-weight:700;line-height:1.2">${v}</div></div>`;
+  box.innerHTML=`${prcTabs('quotes')}<div class="bh"><h2>ประวัติขอราคา</h2><span class="hint">เฉพาะแอดมิน · RD ส่งสูตรให้ RA คิดราคา แล้วส่งราคาให้ SA · นำเข้าจากไฟล์ติดตามโครงการ 2026</span></div>
+    <div class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:16px">${stat('รายการขอราคา',L.length.toLocaleString('en-US'))}${stat('มีราคาแล้ว',withP.toLocaleString('en-US'))}${stat('ลูกค้า / Project',custN.toLocaleString('en-US'))}</div>
+    <div class="search"><input id="pqQ" type="search" autocomplete="off" placeholder="ค้นหาลูกค้า ชื่อกลิ่น รหัสกลิ่น Product ผู้คิดราคา โน้ต…" value="${esc(PQ.q)}">
+      <select id="pqRa" aria-label="กรองผู้คิดราคา"><option value="">ทุก RA</option>${ras.map(x=>`<option value="${esc(x)}" ${PQ.ra===x?'selected':''}>${esc(x)}</option>`).join('')}</select>
+      <select id="pqProd" aria-label="กรอง Product"><option value="">ทุก Product</option>${prods.map(x=>`<option value="${esc(x)}" ${PQ.prod===x?'selected':''}>${esc(x)}</option>`).join('')}</select>
+      <button class="btn small" type="button" id="pqRefresh">รีเฟรช</button><button class="btn small" type="button" id="pqXls">ส่งออก Excel</button></div>
+    <div id="pqMain">${pqTable()}</div>`;
+}
+function pqTable(){
+  const list=pqFiltered(); if(!list.length) return `<div class="empty">${(PQ.list||[]).length?'ไม่พบรายการที่ตรงกับคำค้น':'ยังไม่มีประวัติขอราคา'}</div>`;
+  const part=list.slice(0,PQ.shown);
+  return `<div class="tablebox"><table><thead><tr><th>ลูกค้า / Project</th><th>กลิ่น</th><th>Product</th><th>วันที่สูตร</th><th>RD ส่งสูตร</th><th>ส่งราคา SA</th><th>ผู้ทำสูตร / RA</th><th class="num">ราคา ฿/กก.</th><th>โน้ต</th></tr></thead><tbody>
+    ${part.map(x=>`<tr><td style="font-size:12.5px">${esc(x.customer)||'–'}</td><td><b style="font-size:13px">${esc(x.scentName)||'–'}</b>${x.scentCode?`<div class="mono muted" style="font-size:11.5px">${esc(x.scentCode)}</div>`:''}</td><td style="font-size:12.5px">${esc(x.product)||'–'}</td>
+      <td style="white-space:nowrap;font-size:12.5px">${pqDate(x.formulaDate)}</td><td style="white-space:nowrap;font-size:12.5px">${pqDate(x.rdDue)}</td><td style="white-space:nowrap;font-size:12.5px">${pqDate(x.sentAt)}${x.dueSa?`<div class="muted" style="font-size:11.5px">กำหนด ${pqDate(x.dueSa)}</div>`:''}</td>
+      <td style="font-size:12.5px">${esc(x.rdBy)||'–'}<div class="muted" style="font-size:11.5px">${esc(x.raBy)||'–'}</div></td>
+      <td class="num">${x.price!=null?fmt(x.price,2):'<span class="muted">–</span>'}${x.priceRaw&&x.price==null?`<div class="muted" style="font-size:11.5px">${esc(x.priceRaw)}</div>`:''}</td>
+      <td style="font-size:12px">${esc(x.note)}${x.remark?`<div class="muted">${esc(x.remark)}</div>`:''}</td></tr>`).join('')}</tbody></table></div>
+    <div class="muted" style="font-size:12.5px;margin-top:8px">แสดง ${part.length.toLocaleString('en-US')} จาก ${list.length.toLocaleString('en-US')} รายการ</div>
+    ${list.length>part.length?`<div style="text-align:center;margin-top:12px"><button class="btn" type="button" id="pqMore">แสดงเพิ่ม (อีก ${(list.length-part.length).toLocaleString('en-US')})</button></div>`:''}`;
+}
+function pqXlsx(){
+  if(typeof XLSX==='undefined'){ toast('โหลดตัวเขียน Excel ไม่สำเร็จ'); return; }
+  const list=pqFiltered(), wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['ลูกค้า / Project','ชื่อกลิ่น','รหัสกลิ่น','Product','วันที่สูตร','กำหนดส่งราคาให้ SA','ผู้ทำสูตร','RA ผู้คิดราคา','วันที่ RD ส่งสูตร','วันที่ส่งราคาให้ SA','ราคา (฿/กก.)','ราคา (ข้อความเดิม)','โน้ต','หมายเหตุ'],...list.map(x=>[x.customer,x.scentName,x.scentCode,x.product,x.formulaDate,x.dueSa,x.rdBy,x.raBy,x.rdDue,x.sentAt,x.price,x.priceRaw,x.note,x.remark])]), 'ประวัติขอราคา');
+  saveFile(`ประวัติขอราคา_${list.length}รายการ_${fdaToday()}.xlsx`, XLSX.write(wb,{type:'array',bookType:'xlsx'}));
+}
+$('#priceView').addEventListener('click', async e=>{
+  const t=e.target.closest('button'); if(!t) return;
+  if(t.dataset.prctab){ PQ.on=t.dataset.prctab==='quotes'; if(PQ.on) renderPriceQuotes(); else renderPriceView(); return; }
+  if(t.id==='pqRefresh'){ t.disabled=true; try{ await pqLoad(true); }catch(err){ toast(errText(err)); } renderPriceQuotes(); return; }
+  if(t.id==='pqMore'){ PQ.shown+=150; const m=$('#pqMain'); if(m) m.innerHTML=pqTable(); return; }
+  if(t.id==='pqXls'){ pqXlsx(); return; }
+});
+$('#priceView').addEventListener('input', e=>{ if(e.target.id==='pqQ'){ PQ.q=e.target.value; PQ.shown=150; const m=$('#pqMain'); if(m) m.innerHTML=pqTable(); } });
+$('#priceView').addEventListener('change', e=>{ if(e.target.id==='pqRa'){ PQ.ra=e.target.value; PQ.shown=150; const m=$('#pqMain'); if(m) m.innerHTML=pqTable(); } if(e.target.id==='pqProd'){ PQ.prod=e.target.value; PQ.shown=150; const m=$('#pqMain'); if(m) m.innerHTML=pqTable(); } });
 let PRC=null, prcQ='', prcOwner='', prcDirty={}, prcTimer=null;
 const prcKey=(o,id)=>o+'|'+id;
 function prcSell(f){ const r=PRC && PRC.map[prcKey(f.owner,f.id)]; if(r) return r.sell; const v=toNum(f.p.sell); return v>0 ? v : 0; }
@@ -2410,7 +2460,8 @@ function prcFiltered(){
     .sort((a,b)=>(a.p.name).localeCompare(b.p.name,'th'));
 }
 function renderPriceView(){
-  $('#priceView').innerHTML = `<div class="bh"><h2>ทำราคาขาย</h2><span class="hint">เฉพาะเจ้าของระบบและบทบาทผู้ดูแลระบบ · ตั้งราคาขายจากต้นทุนของทุกสูตร · บันทึกอัตโนมัติ</span></div>
+  if(PQ.on){ renderPriceQuotes(); return; }
+  $('#priceView').innerHTML = `${prcTabs('sell')}<div class="bh"><h2>ทำราคาขาย</h2><span class="hint">เฉพาะเจ้าของระบบและบทบาทผู้ดูแลระบบ · ตั้งราคาขายจากต้นทุนของทุกสูตร · บันทึกอัตโนมัติ</span></div>
     <div id="prcStats" class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:16px"></div>
     <div class="search"><input id="prcQ" type="search" autocomplete="off" placeholder="ค้นหาชื่อสูตรหรืออีเมลเจ้าของ…" value="${esc(prcQ)}">
       <select id="prcOwner" aria-label="กรองเจ้าของสูตร"><option value="">ทุกคน</option></select>

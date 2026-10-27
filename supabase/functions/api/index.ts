@@ -1898,6 +1898,39 @@ async function deleteLabelArchive(ctx: Ctx, id: string) {
   });
 }
 
+/* ===== ประวัติขอราคา: รายการที่ RD ส่งสูตรให้ RA/พี่เจคิดราคา และราคาที่ส่งกลับ SA (นำเข้าจากไฟล์ติดตามโครงการ) · เห็นได้เฉพาะแอดมิน (มีราคา) ===== */
+const pqOut = (r: Any) => ({ id: String(r.id), line: Number(r.line) || 0, customer: String(r.customer || ""), scentName: String(r.scent_name || ""), scentCode: String(r.scent_code || ""), product: String(r.product || ""), formulaDate: String(r.formula_date || ""),
+  dueSa: String(r.due_sa || ""), rdBy: String(r.rd_by || ""), raBy: String(r.ra_by || ""), rdDue: String(r.rd_due || ""), sentAt: String(r.sent_at || ""), price: numOrNull(r.price), priceRaw: String(r.price_raw || ""), price2Raw: String(r.price2_raw || ""),
+  note: String(r.note || ""), remark: String(r.remark || ""), projectId: String(r.project_id || "") });
+async function listPriceQuotes(ctx: Ctx) {
+  await needAdmin(ctx);
+  const rows = await ctx.db`select * from costing.price_quotes order by coalesce(nullif(sent_at, ''), nullif(formula_date, ''), '') desc, line desc limit 5000`;
+  return rows.map(pqOut);
+}
+/** นำเข้าประวัติขอราคาจากไฟล์ (เจ้าของระบบเท่านั้น · upsert ตาม id ทำซ้ำได้) แล้วผูกกับโครงการจากรหัสกลิ่น หรือชื่อลูกค้า */
+async function importPriceQuotes(ctx: Ctx, d: Any) {
+  return await locked(ctx, async (c) => {
+    const m = await me(c), db = c.db;
+    if (m.email !== MIGRATION_OWNER || !m.isOwner) throw new Error("FORBIDDEN");
+    const items = Array.isArray(d && d.items) ? d.items : []; if (items.length > 500) throw new Error("ส่งได้ครั้งละไม่เกิน 500 รายการ");
+    const day = (v: unknown) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || "")) ? String(v) : "");
+    let n = 0, skipped = 0; const now = new Date();
+    for (const x of items) {
+      if (!x || !/^pq26-[0-9]{1,6}$/.test(String(x.id || "")) || !(str(x.customer, 300) || str(x.scentName, 300))) { skipped++; continue; }
+      const row = { id: String(x.id), line: Number(x.line) || 0, customer: str(x.customer, 300), scent_name: str(x.scentName, 300), scent_code: str(x.scentCode, 60), product: str(x.product, 120), formula_date: day(x.formulaDate), due_sa: day(x.dueSa),
+        rd_by: str(x.rdBy, 80), ra_by: str(x.raBy, 80), rd_due: day(x.rdDue), sent_at: day(x.sentAt), price: numOrNull(x.price), price_raw: str(x.priceRaw, 120), price2_raw: str(x.price2Raw, 120), note: str(x.note, 500), remark: str(x.remark, 500) };
+      const ex = (await db`select id from costing.price_quotes where id = ${row.id}`)[0];
+      if (ex) await db`update costing.price_quotes set ${db(row, ...Object.keys(row).filter((k) => k !== "id"))} where id = ${row.id}`;
+      else await db`insert into costing.price_quotes ${db({ ...row, project_id: "", created_at: now, created_by: "import:pq26" })}`;
+      n++;
+    }
+    await db`update costing.price_quotes q set project_id = coalesce((select s.project_id from costing.scents s where q.scent_code <> '' and upper(s.formula_code) = upper(q.scent_code) and s.project_id <> '' limit 1),
+      (select p.id from costing.projects p where lower(btrim(p.company)) = lower(btrim(q.customer)) order by p.created_at desc limit 1), '') where q.project_id = ''`;
+    await log(db, m.email, "importPriceQuotes", `quotes ${n} skipped ${skipped}`);
+    return { imported: n, skipped };
+  });
+}
+
 /** นำเข้าทะเบียนเบสจากไฟล์ Formula Base.xlsx (เจ้าของระบบเท่านั้น · upsert ตาม id ทำซ้ำได้) */
 async function importPdBases(ctx: Ctx, d: Any) {
   return await locked(ctx, async (c) => {
@@ -2725,7 +2758,7 @@ const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   listBriefs, saveBrief, deleteBrief, listScents, saveScent, deleteScent, getTypeformStatus, saveTypeformToken, syncTypeform, disconnectTypeform,
   pwLogin, setMyPassword, pwLogout, resetUserPassword,
   listCustomers, saveCustomer, listProjects, getProject, saveProject, setStage, bulkStage, raCheck, issueProjectDoc, uploadProjectDoc, getProjectDocFile, deleteProjectDoc, listSamples, saveSample, sendSample, deleteSample, evalSummary, importRd,
-  listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases, importPdFormulas, searchPdImported, getPdFormula, listPdDocFormulas, listPdCustomers, listPdByCustomer, searchPdFormulas, listLabelArchive, getLabelArchive, saveLabelArchive, deleteLabelArchive, listPdDupKeys,
+  listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases, importPdFormulas, searchPdImported, getPdFormula, listPdDocFormulas, listPdCustomers, listPdByCustomer, searchPdFormulas, listLabelArchive, getLabelArchive, saveLabelArchive, deleteLabelArchive, listPdDupKeys, listPriceQuotes, importPriceQuotes,
   listPdTrials, savePdTrial, sendPdTrial, decidePdTrial, issuePdTrialStock,
   listRdStock, listRdStockTx, saveRdStockItem, deleteRdStockItem, addRdStockTx, importRdStock,
   listFda, saveFdaReg, renewFdaReg, deleteFdaReg, saveFdaRequest, deleteFdaRequest, getFdaAlert, saveFdaAlert, resetFdaAlertSecret,

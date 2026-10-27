@@ -2965,7 +2965,7 @@ let DOCS=null, DOCF=null, docQ='', PDDOCF=[];
 /* สูตร Product Development ที่อนุมัติแล้ว → รูปแบบสูตรของหน้าเอกสาร (หน่วย %) */
 function pdAsProduct(x){
   return {id:x.id, name:x.name, unit:'pct', lossPct:0, overhead:0, batchKg:1, sell:0, nLines:x.nLines||0,
-    lines:(x.lines||[]).map(l=>({code:l.code||'', nameIn:l.name||'', amt:l.pct==null?'':String(l.pct)})),
+    lines:(x.lines||[]).map(l=>({code:l.code||'', nameIn:l.name||'', amt:l.pct==null?'':String(l.pct), note:l.note||''})),
     meta:{customer:x.customer||'', brand:x.brand||'', sampleCode:x.fragranceCode||x.fgCode||'', sampleName:x.name||''}};
 }
 /* รายการ PD ที่โหลดมาเป็นแบบย่อ (ไม่มีส่วนประกอบ) · โหลดสูตรเต็มตอนจะออกเอกสาร */
@@ -3203,6 +3203,16 @@ async function openDocForm(type, fid){
   const f=docFormulas().find(x=>x.id===fid); if(!f) return;
   DOCF={type, f, d:docDefaults(type, f)}; drawDocForm(); $('#docForm').scrollIntoView({behavior:'smooth', block:'start'});
 }
+/* ตารางสูตรในฟอร์มออกเอกสาร: รหัส RM · ชื่อ · % ในสูตร · CAS จากตารางองค์ประกอบ (ว่าง = ไม่มีข้อมูล CAS จึงถูกรวมเป็น FRAGRANCE ในเอกสาร) */
+function docFormulaTable(p){
+  const c=compute(p), byCode=new Map(); (CHK?CHK.map:[]).forEach(m=>{ if(!byCode.has(m.code)) byCode.set(m.code,[]); byCode.get(m.code).push(m); });
+  const rows=c.rows.filter(r=>r.amt>0||r.ln.code||r.ln.nameIn);
+  if(!rows.length) return '';
+  const cov=rows.filter(r=>byCode.get(r.e?r.e.code:normCode(r.ln.code))).reduce((t,r)=>t+r.pct,0);
+  return `<details open style="margin-top:12px"><summary style="cursor:pointer;font-weight:700;font-size:14px">สูตร (${rows.length} รายการ · รวม ${fmt(rows.reduce((t,r)=>t+r.pct,0),2)}%) <span class="muted" style="font-weight:400;font-size:12.5px">· มีข้อมูล CAS ครอบคลุม ${fmt(cov,1)}% ของสูตร</span></summary>
+    <div class="tablebox" style="margin-top:6px"><table><thead><tr><th>#</th><th>รหัส RM</th><th>ชื่อวัตถุดิบ</th><th class="num">% ในสูตร</th><th>CAS</th></tr></thead><tbody>${rows.map((r,i)=>{ const code=r.e?r.e.code:normCode(r.ln.code), m=byCode.get(code), nm=r.e?r.e.name:(r.ln.nameIn||'');
+      return `<tr><td class="muted">${i+1}</td><td class="mono">${esc(code||'–')}</td><td>${esc(nm)||'<span class="muted">–</span>'}${r.ln.note?` <span class="muted" style="font-size:12px">· ${esc(r.ln.note)}</span>`:''}</td><td class="num">${fmt(r.pct,3)}</td><td class="mono" style="font-size:12.5px">${m?m.map(x=>esc(x.cas)).join(', '):'<span class="muted">ไม่มีข้อมูล</span>'}</td></tr>`; }).join('')}</tbody></table></div></details>`;
+}
 function drawDocForm(){
   const box=$('#docForm'); if(!box) return; if(!DOCF){ box.innerHTML=''; return; }
   const {type, f, d}=DOCF, inp='border:1px solid var(--line-strong);border-radius:7px;padding:6px 9px;background:var(--input-bg);width:100%';
@@ -3256,7 +3266,7 @@ function drawDocForm(){
       ${h3('Section 14 · การขนส่ง')}
       <div class="settings" style="margin-top:4px">${docGenField({k:'transport',l:'ประเภทการขนส่ง (UN)',t:'select',w:1,o:[['UN1266','UN 1266 Perfumery products with flammable solvents · Class 3 · PG III'],['UN1169','UN 1169 Extracts, aromatic, liquid · Class 3 · PG III'],['none','Not regulated for transport']]}, d.transport, inp)}</div>${signBox}`;
   }
-  box.innerHTML=`<div class="card" style="margin-top:18px">${head}${body}
+  box.innerHTML=`<div class="card" style="margin-top:18px">${head}${docFormulaTable(f.p)}${body}
     <div class="row" style="margin-top:16px;gap:10px"><button class="btn" type="button" id="docPreview">ดูตัวอย่าง (ฉบับร่าง)</button><button class="btn primary" type="button" id="docIssue">ออกเอกสารและพิมพ์</button><span class="muted" style="font-size:12.5px">ออกแล้วได้เลขที่เอกสารอัตโนมัติ บันทึกลงทะเบียน และแก้ไขไม่ได้</span></div>
     <div class="note-box" style="margin-top:12px">เอกสารจัดทำจากข้อมูลที่ทีมป้อนและข้อกำหนดที่โหลดไว้ ผู้ออกเอกสารเป็นผู้รับผิดชอบความถูกต้อง ควรตรวจกับ SDS ของวัตถุดิบและ IFRA Standards ฉบับล่าสุดก่อนส่งลูกค้า</div></div>`;
 }

@@ -509,7 +509,7 @@ async function deleteRole(ctx: Ctx, id: string) {
 }
 
 /* ===== สูตรของผู้ใช้ ===== */
-const FORMULA_MAX = 300, FORMULA_CELL_MAX = 45000;
+const FORMULA_MAX = 1500, FORMULA_CELL_MAX = 45000;
 const formulaOut = (r: Any) => ({ id: String(r.id), owner: String(r.owner).toLowerCase(), name: String(r.name), updatedAt: iso(r.updated_at), data: String(r.data) });
 async function loadMyFormulas(ctx: Ctx) {
   const m = await need(ctx, "calc");

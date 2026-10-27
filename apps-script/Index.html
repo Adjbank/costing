@@ -2237,7 +2237,8 @@ $('#navtabs').addEventListener('click', e=>{
   const view={btnDash:'dash', btnCalc:'calc', btnChk:'chk', btnDoc:'doc', btnRd:'rd', btnPd:'pd', btnBt:'bt', btnStk:'stk', btnFda:'fda', btnPerf:'perf', btnMsds:'msds', btnRm:'rm', btnAll:'all', btnPrice:'price', btnCmp:'cmp', btnAdmin:'admin'}[b.id];
   if(view) showView(view);
 });
-function homeView(){ if(can('calc')||can('viewDb')) return 'calc'; if(typeof rdCanView==='function'&&rdCanView()) return 'rd'; if(typeof pfCanView==='function'&&pfCanView()) return 'perf'; if(typeof btCanView==='function'&&btCanView()) return 'bt'; return 'calc'; }
+function homeView(){ if(typeof dashCanView==='function'&&dashCanView()) return 'dash';   /* เข้าระบบแล้วเริ่มที่ Dashboard */
+  if(can('calc')||can('viewDb')) return 'calc'; if(typeof rdCanView==='function'&&rdCanView()) return 'rd'; if(typeof pfCanView==='function'&&pfCanView()) return 'perf'; if(typeof btCanView==='function'&&btCanView()) return 'bt'; return 'calc'; }
 async function showView(v){
   if(v==='admin' && !can('manageUsers')) v='calc';
   if((v==='all' || v==='price') && !isAdminRole()) v='calc';

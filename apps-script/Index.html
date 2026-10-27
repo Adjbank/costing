@@ -4642,7 +4642,7 @@ pfv.addEventListener('submit', e=>{ e.preventDefault();
   if(e.target.id==='tfForm'){ const v=$('#tfToken').value.trim(); if(!v){ $('#tfMsg').textContent='วาง token ก่อน'; return; } tfRun('saveTypeformToken',[v],e.target.querySelector('button'),'เชื่อม Typeform แล้ว กำลังดึงคำตอบเก่าทั้งหมด…'); } });
 /* --- โครงการพัฒนาสินค้า (R&D): คำขอพัฒนา (PDR) → 8 ขั้นตอน → ตัวอย่างและผลประเมินของลูกค้า → BOM
    ดู: projects / perfumer / pd / ra / calc / viewDb · แก้ไข: projects / perfumer / pd · RA: ra · ย้อนขั้น/ยกเลิก: projects หรือ admin (เซิร์ฟเวอร์ตรวจซ้ำทุกครั้ง) */
-let RD={list:null, sla:{}, customers:null, view:'board', q:'', stageF:'', sel:new Set(), open:null, edit:null, sampleEdit:null, sumPeriod:'', sumKind:'scent', sum:null, busy:false};
+let RD={list:null, sla:{}, customers:null, view:'board', q:'', stageF:'', sel:new Set(), open:null, edit:null, sampleEdit:null, mockEdit:null, sumPeriod:'', sumKind:'scent', sum:null, busy:false};
 const rdCanView=()=>['projects','perfumer','pd','ra','calc','viewDb','rdView'].some(can), rdCanEdit=()=>can('projects')||can('perfumer')||can('pd'), rdIsPc=()=>can('projects')||isAdminRole();
 const RD_STAGE=[['s1','รับบรีฟ / วางแผน','Project Co'],['s2','ตรวจกฎหมาย','RA'],['s3','ออกแบบกลิ่น','Perfumer'],['s4','ต้นแบบสินค้า','Product Dev'],['s5','ส่งต้นแบบ / ประเมิน','Project Co'],['s6','Stability / สูตรสุดท้าย','Product Dev'],['s7','BOM / ส่งมอบสูตร','Product Dev'],['s8','Pilot Batch','Product Dev'],['done','เสร็จสิ้น',''],['lost','ยกเลิก','']];
 const RD_STAGE_MAP=Object.fromEntries(RD_STAGE.map(s=>[s[0],s]));
@@ -4793,7 +4793,7 @@ async function rdDocGet(fid, view, btn){
     setTimeout(()=>URL.revokeObjectURL(url),120000); }
   catch(err){ if(w) w.close(); toast(errText(err)); } finally{ if(btn) btn.disabled=false; }
 }
-function rdOpenBlank(){ RD.open={project:{id:'', pdrNo:'ใหม่', docNo:'', customerCode:'', company:'', brand:'', soNo:'', kind:'new', title:'', scentCount:1, stage:'s1', owners:{pc:S.me.email, sa:'', pd:'', perfumer:[]}, briefId:'', ra:{}, actual:{}, data:{}}, scents:[], samples:[]}; RD.sampleEdit=null; drawRd(); window.scrollTo(0,0); }
+function rdOpenBlank(){ RD.open={project:{id:'', pdrNo:'ใหม่', docNo:'', customerCode:'', company:'', brand:'', soNo:'', kind:'new', title:'', scentCount:1, stage:'s1', owners:{pc:S.me.email, sa:'', pd:'', perfumer:[]}, briefId:'', ra:{}, actual:{}, data:{}}, scents:[], samples:[]}; RD.sampleEdit=null; RD.mockEdit=null; drawRd(); window.scrollTo(0,0); }
 function rdProjectPage(o){
   const p=o.project, d=p.data||{}, ed=rdCanEdit(), ro=ed?'':'disabled', due=rdDue(p, o.samples), next=rdNextStage(p), nextL=next?(next==='done'?'ปิดงาน (เสร็จสิ้น)':'ไปขั้น '+RD_STAGE_MAP[next][1]):'';
   const brief=(PF.briefs||[]).find(b=>b.id===p.briefId);
@@ -4846,16 +4846,38 @@ function rdProjectPage(o){
       ${o.samples.length?o.samples.slice().reverse().map(s=>rdSampleCard(s, ed)).join(''):'<div class="muted" style="font-size:12.5px;margin-top:6px">ยังไม่มีชุดตัวอย่าง</div>'}</div>
     ${(d.stageLog||[]).length?`<details class="help"><summary>ประวัติการเปลี่ยนขั้น (${d.stageLog.length})</summary><table style="font-size:12.5px;margin-top:6px"><tbody>${d.stageLog.slice().reverse().map(x=>`<tr><td>${rdDate(x.at)}</td><td>${esc(RD_STAGE_MAP[x.from]?RD_STAGE_MAP[x.from][1]:x.from)} → <b>${esc(RD_STAGE_MAP[x.to]?RD_STAGE_MAP[x.to][1]:x.to)}</b></td><td>${rdPerson(x.by)}</td><td class="muted">${esc(x.note||'')}</td></tr>`).join('')}</tbody></table></details>`:''}`;
 }
-/* Mockup ของโครงการ: อ่านจากข้อมูลที่นำเข้าจากไฟล์ติดตามโครงการ (data.import.rows: ชื่อ/รหัส Mockup, วันที่, รอบส่งและติดตาม, ลูกค้ายืนยัน) */
+/* Mockup ของโครงการ: ข้อมูลที่แก้ไขแล้วเก็บใน data.mockups · ถ้ายังไม่เคยแก้ไข ใช้ข้อมูลที่นำเข้าจากไฟล์ติดตามโครงการ (data.import.rows) · แก้ไข เพิ่ม ลบได้ (สิทธิ์เดียวกับการแก้โครงการ) */
+function rdMockupItems(d){
+  if(d&&Array.isArray(d.mockups)) return d.mockups;
+  return ((d&&d.import&&d.import.rows)||[]).filter(x=>x.muName||x.muCode||x.muDate||x.cfMu||x.muExtra||(x.mu&&x.mu.length)).map(x=>({product:x.product||'', name:x.muName||'', code:x.muCode||'', date:x.muDate||'', rounds:(x.mu||[]).slice(0,3).map(m=>({due:m.due||'', follow:m.follow||''})), extra:x.muExtra||'', cf:x.cfMu||'', note:[x.memo,x.note3].filter(Boolean).join(' · ')}));
+}
+const rdMockBlank=()=>({product:'', name:'', code:'', date:'', rounds:[], extra:'', cf:'', note:''});
 function rdMockupCard(d){
-  const rows=((d&&d.import&&d.import.rows)||[]).filter(x=>x.muName||x.muCode||x.muDate||x.cfMu||x.muExtra||(x.mu&&x.mu.length));
-  if(!rows.length) return '';
-  const dd=v=>v?rdDate(v):'', rounds=x=>(x.mu||[]).map((m,i)=>`<div style="white-space:nowrap">รอบ ${i+1}: ${dd(m.due)||'–'}${m.follow?` <span class="muted">→ ติดตาม ${dd(m.follow)}</span>`:''}</div>`).join('')+(x.muExtra?`<div style="white-space:nowrap">ส่งเพิ่มเติม: ${dd(x.muExtra)}</div>`:'');
-  const named=rows.filter(x=>x.muName||x.muCode).length, confirmed=rows.filter(x=>x.cfMu).length;
-  return `<div class="card" style="margin:0 0 14px"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><h4 style="margin:0">Mockup ในโครงการ · ${named||rows.length}</h4><span class="muted" style="font-size:12.5px">ลูกค้ายืนยันแล้ว ${confirmed} · จากไฟล์ติดตามโครงการ 2026</span></div>
-    <div class="tablebox" style="margin-top:8px"><table><thead><tr><th>Product</th><th>ชื่อ Mockup</th><th>รหัส</th><th>วันที่ Mockup</th><th>กำหนดส่ง / ติดตาม</th><th>ลูกค้ายืนยัน</th><th>หมายเหตุ</th></tr></thead><tbody>
-      ${rows.map(x=>`<tr><td style="font-size:12.5px">${esc(x.product||'–')}</td><td><b style="font-size:13px">${esc(x.muName||'–')}</b></td><td class="mono" style="font-size:12px">${esc(x.muCode||'')}</td><td style="white-space:nowrap;font-size:12.5px">${dd(x.muDate)||'–'}</td>
-        <td style="font-size:12px">${rounds(x)||'<span class="muted">–</span>'}</td><td>${x.cfMu?`<span class="chip ok">ยืนยัน ${dd(x.cfMu)}</span>`:'<span class="muted">–</span>'}</td><td style="font-size:12px">${esc(x.memo||'')}${x.note3?`<div class="muted">${esc(x.note3)}</div>`:''}</td></tr>`).join('')}</tbody></table></div></div>`;
+  const ed=rdCanEdit(), editing=Array.isArray(RD.mockEdit), items=editing?RD.mockEdit:rdMockupItems(d);
+  if(!items.length&&!ed&&!editing) return '';
+  const dd=v=>v?rdDate(v):'', inp='border:1px solid var(--line-strong);border-radius:7px;padding:6px 9px;background:var(--input-bg);width:100%';
+  if(editing){
+    const fld=(l,k,v,t,ml)=>`<div class="field"><label>${l}</label><input data-mk="${k}" ${t?`type="${t}"`:''} value="${esc(v||'')}" ${ml?`maxlength="${ml}"`:''} style="${inp}"></div>`;
+    return `<div class="card" style="margin:0 0 14px"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><h4 style="margin:0">แก้ไข Mockup ในโครงการ · ${items.length}</h4><div class="row" style="gap:6px"><button class="btn small" type="button" id="mkAdd">+ เพิ่ม Mockup</button><button class="btn primary small" type="button" id="mkSave">บันทึก</button><button class="btn small" type="button" id="mkCancel">ยกเลิก</button></div></div>
+      ${items.map((x,i)=>{ const r=x.rounds||[]; return `<div class="card" data-mki="${i}" style="margin:10px 0 0;background:var(--soft,rgba(0,0,0,.03))"><div class="row" style="justify-content:space-between;align-items:center"><b style="font-size:13px">Mockup ${i+1}</b><button class="btn small danger" type="button" data-mkdel="${i}">ลบ</button></div>
+        <div class="settings" style="margin-top:6px">${fld('Product','product',x.product,'',120)}${fld('ชื่อ Mockup','name',x.name,'',200)}${fld('รหัส','code',x.code,'',80)}${fld('วันที่ Mockup','date',x.date,'date')}${fld('ลูกค้ายืนยัน (CF)','cf',x.cf,'date')}${fld('ส่งเพิ่มเติม','extra',x.extra,'date')}
+          ${[0,1,2].map(n=>fld(`รอบ ${n+1} · กำหนดส่ง`,'due'+n,(r[n]||{}).due,'date')+fld(`รอบ ${n+1} · ติดตาม`,'follow'+n,(r[n]||{}).follow,'date')).join('')}
+          <div class="field" style="grid-column:1/-1"><label>หมายเหตุ</label><input data-mk="note" value="${esc(x.note||'')}" maxlength="500" style="${inp}"></div></div></div>`; }).join('')||'<div class="muted" style="font-size:12.5px;margin-top:8px">ยังไม่มี Mockup · กด "+ เพิ่ม Mockup"</div>'}
+      <div class="muted" style="font-size:12px;margin-top:8px">ข้อมูลที่บันทึกจะแทนที่ข้อมูลที่นำเข้าจากไฟล์ในการ์ดนี้ (ข้อมูลเดิมในไฟล์ยังเก็บไว้ในโครงการ)</div></div>`;
+  }
+  const rounds=x=>(x.rounds||[]).filter(m=>m.due||m.follow).map((m,i)=>`<div style="white-space:nowrap">รอบ ${i+1}: ${dd(m.due)||'–'}${m.follow?` <span class="muted">→ ติดตาม ${dd(m.follow)}</span>`:''}</div>`).join('')+(x.extra?`<div style="white-space:nowrap">ส่งเพิ่มเติม: ${dd(x.extra)}</div>`:'');
+  const named=items.filter(x=>x.name||x.code).length, confirmed=items.filter(x=>x.cf).length;
+  return `<div class="card" style="margin:0 0 14px"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><h4 style="margin:0">Mockup ในโครงการ · ${named||items.length}</h4><div class="row" style="gap:8px;align-items:center"><span class="muted" style="font-size:12.5px">ลูกค้ายืนยันแล้ว ${confirmed}${Array.isArray(d&&d.mockups)?'':' · จากไฟล์ติดตามโครงการ 2026'}</span>${ed?`<button class="btn small" type="button" id="mkEdit">${items.length?'แก้ไข':'+ เพิ่ม Mockup'}</button>`:''}</div></div>
+    ${items.length?`<div class="tablebox" style="margin-top:8px"><table><thead><tr><th>Product</th><th>ชื่อ Mockup</th><th>รหัส</th><th>วันที่ Mockup</th><th>กำหนดส่ง / ติดตาม</th><th>ลูกค้ายืนยัน</th><th>หมายเหตุ</th></tr></thead><tbody>
+      ${items.map(x=>`<tr><td style="font-size:12.5px">${esc(x.product||'–')}</td><td><b style="font-size:13px">${esc(x.name||'–')}</b></td><td class="mono" style="font-size:12px">${esc(x.code||'')}</td><td style="white-space:nowrap;font-size:12.5px">${dd(x.date)||'–'}</td>
+        <td style="font-size:12px">${rounds(x)||'<span class="muted">–</span>'}</td><td>${x.cf?`<span class="chip ok">ยืนยัน ${dd(x.cf)}</span>`:'<span class="muted">–</span>'}</td><td style="font-size:12px">${esc(x.note||'')}</td></tr>`).join('')}</tbody></table></div>`:'<div class="muted" style="font-size:12.5px;margin-top:6px">ยังไม่มี Mockup</div>'}</div>`;
+}
+/* อ่านค่าจากฟอร์มแก้ไข Mockup */
+function rdReadMock(){
+  return [...document.querySelectorAll('#rdMain [data-mki], [data-mki]')].filter((el,i,a)=>a.indexOf(el)===i).map(el=>{
+    const v=k=>{ const i=el.querySelector(`[data-mk="${k}"]`); return i?i.value.trim():''; };
+    return {product:v('product'), name:v('name'), code:v('code'), date:v('date'), cf:v('cf'), extra:v('extra'), rounds:[0,1,2].map(n=>({due:v('due'+n), follow:v('follow'+n)})).filter(m=>m.due||m.follow), note:v('note')};
+  });
 }
 function rdChosen(o){ const c=o.project.data&&o.project.data.chosenScent; return c&&(c.scentId||c.code)?c:null; }
 function rdDirChip(o){
@@ -4911,7 +4933,7 @@ function rdReadProject(){
 }
 async function rdOpen(id){
   $('#rdBody').innerHTML='<div class="empty">กำลังโหลดโครงการ…</div>';
-  try{ RD.open=await api('getProject', id); RD.sampleEdit=null; drawRd(); window.scrollTo(0,0); }catch(e){ RD.open=null; drawRd(); toast(errText(e)); }
+  try{ RD.open=await api('getProject', id); RD.sampleEdit=null; RD.mockEdit=null; drawRd(); window.scrollTo(0,0); }catch(e){ RD.open=null; drawRd(); toast(errText(e)); }
 }
 function rdPatchList(p){ const i=RD.list.findIndex(x=>x.id===p.id); const prev=i>=0?RD.list[i]:{}; const row=Object.assign({}, prev, p, {scents:prev.scents||0, samples:prev.samples||0, evaluated:prev.evaluated||0}); if(i>=0) RD.list[i]=row; else RD.list.unshift(row); }
 async function rdRun(fn, args, btn, okMsg, after){
@@ -4962,13 +4984,19 @@ rdv.addEventListener('click', async e=>{
   if(t.dataset.rdfdel){ const f=((RD.open.project.data||{}).pdrFiles||[]).find(x=>x.id===t.dataset.rdfdel); if(!f||!confirm('ลบไฟล์ "'+f.name+'" ออกจากโครงการ?')) return; t.disabled=true;
     try{ const r=await api('deleteProjectDoc', RD.open.project.id, f.id); RD.open.project.data=Object.assign({}, RD.open.project.data, {pdrFiles:r.files}); rdCardRefresh(); toast('ลบไฟล์แล้ว'); }catch(err){ toast(errText(err)); t.disabled=false; } return; }
   if(t.dataset.rdOpen){ rdOpen(t.dataset.rdOpen); return; }
-  if(t.id==='rdBack'){ RD.pdrDraft=null; RD.open=null; RD.sampleEdit=null; drawRd(); return; }
+  if(t.id==='rdBack'){ RD.mockEdit=null; RD.pdrDraft=null; RD.open=null; RD.sampleEdit=null; drawRd(); return; }
   if(t.id==='rdXlsx'){ rdExportProjects(); return; }
   if(t.id==='rdSumXlsx'){ rdExportSummary(); return; }
   if(t.id==='rdSumYear'){ RD.sumPeriod=/^\d{4}$/.test(RD.sumPeriod)?new Date().toISOString().slice(0,7):(RD.sumPeriod||new Date().toISOString().slice(0,7)).slice(0,4); drawRd(); rdLoadSummary(); return; }
   if(t.dataset.rdCopy){ try{ await navigator.clipboard.writeText(t.dataset.rdCopy); toast('คัดลอกลิงก์แล้ว ส่งให้ลูกค้าทาง LINE หรืออีเมลได้เลย'); }catch(ex){ toast('คัดลอกไม่ได้ ให้เลือกข้อความในช่องแล้วกด Ctrl+C'); } return; }
   if(!RD.open) return;
   const p=RD.open.project;
+  if(t.id==='mkEdit'){ RD.mockEdit=JSON.parse(JSON.stringify(rdMockupItems(p.data||{}))); if(!RD.mockEdit.length) RD.mockEdit.push(rdMockBlank()); drawRd(); return; }
+  if(t.id==='mkAdd'){ RD.mockEdit=rdReadMock(); RD.mockEdit.push(rdMockBlank()); drawRd(); return; }
+  if(t.dataset.mkdel!==undefined){ const i=+t.dataset.mkdel; RD.mockEdit=rdReadMock(); RD.mockEdit.splice(i,1); drawRd(); return; }
+  if(t.id==='mkCancel'){ RD.mockEdit=null; drawRd(); return; }
+  if(t.id==='mkSave'){ if(!p.id){ toast('บันทึกโครงการก่อน'); return; } const items=rdReadMock().filter(x=>x.product||x.name||x.code||x.date||x.cf||x.extra||x.rounds.length||x.note);
+    rdRun('saveProjectMockups',[p.id, items],t,'บันทึก Mockup แล้ว',r=>{ RD.open.project=r; RD.mockEdit=null; rdPatchList(r); drawRd(); }); return; }
   if(t.dataset.rdStage!==undefined){
     const to=t.dataset.rdStage; if(!to) return;
     if(!p.id){ toast('บันทึกโครงการก่อน'); return; }

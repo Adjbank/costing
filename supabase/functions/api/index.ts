@@ -1382,6 +1382,24 @@ async function gateCheck(db: Db, pr: Any, to: string): Promise<string> {
     default: return "";
   }
 }
+/** แก้ไข Mockup ของโครงการ (data.mockups) · ทับรายการเดิมทั้งชุด · สิทธิ์เดียวกับการแก้โครงการ */
+async function saveProjectMockups(ctx: Ctx, id: string, items: Any) {
+  return await locked(ctx, async (c) => {
+    const m = await needAny(c, RD_EDIT), db = c.db;
+    const pr = (await db`select * from costing.projects where id = ${str(id, 80)}`)[0];
+    if (!pr) throw new Error("ไม่พบโครงการนี้");
+    if (!Array.isArray(items) || items.length > 60) throw new Error("บันทึก Mockup ได้ไม่เกิน 60 รายการ");
+    const day = (v: unknown) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || "")) ? String(v) : "");
+    const list = items.map((x: Any) => ({ product: str(x && x.product, 120), name: str(x && x.name, 200), code: str(x && x.code, 80), date: day(x && x.date), cf: day(x && x.cf), extra: day(x && x.extra),
+      rounds: (Array.isArray(x && x.rounds) ? x.rounds : []).slice(0, 3).map((r: Any) => ({ due: day(r && r.due), follow: day(r && r.follow) })).filter((r: Any) => r.due || r.follow), note: str(x && x.note, 500) }))
+      .filter((x: Any) => x.product || x.name || x.code || x.date || x.cf || x.extra || x.rounds.length || x.note);
+    const data = { ...(pr.data || {}), mockups: list };
+    if (JSON.stringify(data).length > RD_DATA_MAX) throw new Error("ข้อมูลโครงการใหญ่เกินไป");
+    await db`update costing.projects set data = ${db.json(data)}, updated_at = now(), updated_by = ${m.email} where id = ${String(pr.id)}`;
+    await log(db, m.email, "saveProjectMockups", String(pr.pdr_no) + " · " + list.length + " Mockup");
+    return projOut({ ...pr, data, updated_by: m.email, updated_at: new Date() });
+  });
+}
 async function setStage(ctx: Ctx, id: string, stage: string, note: string, force: boolean) {
   return await locked(ctx, async (c) => {
     const m = await needAny(c, RD_EDIT), db = c.db;
@@ -2758,7 +2776,7 @@ const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   listBriefs, saveBrief, deleteBrief, listScents, saveScent, deleteScent, getTypeformStatus, saveTypeformToken, syncTypeform, disconnectTypeform,
   pwLogin, setMyPassword, pwLogout, resetUserPassword,
   listCustomers, saveCustomer, listProjects, getProject, saveProject, setStage, bulkStage, raCheck, issueProjectDoc, uploadProjectDoc, getProjectDocFile, deleteProjectDoc, listSamples, saveSample, sendSample, deleteSample, evalSummary, importRd,
-  listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases, importPdFormulas, searchPdImported, getPdFormula, listPdDocFormulas, listPdCustomers, listPdByCustomer, searchPdFormulas, listLabelArchive, getLabelArchive, saveLabelArchive, deleteLabelArchive, listPdDupKeys, listPriceQuotes, importPriceQuotes,
+  listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases, importPdFormulas, searchPdImported, getPdFormula, listPdDocFormulas, listPdCustomers, listPdByCustomer, searchPdFormulas, listLabelArchive, getLabelArchive, saveLabelArchive, deleteLabelArchive, listPdDupKeys, listPriceQuotes, importPriceQuotes, saveProjectMockups,
   listPdTrials, savePdTrial, sendPdTrial, decidePdTrial, issuePdTrialStock,
   listRdStock, listRdStockTx, saveRdStockItem, deleteRdStockItem, addRdStockTx, importRdStock,
   listFda, saveFdaReg, renewFdaReg, deleteFdaReg, saveFdaRequest, deleteFdaRequest, getFdaAlert, saveFdaAlert, resetFdaAlertSecret,

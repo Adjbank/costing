@@ -942,6 +942,7 @@ main.wrap::after{content:"";display:block;height:52px;margin:36px 0 6px;border-r
 .ptab .vbadge.sm{margin-left:-2px}
 #importBox{margin:14px 0 0} #importBox>summary{font-weight:500}
 .rm-pick{position:relative;margin:0 0 12px}
+.row-pick{margin:6px 0 0;min-width:220px}.row-pick .rowq{width:100%;box-sizing:border-box;font-size:13px;padding:5px 8px;border:1px solid var(--line-strong);border-radius:8px;background:var(--input-bg);color:var(--ink)}.row-pick .rm-list{min-width:420px}
 .rm-pick input{width:100%;min-height:40px}
 .rm-list{position:absolute;left:0;right:0;top:100%;z-index:30;background:var(--card);border-radius:14px;box-shadow:0 18px 40px #091e4b2e;overflow:hidden;max-height:360px;overflow-y:auto}
 .rm-list:empty{display:none}
@@ -1669,11 +1670,11 @@ function renderDesignPanel(){
   el.innerHTML=`<div class="dp-cur"><span class="muted">งานที่กำลังออกแบบ</span> <b>${esc(p.name)}</b> <span class="vbadge">v${p.ver||1}</span>${p.src?` <span class="muted">· ${esc(p.src)}</span>`:''}</div>${calcDesignHtml(p)}`;
 }
 /* ตัวเลือกวัตถุดิบจากฐานข้อมูล (ค้นหาแล้วกดเพิ่มเข้าสูตร) */
-function rmPickHtml(q){
+function rmPickHtml(q, row){
   q=(q||'').trim().toLowerCase(); if(q.length<2) return '';
   const hit=DB.entries.filter(e=>e.code.toLowerCase().includes(q)||e.name.toLowerCase().includes(q)).slice(0,8);
   if(!hit.length) return '<div class="rm-none">ไม่พบวัตถุดิบที่ตรงกับคำค้น</div>';
-  return hit.map(e=>`<button type="button" class="rm-opt" data-add="${esc(e.code)}" data-name="${esc(e.name)}"><span class="mono">${esc(e.code)}</span><span class="rm-nm">${esc(e.name)}</span><span class="rm-pr">${e.price!=null?fmtP(e.price)+' ฿/g':'–'}</span>${chip(e.status)}</button>`).join('');
+  return hit.map(e=>`<button type="button" class="rm-opt" ${row!=null?`data-setline="${row}" data-code="${esc(e.code)}"`:`data-add="${esc(e.code)}"`} data-name="${esc(e.name)}"><span class="mono">${esc(e.code)}</span><span class="rm-nm">${esc(e.name)}</span><span class="rm-pr">${e.price!=null?fmtP(e.price)+' ฿/g':'–'}</span>${chip(e.status)}</button>`).join('');
 }
 function calcAddLine(p, code, name){
   const blank=p.lines.findIndex(l=>!l.code && !l.nameIn); const ln={code, nameIn:'', amt:''};
@@ -1753,7 +1754,7 @@ function renderEditor(){
         return `<tr>
           <td class="muted">${k+1}</td>
           <td><input class="code" data-i="${r.i}" data-f="code" value="${esc(r.ln.code)}" aria-label="รหัส RM"></td>
-          <td><div class="nm">${esc(nm)}<br>${chip(r.status)}${olfChip((r.e&&r.e.code)||r.ln.code)}${r.e&&r.e.disc?' <span class="chip bad">เลิกใช้/ห้ามใช้</span>':''}${note}</div></td>
+          <td><div class="nm">${esc(nm)}<br>${chip(r.status)}${olfChip((r.e&&r.e.code)||r.ln.code)}${r.e&&r.e.disc?' <span class="chip bad">เลิกใช้/ห้ามใช้</span>':''}${note}</div>${!r.e?`<div class="rm-pick row-pick"><input class="rowq" data-rowq="${r.i}" type="search" autocomplete="off" placeholder="ค้นหาชื่อหรือรหัสวัตถุดิบ…" value="${esc(!r.ln.code&&r.ln.nameIn?r.ln.nameIn:'')}" aria-label="ค้นหาวัตถุดิบแถว ${k+1}"><div class="rm-list" data-rowlist="${r.i}"></div></div>`:''}</td>
           <td class="num"><input class="amt" data-i="${r.i}" data-f="amt" type="number" step="any" min="0" value="${esc(r.ln.amt)}" aria-label="ปริมาณ"></td>
           <td class="num">${fmt(r.pct,2)}</td>
           <td class="num">${priceCell}</td>
@@ -2008,7 +2009,7 @@ function sdChartsHtml(sd){
   const cov=mine?(!RMOLF?'กำลังโหลดข้อมูลกลิ่นของวัตถุดิบ…':has?`ข้อมูลกลิ่นวัตถุดิบครอบคลุม ${a.cover}% ของสูตร${a.unknown?` · ยังไม่มีข้อมูล ${a.unknown} ตัว (กดป้ายในตารางสารประกอบเพื่อใส่)`:''}${a.dflt?` · ${a.dflt} ตัวยังไม่มีค่าความแรง/ความติดทน (ใช้ค่ากลางตามชั้นโน้ต)`:''}`:'วัตถุดิบในสูตรยังไม่มีข้อมูลตระกูลกลิ่น แสดงเฉพาะเป้าหมาย'):'ยังไม่ได้เปิดสูตรของโปรเจคนี้ แสดงเฉพาะเป้าหมาย';
   const wheel=has?{prof:a.prof, order:a.order}:o;
   return `<div class="sd-charts"><div class="sd-chart"><h5>Perfume Engineer · ลักษณะกลิ่น</h5>${sdRadar(series)}${leg}
-      <div class="muted" style="font-size:12px">Top / Heart / Base · เป้าหมาย ${o.ratio.join(' / ')}${has?` · สูตรจริง <b>${a.ratio.join(' / ')}</b>`:''} · ความแรง ${has?`เป้าหมาย ${o.intensity}/5 · หัวน้ำหอม ${a.intensity}/5${doses.length?' · '+doses.map(x=>{ const v=sdDoseLevel(a.lvl,x.d); return `ใน${esc(x.name)} ${fmt(x.d,x.d<1?2:1)}% <b>${v}/5</b> (${esc(SC_INT[v])})`; }).join(' · '):` (${esc(SC_INT[a.intensity])}) · ใส่ % หัวน้ำหอมในขั้นตอนที่ 1 เพื่อดูความแรงในสินค้า`}`:`${o.intensity}/5 (${esc(SC_INT[o.intensity])}, ประมาณจาก Archetype)`}</div></div>
+      <div class="muted" style="font-size:12px">Top / Heart / Base · เป้าหมาย ${o.ratio.join(' / ')}${has?` · สูตรจริง <b>${a.ratio.join(' / ')}</b>`:''} · ความแรง ${has?`เป้าหมาย ${o.intensity}/5 · หัวน้ำหอม ${a.intensity}/5${doses.length?' · '+doses.map(x=>{ const v=sdDoseLevel(a.lvl,x.d); return `ใน ${esc(x.name)} ${fmt(x.d,x.d<1?2:1)}% <b>${v}/5</b> (${esc(SC_INT[v])})`; }).join(' · '):` (${esc(SC_INT[a.intensity])}) · ใส่ % หัวน้ำหอมในขั้นตอนที่ 1 เพื่อดูความแรงในสินค้า`}`:`${o.intensity}/5 (${esc(SC_INT[o.intensity])}, ประมาณจาก Archetype)`}</div></div>
     <div class="sd-chart"><h5>Fragrance Wheel · ${has?'จากสูตรจริง':'เป้าหมาย'}</h5>${sdWheel(wheel)}<div class="muted" style="font-size:12px">${has?'':['top','heart','base'].map(l=>`<b>${L[l]}</b> ${o.layers[l].map(n=>esc(n.en)).join(', ')}`).join(' · ')}</div></div>
     ${has?`<div class="sd-chart"><h5>การระเหยตามเวลา · สูตรจริง</h5>${sdEvapSvg(a.evap)}<div class="muted" style="font-size:12px">กลิ่นลดเหลือครึ่งหนึ่งใน ~${sdHrs(a.evap.half)} · เหลือ 10% ใน ~${sdHrs(a.evap.tenth)}</div></div>`:''}</div>
     <div class="muted" style="font-size:11.5px;margin-top:4px">${cov}</div>`;
@@ -2170,7 +2171,8 @@ $('#designPanel').addEventListener('change',e=>{
 });
 $('#designPanel').addEventListener('click',e=>{ const b=e.target.closest('[data-ddel]'); if(!b) return; const p=active(); if(!p||p.sample) return; calcEnsureItems(p).splice(+b.dataset.ddel,1); save(); renderWork(); });
 $('#btnNewDesign').addEventListener('click',()=>{ calcNewProduct(); save(); renderWork(); $('#designPanel').scrollIntoView({behavior:'smooth',block:'start'}); });
-$('#editor').addEventListener('input',e=>{ if(e.target.id==='rmPick'){ const l=$('#rmPickList'); if(l) l.innerHTML=rmPickHtml(e.target.value); } });
+$('#editor').addEventListener('input',e=>{ if(e.target.id==='rmPick'){ const l=$('#rmPickList'); if(l) l.innerHTML=rmPickHtml(e.target.value); }
+  if(e.target.dataset.rowq!=null){ const l=document.querySelector(`[data-rowlist="${e.target.dataset.rowq}"]`); if(l) l.innerHTML=rmPickHtml(e.target.value, e.target.dataset.rowq); } });
 $('#versionPanel').addEventListener('click',async e=>{
   const p=active(); if(!p||p.sample) return; const t=e.target.closest('button'); if(!t) return; const h=FH[p.id]||(FH[p.id]={versions:[],feedback:[]});
   const busy=on=>{ t.disabled=on; };
@@ -2193,9 +2195,10 @@ $('#editor').addEventListener('click',e=>{
   const oc=e.target.closest('[data-olf]'); if(oc){ OLF_EDIT=OLF_EDIT===oc.dataset.olf?'':oc.dataset.olf; renderEditor(); return; }
   if(e.target.closest('[data-olf-save]')){ olfSaveFrom(e.target.closest('.olf-form'), e.target); return; }
   if(e.target.closest('[data-olf-cancel]')){ OLF_EDIT=''; renderEditor(); return; }
+  const sl=e.target.closest('[data-setline]'); if(sl){ const i=+sl.dataset.setline, ln=p.lines[i]; if(ln){ ln.code=sl.dataset.code; ln.nameIn=''; p.sample=false; save(); renderWork(); toast(`ใส่ ${sl.dataset.name} ในแถว ${i+1} แล้ว · ใส่ปริมาณในตาราง`); const ins=document.querySelectorAll('#editor input.amt'); if(ins[i]) ins[i].focus(); } return; }   /* เลือกจากช่องค้นหาในแถว */
   const ad=e.target.closest('[data-add]'); if(ad){ calcAddLine(p, ad.dataset.add, ad.dataset.name); return; }
   if(e.target.id==='btnSaveProd'){ calcSaveNow(e.target); return; }
-  if(e.target.id==='btnAddRow'){ p.lines.push({code:'',nameIn:'',amt:''}); save(); renderWork(); const ins=document.querySelectorAll('#editor input.code'); ins[ins.length-1]?.focus(); return; }
+  if(e.target.id==='btnAddRow'){ p.lines.push({code:'',nameIn:'',amt:''}); save(); renderWork(); const qs=document.querySelectorAll('#editor input.rowq'); (qs[qs.length-1]||[...document.querySelectorAll('#editor input.code')].pop())?.focus(); return; }
   if(e.target.id==='btnDelProd'){
     if(e.target.dataset.confirm!=='1'){ e.target.dataset.confirm='1'; e.target.textContent='กดอีกครั้งเพื่อยืนยันการลบ'; setTimeout(()=>{ if(e.target.isConnected){e.target.dataset.confirm='';e.target.textContent='ลบสูตรนี้';} },4000); return; }
     state.products=state.products.filter(x=>x.id!==p.id); state.activeId=state.products[0]?.id||null; save(); renderWork(); return; }

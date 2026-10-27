@@ -1961,6 +1961,34 @@ function sdEvapSvg(ev){
   return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="กราฟการระเหยของกลิ่น" style="width:100%;max-width:400px;height:auto">${grid}${areas}<polyline points="${ev.tot.map((v,k)=>X(k).toFixed(1)+','+Y(v).toFixed(1)).join(' ')}" fill="none" stroke="var(--ink)" stroke-width="1.6"/>${xl}<text x="${(x0+pw/2).toFixed(1)}" y="${H-2}" text-anchor="middle" font-size="10" fill="var(--ink-muted)">เวลาบนแถบดม (สเกลไม่เท่ากัน)</text></svg>
     <div class="sd-leg">${['top','heart','base'].map(l=>`<span><i style="border-top:8px solid ${col[l]};opacity:.7"></i>${OLF_LAY[l][0]}</span>`).join('')}</div>`;
 }
+/* Fragrance Pyramid · ไล่เฉดสีแบรนด์ (ค่าเริ่มต้นตาม Mood) + รูป mood board เป็นพื้นผิว · ชื่อวัตถุดิบเด่นของแต่ละชั้นจากสูตรจริง */
+const SD_MOOD_PAL={calm:['#e3eee6','#93b8a3'],fresh:['#f4f8cf','#c6d63a'],warm:['#f7e1c6','#c98a4b'],sensual:['#f2d4dc','#a8556f'],energetic:['#fff0a8','#f0913c'],mysterious:['#8a7b9c','#2c2438'],nostalgic:['#f4e6d6','#c4a07c'],clean:['#f1f7fc','#a8c8e4']};
+function sdPalette(sd){
+  if(sd&&sd.c1&&sd.c2) return [sd.c1, sd.c2];
+  const m=((sd&&sd.moods)||[]).find(x=>SD_MOOD_PAL[x]); if(m) return SD_MOOD_PAL[m];
+  return ['#f3efe4','#c7b38c'];
+}
+const sdShort=n=>{ let t=String(n||'').replace(/\(.*?\)|\[.*?\]/g,' ').split(/[,/]/)[0].replace(/\b(essential|oil|abs\.?|absolute|es\.?|fema[- ]?\d+|\d+(\.\d+)?\s*%.*|in dpg|natural|pure)\b/ig,' ').replace(/\s+/g,' ').trim(); return t.length>22?t.slice(0,21)+'…':t; };
+function sdPyrNames(a, o){
+  const out={}; ['top','heart','base'].forEach(l=>{
+    let ns=a&&a.items?a.items.filter(i=>i.layer===l).sort((x,y)=>y.w-x.w).map(i=>sdShort(i.name)).filter(Boolean):[];
+    ns=[...new Set(ns)].slice(0,3); if(!ns.length&&o) ns=o.layers[l].map(n=>n.en); out[l]=ns; });
+  return out;
+}
+function sdPyramid(sd, names, title, img){
+  const [c1,c2]=sdPalette(sd), id='pyr'+Math.random().toString(36).slice(2,8), W=360, top=[180,14], bl=[16,300], br=[344,300];
+  const tri=`${top.join(',')} ${br.join(',')} ${bl.join(',')}`, cuts=[126,213], xAt=y=>(y-14)/286*164;
+  const band=(y)=>`<line x1="${(180-xAt(y)).toFixed(1)}" x2="${(180+xAt(y)).toFixed(1)}" y1="${y}" y2="${y}" stroke="#ffffff" stroke-opacity=".7" stroke-width="1.2"/>`;
+  const L=[['TOP',names.top,88],['MIDDLE',names.heart,175],['LAST',names.base,262]];
+  const txt=L.map(([h,ns,y])=>`<text x="180" y="${y}" text-anchor="middle" class="pyr-h">${h}</text><text x="180" y="${y+19}" text-anchor="middle" class="pyr-n">${esc(ns.join(', ')||'—')}</text>`).join('');
+  const tag=String(sd&&(sd.concept||sd.tone)||'').split(/\n|(?<=[.!?。])\s/)[0].slice(0,90);
+  return `${title?`<div style="font-weight:700;letter-spacing:.14em;margin:2px 0 4px">${esc(String(title).toUpperCase())}</div>`:""}<svg viewBox="0 0 ${W} ${tag?352:318}" role="img" aria-label="Fragrance Pyramid" style="width:100%;max-width:380px;height:auto">
+    <defs><linearGradient id="${id}g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient><clipPath id="${id}c"><polygon points="${tri}"/></clipPath></defs>
+    <g clip-path="url(#${id}c)">${img?`<image href="${img}" x="0" y="0" width="${W}" height="300" preserveAspectRatio="xMidYMid slice"/>`:''}<rect x="0" y="0" width="${W}" height="300" fill="url(#${id}g)" opacity="${img?.72:1}"/>${band(cuts[0])}${band(cuts[1])}</g>
+    <style>.pyr-h{font:700 13px var(--font,system-ui);letter-spacing:.08em;fill:#14213d;paint-order:stroke;stroke:#ffffffb0;stroke-width:3px}.pyr-n{font:500 12.5px var(--font,system-ui);fill:#14213d;paint-order:stroke;stroke:#ffffffc0;stroke-width:3px}</style>
+    ${txt}${tag?`<text x="180" y="334" text-anchor="middle" font-size="12.5" fill="var(--ink-muted)">${esc(tag)}</text>`:''}</svg>`;
+}
+function sdPyrImg(){ const pid=calcCtxPid(), x=pid?calcProj(pid):null, f=x?sdImgs(x)[0]:null, u=f&&SD.imgs[f.id]; return u&&u!=='…'?u:''; }
 /* Radar ลักษณะกลิ่น (Perfume Engineer) · เทียบเป้าหมาย (Archetype + Mood) กับสูตรจริง */
 function sdAxVals(prof, ratio, intensity, ext){
   const cl=v=>Math.max(0.04,Math.min(1,v));   /* 3 แกนเชิงวิศวกรรมกลิ่น · โทนกลิ่นดูที่ Fragrance Wheel */
@@ -1984,13 +2012,13 @@ function sdFormulaProfile(p){
     if(!o||!o.layer){ unknown+=pct; nUnk++; return; } if(o.layer==='none'){ none+=pct; return; }
     const [st,life]=olfSL(o), w=pct*Math.pow(2,st-3), f=o.fam||{}, sm=Object.values(f).reduce((x,y)=>x+(+y||0),0)||1;
     if(o.strength==null||o.life==null) dflt++;
-    SC_AX.forEach((ax,k)=>{ prof[k]+=w*(+f[ax]||0)/sm; }); lay[o.layer]+=pct; known+=pct; items.push({layer:o.layer, w, life}); });
+    SC_AX.forEach((ax,k)=>{ prof[k]+=w*(+f[ax]||0)/sm; }); lay[o.layer]+=pct; known+=pct; items.push({layer:o.layer, w, life, name:(r.e&&r.e.name)||r.ln.nameIn||code}); });
   if(known<=0) return {cover:0, unknown:nUnk};
   const t=lay.top+lay.heart+lay.base||1, ratio=[lay.top,lay.heart,lay.base].map(v=>Math.round(v/t*100));
   const order=SC_AX.map((ax,k)=>[ax,prof[k]]).sort((x,y)=>y[1]-x[1]), W=items.reduce((x,i)=>x+i.w,0)||1;
   const lvl=3+Math.log2(W/known), intensity=Math.max(1,Math.min(5,Math.round(lvl)));   /* ความแรงของหัวน้ำหอม: ค่าเฉลี่ยพลังกลิ่นต่อ % ของสารหอม */
   const ten=items.reduce((x,i)=>x+i.w*Math.log10(Math.max(1,i.life)),0)/W/Math.log10(400), dif=Math.min(1,items.filter(i=>i.life<=12).reduce((x,i)=>x+i.w,0)/W*1.6);
-  return {prof, ratio, order, cover:Math.round(known/(known+unknown)*100), unknown:nUnk, none:Math.round(none), intensity, lvl, ext:{ten, dif}, evap:sdEvap(items), dflt};
+  return {prof, ratio, order, cover:Math.round(known/(known+unknown)*100), unknown:nUnk, none:Math.round(none), intensity, lvl, ext:{ten, dif}, evap:sdEvap(items), dflt, items};
 }
 const SD_DOSE_REF=15;
 function sdProductDoses(p){
@@ -2009,7 +2037,8 @@ function sdChartsHtml(sd){
   return `<div class="sd-charts"><div class="sd-chart"><h5>Perfume Engineer · ลักษณะกลิ่น</h5>${sdRadar(series)}${leg}
       <div class="muted" style="font-size:12px">Top / Heart / Base · เป้าหมาย ${o.ratio.join(' / ')}${has?` · สูตรจริง <b>${a.ratio.join(' / ')}</b>`:''} · ความแรง ${has?`เป้าหมาย ${o.intensity}/5 · หัวน้ำหอม ${a.intensity}/5${doses.length?' · '+doses.map(x=>{ const v=sdDoseLevel(a.lvl,x.d); return `ใน ${esc(x.name)} ${fmt(x.d,x.d<1?2:1)}% <b>${v}/5</b> (${esc(SC_INT[v])})`; }).join(' · '):` (${esc(SC_INT[a.intensity])}) · ใส่ % หัวน้ำหอมในขั้นตอนที่ 1 เพื่อดูความแรงในสินค้า`}`:`${o.intensity}/5 (${esc(SC_INT[o.intensity])}, ประมาณจาก Archetype)`}</div></div>
     <div class="sd-chart"><h5>Fragrance Wheel · ${has?'จากสูตรจริง':'เป้าหมาย'}</h5>${sdWheel(wheel)}<div class="muted" style="font-size:12px">${has?'':['top','heart','base'].map(l=>`<b>${L[l]}</b> ${o.layers[l].map(n=>esc(n.en)).join(', ')}`).join(' · ')}</div></div>
-    ${has?`<div class="sd-chart"><h5>การระเหยตามเวลา · สูตรจริง</h5>${sdEvapSvg(a.evap)}<div class="muted" style="font-size:12px">กลิ่นลดเหลือครึ่งหนึ่งใน ~${sdHrs(a.evap.half)} · เหลือ 10% ใน ~${sdHrs(a.evap.tenth)}</div></div>`:''}</div>
+    ${has?`<div class="sd-chart"><h5>การระเหยตามเวลา · สูตรจริง</h5>${sdEvapSvg(a.evap)}<div class="muted" style="font-size:12px">กลิ่นลดเหลือครึ่งหนึ่งใน ~${sdHrs(a.evap.half)} · เหลือ 10% ใน ~${sdHrs(a.evap.tenth)}</div></div>`:''}
+    <div class="sd-chart sd-pyr"><h5>Fragrance Pyramid${has?' · สูตรจริง':' · เป้าหมาย'}</h5>${sdPyramid(sd, sdPyrNames(has?a:null,o), has?p.name:'', sdPyrImg())}</div></div>
     <div class="muted" style="font-size:11.5px;margin-top:4px">${cov}</div>`;
 }
 const sdImgs=x=>((x.data&&x.data.pdrFiles)||[]).filter(f=>f.kind==='design');
@@ -2022,7 +2051,7 @@ function sdImgsHtml(x){
 async function sdLoadImgs(x){
   for(const f of sdImgs(x)){ if(SD.imgs[f.id]) continue; SD.imgs[f.id]='…';
     try{ const r=await api('getProjectDocFile', x.id, f.id), bin=atob(r.b64), u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i);
-      SD.imgs[f.id]=URL.createObjectURL(new Blob([u],{type:r.mime})); const b=document.querySelector(`[data-sd-img="${f.id}"]`); if(b) b.innerHTML=`<img src="${SD.imgs[f.id]}" alt="${esc(f.name)}">`; }
+      SD.imgs[f.id]=URL.createObjectURL(new Blob([u],{type:r.mime})); const b=document.querySelector(`[data-sd-img="${f.id}"]`); if(b) b.innerHTML=`<img src="${SD.imgs[f.id]}" alt="${esc(f.name)}">`; if(f===sdImgs(x)[0]){ const c=$('#sdCharts'); if(c) c.innerHTML=sdChartsHtml(sdOf(x)); } }
     catch(e){ delete SD.imgs[f.id]; } }
 }
 function sdHtml(){
@@ -2036,6 +2065,7 @@ function sdHtml(){
       ${ta('story','Brand Story','เรื่องราวของแบรนด์ ที่มา คุณค่า กลุ่มลูกค้า',3)}
       <div class="field"><label for="sd_arch">Brand Archetype</label><select id="sd_arch" data-sd="arch" ${ro}><option value="">— เลือก Archetype —</option>${SC_ARCH.map(a=>`<option value="${a.id}" ${sd.arch===a.id?'selected':''}>${esc(a.en)} · ${esc(a.th)} — ${esc(a.dir)}</option>`).join('')}</select></div>
       <div class="field"><label for="sd_tone">Tone</label><input id="sd_tone" data-sd="tone" maxlength="500" value="${esc(sd.tone||'')}" placeholder="เช่น อบอุ่น หรูหรา เรียบง่าย" ${ro}></div>
+      <div class="field"><label>สีแบรนด์ (ไล่เฉดบน → ล่าง · ใช้ใน Fragrance Pyramid)</label><div class="row" style="gap:8px;align-items:center"><input type="color" data-sd="c1" value="${sdPalette(sd)[0]}" ${ro} aria-label="สีบน" style="width:44px;height:32px;padding:0;border:1px solid var(--line-strong);border-radius:6px"><input type="color" data-sd="c2" value="${sdPalette(sd)[1]}" ${ro} aria-label="สีล่าง" style="width:44px;height:32px;padding:0;border:1px solid var(--line-strong);border-radius:6px"><span class="muted" style="font-size:12px">${sd.c1?'กำหนดเอง':'ตาม Mood'}</span>${ed&&sd.c1?'<button type="button" class="btn link" data-sd-colreset>ใช้สีตาม Mood</button>':''}</div></div>
       ${ta('concept','Concept','แนวคิดของกลิ่น เรื่องที่อยากเล่า',2)}
       <div class="field sd-wide"><label>Mood (เลือกได้ 3)</label><div class="sc-chips">${SC_MOOD.map(m=>`<button type="button" class="sc-chip" data-sd-mood="${m.id}" aria-pressed="${sd.moods.includes(m.id)}" ${ro}>${esc(m.th)} · ${esc(m.en)}</button>`).join('')}</div></div>
       <div class="field sd-wide"><label for="sd_heart">Heart Ingredients</label><input id="sd_heart" data-sd="heart" maxlength="1000" value="${esc(sd.heart||'')}" placeholder="วัตถุดิบหัวใจของกลิ่น เช่น Rose, Jasmine, Sandalwood" ${ro}>
@@ -2057,6 +2087,7 @@ $('#sdBrief').addEventListener('input',e=>{
 $('#sdBrief').addEventListener('click',async e=>{
   const t=e.target.closest('button'); if(!t) return; const pid=calcCtxPid(), x=pid?calcProj(pid):null; if(!x) return;
   if(t.dataset.sdMood){ const d=sdDraft(pid), id=t.dataset.sdMood; d.moods=d.moods.includes(id)?d.moods.filter(m=>m!==id):d.moods.concat(id).slice(-3); renderSdBrief(); return; }
+  if(t.dataset.sdColreset!==undefined){ const d=sdDraft(pid); d.c1=''; d.c2=''; renderSdBrief(); return; }
   if(t.dataset.sdHeart){ const d=sdDraft(pid); d.heart=[d.heart,t.dataset.sdHeart].filter(v=>String(v||'').trim()).join(', '); renderSdBrief(); return; }
   if(t.dataset.sdImg){ const u=SD.imgs[t.dataset.sdImg]; if(u&&u!=='…') window.open(u,'_blank','noopener'); return; }
   if(t.dataset.sdImgdel){ if(!confirm('ลบรูปนี้?')) return; t.disabled=true;

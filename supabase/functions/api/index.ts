@@ -1452,7 +1452,8 @@ async function saveProjectScentDesign(ctx: Ctx, id: string, d: Any) {
     d = d && typeof d === "object" ? d : {};
     const arch = SD_TOKEN.test(String(d.arch || "")) ? String(d.arch) : "";
     const moods = (Array.isArray(d.moods) ? d.moods : []).map(String).filter((x: string) => SD_TOKEN.test(x)).filter((x: string, i: number, a: string[]) => a.indexOf(x) === i).slice(0, 3);
-    const sd = { story: str(d.story, 3000), arch, concept: str(d.concept, 3000), heart: str(d.heart, 1000), moods, tone: str(d.tone, 500), details: str(d.details, 3000), at: new Date().toISOString(), by: m.email };
+    const hexColor = (v: unknown) => (/^#[0-9a-f]{6}$/i.test(String(v || "")) ? String(v).toLowerCase() : "");   /* สีแบรนด์ใช้ไล่เฉด Fragrance Pyramid */
+    const sd = { c1: hexColor(d.c1), c2: hexColor(d.c2), story: str(d.story, 3000), arch, concept: str(d.concept, 3000), heart: str(d.heart, 1000), moods, tone: str(d.tone, 500), details: str(d.details, 3000), at: new Date().toISOString(), by: m.email };
     const data = { ...(pr.data || {}), scentDesign: sd };
     if (JSON.stringify(data).length > RD_DATA_MAX) throw new Error("ข้อมูลโครงการใหญ่เกินไป");
     await db`update costing.projects set data = ${db.json(data)}, updated_at = now(), updated_by = ${m.email} where id = ${String(pr.id)}`;

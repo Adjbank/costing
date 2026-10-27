@@ -18,6 +18,10 @@
 .doc-sheet .dtitle{text-align:right}
 .doc-sheet .dtitle h1{font-size:24px}
 .doc-sheet .dsub{font-size:11.5px;color:#444;margin-top:4px}
+.doc-sheet .dh.dh-sds{align-items:center;gap:24px;margin-bottom:26px}
+.doc-sheet .dh-sds .dtitle{text-align:left;width:48%;flex:0 0 48%}
+.doc-sheet .dh-sds .dtitle h1{font-family:"Times New Roman",Times,"Liberation Serif",serif;font-size:21px;font-weight:700;line-height:1.25;letter-spacing:0}
+.doc-sheet .dh-sds .dsub{font-family:Arial,"Liberation Sans",Helvetica,sans-serif;font-size:12px;line-height:1.4;color:#222;margin-top:6px}
 .doc-sheet .dsmall{font-size:11px;color:#333}
 .doc-sheet .dlab{font-weight:700;font-size:11.5px}
 .doc-sheet .dsec{background:#13214a;color:#fff;font-weight:700;padding:4px 10px;margin:18px 0 10px;font-size:12.5px;break-after:avoid}
@@ -3294,13 +3298,15 @@ function ifraHtml(d, meta){
     <p class="dsmall" style="margin-top:22px">Disclaimer: This Certificate provides restrictions for use of the specified product based only on those materials restricted by IFRA Standards for the toxicity endpoint(s) described in each Standard. This Certificate does not provide certification of a comprehensive safety assessment of all product constituents. This certificate is the responsibility of the fragrance supplier issuing it. It has not been prepared or endorsed by IFRA in anyway.</p>
     ${docFoot('IFRA', meta)}`;
 }
+const docRevDate=v=>{ const m=String(v||'').match(/^(\d{4})-(\d{2})-(\d{2})/), x=m?new Date(+m[1],+m[2]-1,+m[3]):(v?new Date(v):new Date()); if(isNaN(x)) return ''; return ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][x.getMonth()]+','+String(x.getDate()).padStart(2,'0')+','+x.getFullYear(); };
+const sdsHead=d=>`<div class="dh dh-sds"><div class="dlogo"><img src="${LOGO.h}" alt="Scent &amp; Sense" style="height:62px;width:auto;display:block"></div><div class="dtitle"><h1>Safety Data Sheet (SDS)</h1><div class="dsub">According to Globally Harmonized System of<br>Classification and Labelling of Chemicals (GHS)<br>Revision Date: ${esc(docRevDate(d.date))}</div></div></div>`;
 function sdsHtml(d, meta){
   const H=d.hazards, P=sdsPStatements(H), sec=docSec, li=a=>`<ul>${a.map(x=>`<li>${x}</li>`).join('')}</ul>`;
   const flam=H.find(c=>/^H22[456]$/.test(c));
   const tr = d.transport==='none' ? '<p>Not regulated as dangerous goods for transport.</p>'
     : `<p><b>IMDG (Maritime transport):</b></p>${li([`Proper shipping name: ${d.transport==='UN1169'?'Extracts, aromatic, liquid':'Perfumery products with flammable solvents'}`,'Class: 3 – Flammable liquids','Packing group: III',`UN number: ${d.transport==='UN1169'?'UN 1169':'UN 1266'}`,'EMS code: F-E, S-D'])}
        <p><b>ADR/RID (Road/Rail transport):</b></p>${li(['Class: 3 – Flammable liquids',`UN number: ${d.transport==='UN1169'?'UN 1169':'UN 1266'}`,'Label: 3 (Flammable liquid)','Tunnel restriction code: D/E'])}`;
-  return `${docHead('SAFETY DATA SHEET (MSDS)', `According to the Globally Harmonized System of Classification and Labelling of Chemicals (GHS)<br>${docSubLine(d, meta, 'Revision date')}`)}
+  return `${sdsHead(d)}
     ${sec(1,'Identification of the Substance/Mixture and of the Company')}
     ${docIdent(d, [['Recommended use',d.application]], [['Telephone',COMPANY.phone]])}
     ${sec(2,'Hazards Identification')}

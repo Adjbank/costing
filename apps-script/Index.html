@@ -1053,7 +1053,7 @@ main.wrap::after{content:"";display:block;height:52px;margin:36px 0 6px;border-r
       <section class="block" id="s3p">
         <div class="bh"><h2><span class="n">3</span>ข้อมูลกลิ่นสำหรับโปรเจคนี้</h2><span class="hint">บันทึกการออกแบบแต่ละแนวทาง · การส่งตัวอย่าง · ฟีดแบคและการยืนยันจากลูกค้า</span></div>
         <div id="projScentPanel"></div>
-        <div id="s4" class="s3-formulas">
+        <div id="s4" class="s3-formulas" hidden>   <!-- ซ่อนไว้ (ผู้ใช้ขอเอาออก) · คงโครงเดิมเพื่อให้โค้ดตารางสูตร/Feedback/Version ไม่พัง -->
           <h3 style="font-size:15px;margin:22px 0 4px">สูตรที่ออกแบบทั้งหมด · Feedback จากลูกค้า · Version</h3>
           <div class="muted" style="font-size:12.5px;margin-bottom:8px">คลิกชื่อเพื่อเปิดสูตร · บันทึก Feedback จากลูกค้า แล้วพัฒนาต่อเป็น Version ถัดไป</div>
           <div class="tablebox"><table id="overview"></table></div>
@@ -1837,7 +1837,7 @@ function renderDbFilters(){
 function renderWork(){ if(!can('calc')) return; renderDesignPanel(); renderSdBrief(); renderTabs(); renderEditor(); renderProjScent(); renderSummary(); renderOverview(); renderVersionPanel(); }
 function applyPermsToLayout(){
   const calc=can('calc'), view=can('viewDb');
-  ['#stepsBar','#s1','#s2','#s3p','#s4','#summary'].forEach(s=>$(s).hidden=!calc);
+  ['#stepsBar','#s1','#s2','#s3p','#summary'].forEach(s=>$(s).hidden=!calc);
   $('#s5').hidden=!view||calc;   /* ตารางฐานราคาไม่แสดงในหมวด Perfumer (เลือกวัตถุดิบผ่านช่องค้นหาในตัวออกแบบ) · แสดงเฉพาะผู้ที่มีสิทธิ์ดูราคาอย่างเดียว */
   $('.layout').style.gridTemplateColumns = calc ? '' : 'minmax(0,1fr)';
   let none=$('#noPerm');

@@ -942,7 +942,7 @@ main.wrap::after{content:"";display:block;height:52px;margin:36px 0 6px;border-r
 .ptab .vbadge.sm{margin-left:-2px}
 #importBox{margin:14px 0 0} #importBox>summary{font-weight:500}
 .rm-pick{position:relative;margin:0 0 12px}
-.row-pick{margin:6px 0 0;min-width:220px}.row-pick .rowq{width:100%;box-sizing:border-box;font-size:13px;padding:5px 8px;border:1px solid var(--line-strong);border-radius:8px;background:var(--input-bg);color:var(--ink)}.row-pick .rm-list{min-width:420px}
+.row-pick{margin:6px 0 0;min-width:220px}.code-pick{margin:0;min-width:0}.code-pick .rm-list{min-width:440px}.row-pick .rowq{width:100%;box-sizing:border-box;font-size:13px;padding:5px 8px;border:1px solid var(--line-strong);border-radius:8px;background:var(--input-bg);color:var(--ink)}.row-pick .rm-list{min-width:420px}
 .rm-pick input{width:100%;min-height:40px}
 .rm-list{position:absolute;left:0;right:0;top:100%;z-index:30;background:var(--card);border-radius:14px;box-shadow:0 18px 40px #091e4b2e;overflow:hidden;max-height:360px;overflow-y:auto}
 .rm-list:empty{display:none}
@@ -1672,7 +1672,7 @@ function renderDesignPanel(){
 /* ตัวเลือกวัตถุดิบจากฐานข้อมูล (ค้นหาแล้วกดเพิ่มเข้าสูตร) */
 function rmPickHtml(q, row){
   q=(q||'').trim().toLowerCase(); if(q.length<2) return '';
-  const hit=DB.entries.filter(e=>e.code.toLowerCase().includes(q)||e.name.toLowerCase().includes(q)).slice(0,8);
+  const ws=q.split(/\s+/).filter(Boolean), hit=DB.entries.filter(e=>{ const t=(e.code+' '+e.name).toLowerCase(); return ws.every(w=>t.includes(w)); }).slice(0,8);
   if(!hit.length) return '<div class="rm-none">ไม่พบวัตถุดิบที่ตรงกับคำค้น</div>';
   return hit.map(e=>`<button type="button" class="rm-opt" ${row!=null?`data-setline="${row}" data-code="${esc(e.code)}"`:`data-add="${esc(e.code)}"`} data-name="${esc(e.name)}"><span class="mono">${esc(e.code)}</span><span class="rm-nm">${esc(e.name)}</span><span class="rm-pr">${e.price!=null?fmtP(e.price)+' ฿/g':'–'}</span>${chip(e.status)}</button>`).join('');
 }
@@ -1753,7 +1753,7 @@ function renderEditor(){
           : `<span title="จากฐานราคา">${fmtP(r.price)}</span>`;
         return `<tr>
           <td class="muted">${k+1}</td>
-          <td><input class="code" data-i="${r.i}" data-f="code" value="${esc(r.ln.code)}" aria-label="รหัส RM"></td>
+          <td><div class="rm-pick row-pick code-pick"><input class="code" data-i="${r.i}" data-f="code" value="${esc(r.ln.code)}" autocomplete="off" placeholder="รหัสหรือชื่อ" aria-label="รหัส RM (พิมพ์รหัสหรือชื่อเพื่อค้นหา)"><div class="rm-list" data-codelist="${r.i}"></div></div></td>
           <td><div class="nm">${esc(nm)}<br>${chip(r.status)}${olfChip((r.e&&r.e.code)||r.ln.code)}${r.e&&r.e.disc?' <span class="chip bad">เลิกใช้/ห้ามใช้</span>':''}${note}</div>${!r.e?`<div class="rm-pick row-pick"><input class="rowq" data-rowq="${r.i}" type="search" autocomplete="off" placeholder="ค้นหาชื่อหรือรหัสวัตถุดิบ…" value="${esc(!r.ln.code&&r.ln.nameIn?r.ln.nameIn:'')}" aria-label="ค้นหาวัตถุดิบแถว ${k+1}"><div class="rm-list" data-rowlist="${r.i}"></div></div>`:''}</td>
           <td class="num"><input class="amt" data-i="${r.i}" data-f="amt" type="number" step="any" min="0" value="${esc(r.ln.amt)}" aria-label="ปริมาณ"></td>
           <td class="num">${fmt(r.pct,2)}</td>
@@ -2133,7 +2133,7 @@ $('#editor').addEventListener('change',e=>{
 
   else if(['unit','batchKg','lossPct','overhead'].includes(t.id)){ p[t.id]= t.id==='unit' ? t.value : t.value; }
   else if(t.dataset.f){ const ln=p.lines[+t.dataset.i]; if(!ln) return;
-    if(t.dataset.f==='code'){ ln.code=normCode(t.value); ln.nameIn=''; }
+    if(t.dataset.f==='code'){ const v=t.value.trim(); if(v&&!/^(rm-|[0-9])/i.test(v)){ ln.code=''; ln.nameIn=v; } else { ln.code=normCode(v); ln.nameIn=''; } }   /* พิมพ์ชื่อในช่องรหัส = จับคู่จากชื่อ */
     else if(t.dataset.f==='amt') ln.amt=t.value;
     else if(t.dataset.f==='override') ln.override=t.value; }
   else return;
@@ -2171,7 +2171,9 @@ $('#designPanel').addEventListener('change',e=>{
 });
 $('#designPanel').addEventListener('click',e=>{ const b=e.target.closest('[data-ddel]'); if(!b) return; const p=active(); if(!p||p.sample) return; calcEnsureItems(p).splice(+b.dataset.ddel,1); save(); renderWork(); });
 $('#btnNewDesign').addEventListener('click',()=>{ calcNewProduct(); save(); renderWork(); $('#designPanel').scrollIntoView({behavior:'smooth',block:'start'}); });
+$('#editor').addEventListener('mousedown',e=>{ if(e.target.closest('[data-setline]')) e.preventDefault(); });
 $('#editor').addEventListener('input',e=>{ if(e.target.id==='rmPick'){ const l=$('#rmPickList'); if(l) l.innerHTML=rmPickHtml(e.target.value); }
+  if(e.target.dataset.f==='code'&&e.target.dataset.i!=null){ const l=document.querySelector(`[data-codelist="${e.target.dataset.i}"]`); if(l) l.innerHTML=rmPickHtml(e.target.value, e.target.dataset.i); }
   if(e.target.dataset.rowq!=null){ const l=document.querySelector(`[data-rowlist="${e.target.dataset.rowq}"]`); if(l) l.innerHTML=rmPickHtml(e.target.value, e.target.dataset.rowq); } });
 $('#versionPanel').addEventListener('click',async e=>{
   const p=active(); if(!p||p.sample) return; const t=e.target.closest('button'); if(!t) return; const h=FH[p.id]||(FH[p.id]={versions:[],feedback:[]});

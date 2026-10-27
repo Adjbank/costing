@@ -1215,9 +1215,10 @@ async function finishMigration(ctx: Ctx) {
    โครงการหนึ่งรายการ = คำขอพัฒนา (FM-RD-01) หนึ่งใบ เดินผ่านขั้น s1..s8 → done (หรือ lost) ตามระเบียบปฏิบัติ QP-RD-01
    เลขเอกสาร FM-RD-XX-DDMMYY-NNN ออกให้เองจากตัวนับ docseq (NNN รันต่อเดือน) · ลูกค้าประเมินตัวอย่างผ่านลิงก์สาธารณะ (ไม่ต้อง log in) */
 const RD_VIEW = ["projects", "perfumer", "pd", "ra", "calc", "viewDb", "rdView"], RD_EDIT = ["projects", "perfumer", "pd"], RD_DATA_MAX = 60000;
-const RD_STAGES = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "done", "lost"];
+const RD_STAGES = ["s1", "s2", "s3", "s3e", "s4", "s5", "s6", "s7", "s8", "done", "lost"];   /* s3e = ส่งตัวอย่างกลิ่นให้ลูกค้าประเมิน (แทรกระหว่างออกแบบกลิ่นกับต้นแบบสินค้า) */
+const RD_MAX_ROUNDS = 3;   /* ส่งตัวอย่างกลิ่น/ต้นแบบได้ไม่เกิน 3 รอบ = รอบแรก + แก้ไข 2 ครั้ง */
 const RD_KINDS: Record<string, number> = { new: 1, cost: 1, topping: 1, repeat: 1 };
-const RD_SLA_DEFAULT: Record<string, number> = { s1: 1, s2: 2, s3: 15, s3send: 2, s3eval: 7, s5send: 2, s5eval: 7, s7: 1 };
+const RD_SLA_DEFAULT: Record<string, number> = { s1: 1, s2: 2, s3: 15, s3send: 2, s3eval: 7, s3e: 7, s5send: 2, s5eval: 7, s7: 1 };
 const RA_STATUS: Record<string, number> = { pending: 1, pass: 1, cond: 1, fail: 1 };
 const SAMPLE_KINDS: Record<string, number> = { scent: 1, mockup: 1 };
 const EVAL_FIELDS = ["scent", "appearance", "skinfeel", "target", "brand", "overall"];
@@ -1389,6 +1390,7 @@ async function gateCheck(db: Db, pr: Any, to: string): Promise<string> {
   switch (to) {
     case "s2": return !pr.customer_code ? "ระบุรหัสลูกค้าก่อน" : !ow.pc ? "ระบุผู้ประสานงาน (Project Coordinator) ก่อน" : "";
     case "s3": return ra.status !== "pass" && ra.status !== "cond" ? "RA ต้องตรวจกฎหมายผ่าน (หรือผ่านแบบมีเงื่อนไข) ก่อน" : !(ow.perfumer || []).length ? "มอบหมาย Perfumer ก่อน" : "";
+    case "s3e": return (await db`select 1 from costing.samples where project_id = ${String(pr.id)} and kind = 'scent' and status <> 'draft' limit 1`).length ? "" : "ยังไม่ได้ส่งตัวอย่างกลิ่นให้ลูกค้า (สร้างชุดตัวอย่าง FM-RD-04 แล้วกดส่ง)";
     case "s4": return (await decided("scent")) ? "" : 'ลูกค้ายังไม่ได้เลือกกลิ่นที่จะ "ผลิตจริงต่อไป" (ส่งตัวอย่างกลิ่น ' + RD_DIRECTIONS + ' แนวทาง แล้วให้ลูกค้าเลือก 1 กลิ่นในแบบประเมิน)';
     case "s5": return (await db`select 1 from costing.samples where project_id = ${String(pr.id)} and kind = 'mockup' limit 1`).length ? "" : "ยังไม่มีชุดตัวอย่างต้นแบบสินค้า (FM-RD-04)";
     case "s6": return (await decided("mockup")) ? "" : 'ลูกค้ายังไม่ได้ยืนยันต้นแบบ (ต้องมีผลประเมินต้นแบบที่เลือก "ผลิตจริงต่อไป")';
@@ -1596,6 +1598,18 @@ async function saveSample(ctx: Ctx, s: Any) {
     return sampleOut({ ...row, items, eval: ex ? ex.eval || {} : {} }, await evalBase(db));
   });
 }
+/** รอบที่ของชุดตัวอย่าง (นับเฉพาะชุดที่ส่งแล้วของโครงการและชนิดเดียวกัน ตามวันที่สร้าง) */
+async function sampleRound(db: Db, ex: Any): Promise<number> {
+  return Number((await db`select count(*)::int as n from costing.samples where project_id = ${String(ex.project_id)} and kind = ${String(ex.kind)} and status <> 'draft' and (created_at < ${ex.created_at} or id = ${String(ex.id)})`)[0].n) || 1;
+}
+/** ย้ายขั้นโครงการอัตโนมัติจากการส่งตัวอย่าง/ผลประเมิน (บันทึกใน stageLog) */
+async function autoStage(db: Db, pr: Any, to: string, note: string, by: string) {
+  const actual = { ...(pr.actual || {}) }, data = { ...(pr.data || {}) }, at = new Date().toISOString();
+  if (!actual[to]) actual[to] = at;
+  data.stageLog = (Array.isArray(data.stageLog) ? data.stageLog : []).concat([{ from: String(pr.stage), to, note: "[อัตโนมัติ] " + note, by, at }]).slice(-100);
+  await db`update costing.projects set stage = ${to}, actual = ${db.json(actual)}, data = ${db.json(data)}, updated_at = now() where id = ${String(pr.id)}`;
+  pr.stage = to; pr.actual = actual; pr.data = data;
+}
 /** ส่งตัวอย่าง: บันทึกวันส่ง สร้างลิงก์ประเมิน และบันทึกวันที่จริงของขั้นในโครงการ */
 async function sendSample(ctx: Ctx, id: string) {
   return await locked(ctx, async (c) => {
@@ -1608,10 +1622,17 @@ async function sendSample(ctx: Ctx, id: string) {
       const prior = (await db`select 1 from costing.samples where project_id = ${String(ex.project_id)} and kind = 'scent' and status = 'evaluated' limit 1`).length > 0;
       if (!prior && n !== RD_DIRECTIONS) throw new Error(`ตัวอย่างกลิ่นรอบแรกต้องเสนอ ${RD_DIRECTIONS} แนวทาง (ชุดนี้มี ${n}) · รอบแก้ไขหลังลูกค้าเลือกแล้วส่งกี่กลิ่นก็ได้`);
     }
+    if (String(ex.status) === "draft") {   /* จำกัดจำนวนรอบ: รอบแรก + แก้ไขได้ 2 ครั้ง */
+      const sent = Number((await db`select count(*)::int as n from costing.samples where project_id = ${String(ex.project_id)} and kind = ${String(ex.kind)} and status <> 'draft' and id <> ${String(ex.id)}`)[0].n) || 0;
+      if (sent >= RD_MAX_ROUNDS) throw new Error(`ส่ง${String(ex.kind) === "mockup" ? "ต้นแบบสินค้า" : "ตัวอย่างกลิ่น"}ครบ ${RD_MAX_ROUNDS} รอบแล้ว (รอบแรก + แก้ไข ${RD_MAX_ROUNDS - 1} ครั้ง) · ให้ลูกค้ายืนยัน หรือ Project Coordinator ตัดสินใจปิด/ยกเลิกโครงการ`);
+    }
     const now = new Date(), token = ex.eval_token || uuid(24), shipped = ex.shipped_at || now;
     await db`update costing.samples set status = 'sent', eval_token = ${token}, shipped_at = ${shipped}, updated_at = now(), updated_by = ${m.email} where id = ${String(ex.id)}`;
     const pr = (await db`select * from costing.projects where id = ${String(ex.project_id)}`)[0];
-    if (pr) { const key = String(ex.kind) === "mockup" ? "s5send" : "s3send", actual = { ...(pr.actual || {}) }; if (!actual[key]) actual[key] = now.toISOString(); await db`update costing.projects set actual = ${db.json(actual)}, updated_at = now() where id = ${String(pr.id)}`; }
+    if (pr) { const key = String(ex.kind) === "mockup" ? "s5send" : "s3send", actual = { ...(pr.actual || {}) }; if (!actual[key]) actual[key] = now.toISOString(); await db`update costing.projects set actual = ${db.json(actual)}, updated_at = now() where id = ${String(pr.id)}`; pr.actual = actual;
+      const rd = await sampleRound(db, ex);   /* ส่งแล้ว → เข้าขั้นรอลูกค้าประเมิน */
+      if (String(ex.kind) === "scent" && String(pr.stage) === "s3") await autoStage(db, pr, "s3e", "ส่งตัวอย่างกลิ่น " + String(ex.doc_no) + " รอบที่ " + rd, m.email);
+      if (String(ex.kind) === "mockup" && String(pr.stage) === "s4") await autoStage(db, pr, "s5", "ส่งต้นแบบสินค้า " + String(ex.doc_no) + " รอบที่ " + rd, m.email); }
     await log(db, m.email, "sendSample", String(ex.doc_no) + " · ส่งแล้ว");
     return sampleOut({ ...ex, status: "sent", eval_token: token, shipped_at: shipped, updated_by: m.email, updated_at: now }, await evalBase(db));
   });
@@ -1656,15 +1677,16 @@ button{background:#1f3a5f;color:#fff;border:0;border-radius:10px;padding:12px 20
   const items = Array.isArray(r.items) ? r.items : [], ev = r.eval || {}, done = String(r.status) === "evaluated";
   const CRIT = [["scent", "กลิ่น (Scent)"], ["appearance", "สี / ลักษณะภายนอก (Appearance)"], ["skinfeel", "ความรู้สึกหลังใช้งาน (Skin feel)"], ["target", "ความเหมาะสมกับกลุ่มเป้าหมาย (Target fit)"], ["brand", "ความเหมาะสมกับแบรนด์ (Brand alignment)"], ["overall", "ความชอบโดยรวม (Overall liking)"]];
   const prev = (code: string) => (Array.isArray(ev.items) ? ev.items : []).find((x: Any) => x.code === code) || {};
-  const isScent = String(r.kind) === "scent", pk = ev.pick || {};
+  const isScent = String(r.kind) === "scent", pk = ev.pick || {}, round = await sampleRound(sql, r), last = round >= RD_MAX_ROUNDS;
   const itemHtml = (it: Any, i: number) => { const pv = prev(it.code); return `<div class="card" data-item="${i}"><h2>${hx(it.code || "ตัวอย่าง " + (i + 1))}${it.name ? " · " + hx(it.name) : ""}</h2>${it.size ? `<div class="muted">${hx(it.size)}${it.qty ? " × " + hx(it.qty) : ""}</div>` : ""}
     ${CRIT.map(([k, l]) => `<div class="crit"><span>${l}</span><div class="scale">${[1, 2, 3, 4, 5].map((v) => `<label><input type="radio" name="s${i}_${k}" value="${v}" ${Number((pv.scores || {})[k]) === v ? "checked" : ""}><span>${v}</span></label>`).join("")}</div></div>`).join("")}
     <div style="margin-top:8px"><div class="muted">ความเห็น / ข้อเสนอแนะ</div><textarea name="c${i}" rows="2" maxlength="1000">${hx(pv.comment || "")}</textarea></div>
-    ${isScent ? "" : `<div class="dec" style="margin-top:8px"><div class="muted">ตัวอย่างนี้เหมาะสำหรับ</div><label><input type="radio" name="d${i}" value="produce" ${pv.decision === "produce" ? "checked" : ""}><span>ผลิตจริงต่อไป</span></label><label><input type="radio" name="d${i}" value="revise" ${pv.decision === "revise" ? "checked" : ""}><span>ปรับแก้แล้วส่งใหม่</span></label><label><input type="radio" name="d${i}" value="reject" ${pv.decision === "reject" ? "checked" : ""}><span>ไม่เลือก</span></label></div>`}</div>`; };
+    ${isScent ? "" : `<div class="dec" style="margin-top:8px"><div class="muted">ตัวอย่างนี้เหมาะสำหรับ</div><label><input type="radio" name="d${i}" value="produce" ${pv.decision === "produce" ? "checked" : ""}><span>ผลิตจริงต่อไป</span></label>${last ? "" : `<label><input type="radio" name="d${i}" value="revise" ${pv.decision === "revise" ? "checked" : ""}><span>ปรับแก้แล้วส่งใหม่</span></label>`}<label><input type="radio" name="d${i}" value="reject" ${pv.decision === "reject" ? "checked" : ""}><span>ไม่เลือก</span></label></div>`}</div>`; };
   const pickHtml = !isScent ? "" : `<div class="card" id="pick"><h2>เลือก 1 กลิ่นที่จะไปต่อ *</h2><div class="muted">จาก ${items.length} แนวทางที่ส่งมา เลือกได้กลิ่นเดียว</div>
     <div class="dec">${items.map((it: Any, i: number) => `<label><input type="radio" name="pick" value="${i}" ${Number(pk.idx) === i && pk.action ? "checked" : ""}><span>${hx(it.code || "ตัวอย่าง " + (i + 1))}${it.name ? " · " + hx(it.name) : ""}</span></label>`).join("")}</div>
-    <div class="muted" style="margin-top:10px">กลิ่นที่เลือกจะนำไป</div><div class="dec"><label><input type="radio" name="pickAct" value="produce" ${pk.action === "produce" ? "checked" : ""}><span>ไปต่อ · ผลิตจริงต่อไป</span></label><label><input type="radio" name="pickAct" value="revise" ${pk.action === "revise" ? "checked" : ""}><span>นำไปแก้ไขแล้วส่งใหม่</span></label></div></div>`;
+    <div class="muted" style="margin-top:10px">กลิ่นที่เลือกจะนำไป</div><div class="dec"><label><input type="radio" name="pickAct" value="produce" ${pk.action === "produce" ? "checked" : ""}><span>ไปต่อ · ผลิตจริงต่อไป</span></label>${last ? "" : `<label><input type="radio" name="pickAct" value="revise" ${pk.action === "revise" ? "checked" : ""}><span>นำไปแก้ไขแล้วส่งใหม่</span></label>`}</div></div>`;
   const body = `<div class="brandbar">Scent &amp; Sense · แผนกวิจัยและพัฒนา</div><h1>แบบประเมิน${String(r.kind) === "mockup" ? "ต้นแบบผลิตภัณฑ์" : "ตัวอย่างกลิ่น"}</h1>
+    <div class="muted">รอบที่ ${round} จาก ${RD_MAX_ROUNDS}${last ? " · <b>รอบสุดท้าย</b> (แก้ไขครบ " + (RD_MAX_ROUNDS - 1) + " ครั้งแล้ว)" : ""}</div>
     <div class="muted">${hx(r.brand || r.company)}${r.brand && r.company ? " · " + hx(r.company) : ""} · เอกสาร ${hx(r.doc_no)} · ส่งเมื่อ ${r.shipped_at ? hx(bkk(new Date(r.shipped_at)).slice(0, 10)) : "-"}</div>
     ${done ? `<div class="card ok"><b>ประเมินแล้ว</b> เมื่อ ${hx(bkk(new Date(ev.submittedAt || Date.now())))} โดย ${hx(ev.email || "")} · แก้ไขคำตอบได้ด้านล่างแล้วกดส่งอีกครั้ง</div>` : `<div class="card"><p style="margin:0">${isScent ? "ให้คะแนน 1 (น้อย) ถึง 5 (มาก) ทุกกลิ่นที่ส่งมา " + items.length + " แนวทาง แล้วเลือก 1 กลิ่นที่จะไปต่อ (ผลิตจริง) หรือนำไปแก้ไข" : "ให้คะแนน 1 (น้อย) ถึง 5 (มาก) ในแต่ละด้าน และเลือกว่าตัวอย่างใดให้ผลิตจริงต่อไป"} ใช้เวลาประมาณ 2 นาที</p></div>`}
     <form id="f">${items.map(itemHtml).join("")}${pickHtml}
@@ -1690,6 +1712,8 @@ async function evalSubmit(token: string, body: Any): Promise<Any> {
       EVAL_FIELDS.forEach((f) => { const v = Math.round(Number((a.scores || {})[f])); scores[f] = v >= 1 && v <= 5 ? v : 0; });
       return { code: String(it.code || ""), name: String(it.name || ""), scentId: String(it.scentId || ""), formulaCode: String(it.formulaCode || ""), scores, comment: str(a.comment, 1000), decision: EVAL_DECISIONS[a.decision] ? String(a.decision) : "" }; });
     if (evItems.some((x: Any) => EVAL_FIELDS.some((f) => !x.scores[f]))) throw new Error("ให้คะแนนให้ครบทุกด้าน");
+    const round = await sampleRound(db, ex), last = round >= RD_MAX_ROUNDS;
+    if (last && (evItems.some((x: Any) => x.decision === "revise") || String((body.pick || {}).action || "") === "revise")) throw new Error("รอบนี้เป็นรอบสุดท้าย (แก้ไขครบ " + (RD_MAX_ROUNDS - 1) + " ครั้งแล้ว) เลือกได้เฉพาะผลิตจริงต่อไปหรือไม่เลือก");
     let pick: Any = null;
     if (String(ex.kind) === "scent") {   /* ตัวอย่างกลิ่น: ลูกค้าเลือก 1 กลิ่น ที่เหลือถือว่าไม่เลือก */
       const pb = body.pick || {}, idx = Math.round(Number(pb.idx)), act = String(pb.action || "");
@@ -1705,7 +1729,10 @@ async function evalSubmit(token: string, body: Any): Promise<Any> {
     const pr = (await db`select * from costing.projects where id = ${String(ex.project_id)}`)[0];
     if (pr) { const key = String(ex.kind) === "mockup" ? "s5eval" : "s3eval", actual = { ...(pr.actual || {}) }, data = { ...(pr.data || {}) }; actual[key] = now.toISOString();
       if (pick) data.chosenScent = { ...pick, sampleId: String(ex.id), sampleDocNo: String(ex.doc_no || ""), evalDocNo, at: now.toISOString(), email };
-      await db`update costing.projects set actual = ${db.json(actual)}, data = ${db.json(data)}, updated_at = now() where id = ${String(pr.id)}`; }
+      await db`update costing.projects set actual = ${db.json(actual)}, data = ${db.json(data)}, updated_at = now() where id = ${String(pr.id)}`; pr.actual = actual; pr.data = data;
+      const by = "customer:" + email;   /* ลูกค้าขอแก้ → กลับไปขั้นออกแบบ/ทำต้นแบบ */
+      if (String(ex.kind) === "scent" && pick && pick.action === "revise" && String(pr.stage) === "s3e") await autoStage(db, pr, "s3", "ลูกค้าขอแก้ไขกลิ่น (รอบที่ " + round + "/" + RD_MAX_ROUNDS + ")", by);
+      if (String(ex.kind) === "mockup" && !ev.produce && evItems.some((x: Any) => x.decision === "revise") && String(pr.stage) === "s5") await autoStage(db, pr, "s4", "ลูกค้าขอแก้ไขต้นแบบ (รอบที่ " + round + "/" + RD_MAX_ROUNDS + ")", by); }
     if (pick && pick.action === "produce" && pick.scentId) await db`update costing.scents set status = 'approved', updated_at = now(), updated_by = ${"customer:" + email} where id = ${String(pick.scentId)} and status in ('draft', 'trial', 'sent')`;
     await log(db, "customer:" + email, "evalSubmit", String(ex.doc_no) + " → " + evalDocNo + (pick ? " · เลือก " + (pick.code || pick.name) + (pick.action === "produce" ? " ไปต่อ" : " นำไปแก้ไข") : ev.produce ? " · เลือกผลิตจริง" : ""));
     return { ok: true, docNo: evalDocNo };
@@ -2737,7 +2764,7 @@ function dashMonths(n: number) {
 function dashDue(p: Any, sla: Record<string, number>, sent: Record<string, string>, now: number) {
   const st = String(p.stage), entered = p.actual && p.actual[st]; if (!entered || st === "done" || st === "lost") return null;
   let days = sla[st], from = String(entered), waiting = false;
-  if (st === "s3" || st === "s5") { const s = sent[p.id + "|" + (st === "s3" ? "scent" : "mockup")]; if (s) { from = s; days = sla[st === "s3" ? "s3eval" : "s5eval"]; waiting = true; } }
+  if (st === "s3" || st === "s3e" || st === "s5") { const sc = st !== "s5", s = sent[p.id + "|" + (sc ? "scent" : "mockup")]; if (s) { from = s; days = sla[sc ? "s3eval" : "s5eval"]; waiting = true; } }
   const inStage = Math.floor((now - Date.parse(String(entered))) / 86400000);
   if (!days) return { left: null, overdue: false, waiting, inStage };
   const left = Math.ceil((Date.parse(from) + days * 86400000 - now) / 86400000);

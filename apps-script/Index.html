@@ -2503,7 +2503,7 @@ async function loadFromServer(){
     if(!S.me || S.me.email!==mine) return;                 /* เปลี่ยนผู้ใช้ระหว่างโหลด */
     const server = list.map(r=>{ try{ const p=JSON.parse(r.data); return p && Array.isArray(p.lines) ? Object.assign(p,{id:r.id}) : null; }catch(e){ return null; } }).filter(Boolean);
     const ids = new Set(server.map(p=>p.id));
-    const localOnly = state.products.filter(p=>!p.sample && !ids.has(p.id));
+    const localOnly = state.products.filter(p=>!p.sample && !ids.has(p.id) && !/^pfm-/.test(String(p.id)));   /* สูตรนำเข้าจากไฟล์ (pfm-…) ที่ย้ายเจ้าของแล้ว ไม่ดันกลับขึ้นบัญชีเดิม */
     if(server.length || localOnly.length){
       state.products = server.concat(localOnly);
       if(!state.products.find(p=>p.id===state.activeId)) state.activeId = state.products[0].id;

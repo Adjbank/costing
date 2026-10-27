@@ -1507,7 +1507,7 @@ async function calcLoadLinks(){
   if(CALC_LINK.loading||CALC_LINK.briefs) return; CALC_LINK.loading=true;
   try{ const [b,p]=await Promise.all([api('listBriefs').catch(()=>[]), api('listProjects').catch(()=>({items:[]}))]); CALC_LINK.briefs=b||[]; CALC_LINK.projects=(p&&p.items)||[]; CALC_LINK.err=''; }
   catch(e){ CALC_LINK.err=errText(e); CALC_LINK.briefs=[]; CALC_LINK.projects=[]; }
-  CALC_LINK.loading=false; if(S.view==='calc'&&active()) renderEditor();
+  CALC_LINK.loading=false; if(S.view==='calc'){ if(active()) renderEditor(); else renderDesignPanel(); }   /* ยังไม่มีงาน: วาดกล่องผูก PDR/บรีฟ ใหม่ให้มีรายการ */
 }
 const calcNum=v=>{ const n=parseFloat(String(v??'').replace(/,/g,'')); return isFinite(n)?n:0; };
 /* อ่านข้อความ "EDP 30 ml × 1,000" จาก PDR เป็นประเภท ปริมาตร และจำนวน */
@@ -1585,7 +1585,7 @@ function calcDesignHtml(p){
   return `<div class="cd-box" id="designBox">
     <div class="cd-h"><h3>งานออกแบบกลิ่น</h3><span class="muted">ผูกกับบรีฟหรือ PDR เพื่อดึงลูกค้า แบรนด์ สินค้า และแนวทางกลิ่นมาใช้${CALC_LINK.loading?' · กำลังโหลดรายการ…':''}</span></div>
     <div class="settings cd-links">
-      <div class="field" style="grid-column:1/-1"><label for="lnkQ">ค้นหา PDR / บรีฟ</label><input id="lnkQ" type="search" autocomplete="off" placeholder="พิมพ์เลข PDR ชื่อลูกค้า แบรนด์ ชื่องาน หรือสินค้า" value="${esc(CALC_LINK.q||'')}"></div>
+      <div class="field" style="grid-column:1/-1"><label for="lnkQ">ค้นหา PDR / บรีฟ</label><input id="lnkQ" type="search" autocomplete="off" placeholder="พิมพ์เลข PDR ชื่อลูกค้า แบรนด์ ชื่องาน หรือสินค้า" value="${esc(CALC_LINK.q||'')}"><div id="lnkCount" class="muted" style="font-size:12px;margin-top:4px"></div></div>
       <div class="field"><label for="lnkPdr">PDR จากฝ่ายขาย</label><select id="lnkPdr">${pl}</select></div>
       <div class="field"><label for="lnkBrief">บรีฟลูกค้า</label><select id="lnkBrief">${bl}</select></div>
     </div>
@@ -1836,7 +1836,9 @@ $('#editor').addEventListener('change',e=>{
 });
 $('#designPanel').addEventListener('input',e=>{
   if(e.target.id!=='lnkQ') return; CALC_LINK.q=e.target.value;
-  const p=active(), L=(p&&p.link)||{}, lo=calcLinkOpts(L, CALC_LINK.q), a=$('#lnkPdr'), b=$('#lnkBrief'); if(a) a.innerHTML=lo.pl; if(b) b.innerHTML=lo.bl;
+  const p=active(), L=(p&&p.link)||{}, lo=calcLinkOpts(L, CALC_LINK.q), a=$('#lnkPdr'), b=$('#lnkBrief'), n=$('#lnkCount'), on=!!CALC_LINK.q.trim();
+  if(a){ a.innerHTML=lo.pl; a.size=on?Math.min(7,a.options.length):1; } if(b){ b.innerHTML=lo.bl; b.size=on?Math.min(7,b.options.length):1; }
+  if(n) n.textContent=on?`พบ PDR ${Math.max(0,(a?a.options.length:1)-1)} รายการ · บรีฟ ${Math.max(0,(b?b.options.length:1)-1)} รายการ · คลิกที่รายการเพื่อเลือก`:'';
 });
 $('#designPanel').addEventListener('change',e=>{
   const t=e.target; let p=active(); if(p&&p.sample) p=null; /* สูตรตัวอย่างไม่ถูกแก้ทับ: เริ่มงานใหม่แทน */

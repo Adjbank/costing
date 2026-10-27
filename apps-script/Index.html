@@ -5111,7 +5111,7 @@ function renderUsersTab(){
     <div class="tablebox"><table><thead><tr><th>อีเมล</th><th>บทบาท</th><th>สถานะ</th><th>เพิ่มเมื่อ</th><th></th></tr></thead><tbody>
     ${list.map(u=>{ const self=u.email===d.me, locked=u.owner||self;
       return `<tr data-email="${esc(u.email)}">
-        <td><div class="person">${ava(u.email)}<div><span>${esc(u.email)}</span>${u.owner?'<small>เจ้าของระบบ</small>':self?'<small>คุณ</small>':''}${u.addedBy&&!u.owner?`<small>เพิ่มโดย ${esc(shortName(u.addedBy))}</small>`:''}</div></div></td>
+        <td><div class="person">${ava(u.email)}<div><span>${esc(u.email)}</span>${u.owner?'<small>เจ้าของระบบ</small>':self?'<small>คุณ</small>':''}${u.addedBy&&!u.owner?`<small>เพิ่มโดย ${esc(shortName(u.addedBy))}</small>`:''}${u.owner&&!d.users.some(x=>x.email===u.email)?'':`<input data-uname type="text" maxlength="120" value="${esc(u.fullName||'')}" placeholder="ชื่อ-นามสกุล (ใช้ในเอกสาร)" aria-label="ชื่อ-นามสกุล" style="margin-top:4px;font-size:12.5px;padding:4px 8px;border:1px solid var(--line-strong);border-radius:6px;background:var(--input-bg);width:100%;min-width:200px">`}</div></div></td>
         <td>${locked?`<span class="chip info">${esc(S.roles[u.role]?S.roles[u.role].name:u.role)}</span>`:`<select data-act="role" aria-label="บทบาท">${roleOpts(u.role)}</select>${S.roles[u.role]?'':' <span class="chip bad">บทบาทถูกลบ</span>'}`}</td>
         <td>${u.active?'<span class="chip ok">ใช้งาน</span>':'<span class="chip bad">ระงับ</span>'} ${(u.hasPassword||(d.withPassword||[]).includes(u.email))?'<span class="chip info" title="ตั้งรหัสผ่านแล้ว">มีรหัสผ่าน</span>':'<span class="chip warn" title="ยังไม่เคยตั้งรหัสผ่าน">ยังไม่ตั้งรหัส</span>'}</td>
         <td class="muted" style="white-space:nowrap">${fmtDate(u.addedAt)}</td>
@@ -5191,6 +5191,7 @@ adm.addEventListener('change', e=>{
   if(t.id==='accAuto' || t.id==='accRole'){ const on=$('#accAuto').checked, r=$('#accRole').value;
     return admCall('saveAccess',[on, r], on?`เปิดเข้าใช้อัตโนมัติแล้ว · บทบาทเริ่มต้น "${S.roles[r].name}"`:'ปิดเข้าใช้อัตโนมัติแล้ว'); }
   const row=t.closest('tr[data-email]');
+  if(row && t.hasAttribute('data-uname')){ return admCall('setUserName',[row.dataset.email, t.value.trim()],'บันทึกชื่อแล้ว'); }
   if(row && t.dataset.act==='role'){ const u=S.adm.users.find(x=>x.email===row.dataset.email); return admCall('setUser',[row.dataset.email, t.value, u?u.active:true, false],'เปลี่ยนบทบาทแล้ว'); }
   const rr=t.closest('tr[data-rid]'); if(!rr) return;
   if(t.dataset.perm) return admCall('updateRole',[rr.dataset.rid, {perms:{[t.dataset.perm]:t.checked}}],'บันทึกสิทธิ์แล้ว');
@@ -5576,10 +5577,12 @@ function pdRedraw(){
 /* ใบสูตรพิมพ์ = แบบฟอร์ม FM-RD-03 Rev.01 "Prototype Product Formulation Record"
    หน้า 1 ข้อมูลโครงการ + รายการสูตร (ไม่มีราคา/ต้นทุน เพราะเป็นเอกสารหน้างาน มีช่อง drop และ ชั่งจริง ให้เขียน) · หน้า 2 วิธีทำ ข้อกำหนด ประเมินความคงตัว · หน้า 3 สรุปผล */
 const FM3_REV='FM-RD-03: Rev. No.01. 18/03/2569';
+let PEOPLE=null;
+async function pdPeople(){ if(PEOPLE) return PEOPLE; try{ PEOPLE=await api('listPeopleNames'); }catch(e){ PEOPLE={}; } return PEOPLE; }
 function pdPrintHtml(f){
   const batch=toNum(f.batchG)||1000, c=pdCost(f), e=esc;
   const th=v=>{ if(!v) return ''; const m=String(v).match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return `${+m[3]}/${+m[2]}/${+m[1]+543}`; const d=new Date(v); return isNaN(d)?'':`${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()+543}`; };
-  const who=v=>String(v||'').includes('@')?shortName(v):String(v||'');
+  const who=v=>{ v=String(v||'').trim(); if(!v.includes('@')) return v; return (PEOPLE&&PEOPLE[v.toLowerCase()])||shortName(v); };   /* อีเมล → ชื่อจริงจากหน้าผู้ใช้ ถ้ายังไม่ตั้งชื่อใช้ส่วนหน้าอีเมล */
   const sample=[f.fragranceName, f.fragranceCode?'('+f.fragranceCode+')':''].filter(Boolean).join(' ');
   const kv=(l1,v1,l2,v2,tall)=>`<tr${tall?' style="height:46px"':''}><td class="lab">${l1}</td><td>${e(v1==null?'':v1)}</td><td class="lab">${l2}</td><td>${e(v2==null?'':v2)}</td></tr>`;
   const info=[
@@ -5625,7 +5628,7 @@ function pdPrintHtml(f){
     </div>
   </div>`;
 }
-function pdPrint(f){ $('#docPrint').innerHTML=pdPrintHtml(f); $('#docTitle').textContent='ใบสูตรผลิตภัณฑ์ · '+f.code; $('#docOverlay').hidden=false; document.body.classList.add('doc-open'); $('#docPrint').scrollTop=0; }
+async function pdPrint(f){ await pdPeople(); $('#docPrint').innerHTML=pdPrintHtml(f); $('#docTitle').textContent='ใบสูตรผลิตภัณฑ์ · '+f.code; $('#docOverlay').hidden=false; document.body.classList.add('doc-open'); $('#docPrint').scrollTop=0; }
 /* บล็อกในหน้าโครงการ: สูตรผลิตภัณฑ์ของโครงการนั้น */
 function rdPdBlock(p){
   const list=(PD.list||[]).filter(f=>f.projectId===p.id);

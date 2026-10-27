@@ -396,16 +396,32 @@ async function saveExport(ctx: Ctx, filename: string, b64: string) {
 /* ===== ผู้ดูแลระบบ ===== */
 async function adminData_(ctx: Ctx, m: Me) {
   const db = ctx.db, rr = await readRoles(db);
-  const users = await db`select email, role, active, added_by, added_at from costing.users order by added_at, email`;
+  const users = await db`select email, role, active, added_by, added_at, full_name from costing.users order by added_at, email`;
   const reqs = await db`select email, at from costing.requests order by at`;
   const vis = await db`select email, first_seen, last_seen from costing.visitors order by first_seen`;
   const pw = new Set((await db`select email from costing.credentials`).map((r: Any) => String(r.email).toLowerCase()));
   return { owner: m.owner, me: m.email, withPassword: [...pw],
-    users: users.map((r: Any) => ({ email: String(r.email).toLowerCase(), role: String(r.role), active: r.active !== false, addedBy: String(r.added_by || ""), addedAt: iso(r.added_at), hasPassword: pw.has(String(r.email).toLowerCase()) })),
+    users: users.map((r: Any) => ({ email: String(r.email).toLowerCase(), role: String(r.role), active: r.active !== false, addedBy: String(r.added_by || ""), addedAt: iso(r.added_at), fullName: String(r.full_name || ""), hasPassword: pw.has(String(r.email).toLowerCase()) })),
     requests: reqs.map((r: Any) => ({ email: String(r.email).toLowerCase(), at: iso(r.at) })),
     visitors: vis.map((r: Any) => ({ email: String(r.email).toLowerCase(), firstSeen: iso(r.first_seen), lastSeen: iso(r.last_seen) })),
     roles: rr.roles, order: rr.order,
     access: { autoJoin: (await getSetting(db, "autoJoin")) === "true", defaultRole: (await getSetting(db, "defaultRole")) || "costing" } };
+}
+/** ชื่อ-นามสกุลจริงของผู้ใช้ (ใช้พิมพ์ในช่องผู้ลงนามของเอกสาร เช่น FM-RD-03) */
+async function setUserName(ctx: Ctx, email: string, name: string) {
+  return await locked(ctx, async (c) => {
+    const m = await need(c, "manageUsers"), db = c.db; email = str(email, 200).toLowerCase(); name = str(name, 120);
+    if (!(await db`update costing.users set full_name = ${name} where email = ${email} returning email`).length) throw new Error("ไม่พบผู้ใช้นี้");
+    await log(db, m.email, "setUserName", email + " · " + name);
+    return await adminData_(c, m);
+  });
+}
+/** อีเมล → ชื่อจริง ของผู้ใช้ที่ตั้งชื่อไว้ · คนที่ดูข้อมูล R&D ได้ใช้แสดงชื่อในเอกสาร */
+async function listPeopleNames(ctx: Ctx) {
+  await needAny(ctx, RD_VIEW);
+  const out: Record<string, string> = {};
+  (await ctx.db`select email, full_name from costing.users where active is not false and full_name <> ''`).forEach((r: Any) => { out[String(r.email).toLowerCase()] = String(r.full_name); });
+  return out;
 }
 async function adminData(ctx: Ctx) { return await adminData_(ctx, await need(ctx, "manageUsers")); }
 async function setUser(ctx: Ctx, email: string, role: string, active: boolean, notify: boolean) {
@@ -2776,7 +2792,7 @@ const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   listBriefs, saveBrief, deleteBrief, listScents, saveScent, deleteScent, getTypeformStatus, saveTypeformToken, syncTypeform, disconnectTypeform,
   pwLogin, setMyPassword, pwLogout, resetUserPassword,
   listCustomers, saveCustomer, listProjects, getProject, saveProject, setStage, bulkStage, raCheck, issueProjectDoc, uploadProjectDoc, getProjectDocFile, deleteProjectDoc, listSamples, saveSample, sendSample, deleteSample, evalSummary, importRd,
-  listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases, importPdFormulas, searchPdImported, getPdFormula, listPdDocFormulas, listPdCustomers, listPdByCustomer, searchPdFormulas, listLabelArchive, getLabelArchive, saveLabelArchive, deleteLabelArchive, listPdDupKeys, listPriceQuotes, importPriceQuotes, saveProjectMockups,
+  listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases, importPdFormulas, searchPdImported, getPdFormula, listPdDocFormulas, listPdCustomers, listPdByCustomer, searchPdFormulas, listLabelArchive, getLabelArchive, saveLabelArchive, deleteLabelArchive, listPdDupKeys, listPriceQuotes, importPriceQuotes, saveProjectMockups, setUserName, listPeopleNames,
   listPdTrials, savePdTrial, sendPdTrial, decidePdTrial, issuePdTrialStock,
   listRdStock, listRdStockTx, saveRdStockItem, deleteRdStockItem, addRdStockTx, importRdStock,
   listFda, saveFdaReg, renewFdaReg, deleteFdaReg, saveFdaRequest, deleteFdaRequest, getFdaAlert, saveFdaAlert, resetFdaAlertSecret,

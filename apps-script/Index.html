@@ -2961,14 +2961,22 @@ const GHS_P = {base:[['P102','Keep out of reach of children'],['P264','Wash hand
 const DOC_BANDS=[[90,'90-100'],[80,'80-90'],[70,'70-80'],[60,'60-70'],[50,'50-60'],[40,'40-50'],[30,'30-40'],[20,'20-30'],[10,'10-20'],[5,'5-10'],[1,'1-5'],[0.1,'0.1-1'],[0.01,'0.01-0.1'],[0.001,'0.001-0.01'],[0,'<0.001']];
 const docBand=p=>(DOC_BANDS.find(([lo])=>p>=lo)||DOC_BANDS[DOC_BANDS.length-1])[1];
 const docDate=d=>{ const x=d?new Date(d):new Date(); return isNaN(x)?'':x.toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}); };
-let DOCS=null, DOCF=null, docQ='';
+let DOCS=null, DOCF=null, docQ='', PDDOCF=[];
+/* สูตร Product Development ที่อนุมัติแล้ว → รูปแบบสูตรของหน้าเอกสาร (หน่วย %) */
+function pdAsProduct(x){
+  return {id:x.id, name:x.name, unit:'pct', lossPct:0, overhead:0, batchKg:1, sell:0,
+    lines:(x.lines||[]).map(l=>({code:l.code||'', nameIn:l.name||'', amt:l.pct==null?'':String(l.pct)})),
+    meta:{customer:x.customer||'', brand:x.brand||'', sampleCode:x.fragranceCode||x.fgCode||'', sampleName:x.name||''}};
+}
 function docFormulas(){
-  if(isAdminRole() && ADM_FORMS) return ADM_FORMS.map(f=>({id:f.id, owner:f.owner, p:f.p}));
-  return state.products.filter(p=>!p.sample).map(p=>({id:p.id, owner:S.me.email, p}));
+  const pd=PDDOCF.map(x=>({id:x.id, owner:String(x.updatedBy||'').toLowerCase(), p:pdAsProduct(x), pd:x}));
+  if(isAdminRole() && ADM_FORMS) return ADM_FORMS.map(f=>({id:f.id, owner:f.owner, p:f.p})).concat(pd);
+  return state.products.filter(p=>!p.sample).map(p=>({id:p.id, owner:S.me.email, p})).concat(pd);
 }
 async function loadDocs(force){
-  if(DOCS && !force) return;
-  const tasks=[api('listDocs')];
+  const pdp=api('listPdDocFormulas').then(l=>{ PDDOCF=l; }).catch(()=>{});   /* สูตร PD ที่อนุมัติแล้ว: โหลดใหม่ทุกครั้งที่เปิดหน้า */
+  if(DOCS && !force){ await pdp; return; }
+  const tasks=[api('listDocs'), pdp];
   if(isAdminRole()) tasks.push(loadAdminForms(force));
   if(!CHK || force) tasks.push(loadChk(force));
   const [list]=await Promise.all(tasks); DOCS=list;
@@ -3169,10 +3177,10 @@ function drawDocs(){
     <div class="search"><input id="docQ" type="search" autocomplete="off" placeholder="ค้นหาชื่อสูตร ลูกค้า แบรนด์ รหัสตัวอย่าง หรือเลขที่เอกสาร…" value="${esc(docQ)}">
       <button class="btn small" type="button" id="docRefresh">รีเฟรช</button><button class="btn small" type="button" id="docXls">ดาวน์โหลดทะเบียน Excel</button></div>
     <div class="tablebox"><table><thead><tr><th>ชื่อสูตร / ผลิตภัณฑ์</th><th>ลูกค้า</th><th>แบรนด์</th><th>รหัสตัวอย่าง</th>${isAdminRole()?'<th>เจ้าของสูตร</th>':''}<th>เอกสาร <span class="muted" style="font-weight:400;font-size:11.5px">(สีเข้ม = ออกแล้ว กดเพื่อพิมพ์)</span></th>${canIssue?'<th>ออกฉบับใหม่</th>':''}</tr></thead><tbody>
-      ${rows.map(r=>`<tr data-fid="${esc(r.f.id)}"><td><b>${esc(r.m.sampleName||r.f.p.name)}</b>${r.m.sampleName&&r.m.sampleName!==r.f.p.name?`<div class="muted" style="font-size:12px">${esc(r.f.p.name)}</div>`:''}</td><td>${esc(r.m.customer)||dash}</td><td>${esc(r.m.brand)||dash}</td><td class="mono">${esc(r.m.sampleCode)||dash}</td>${isAdminRole()?`<td class="muted" style="font-size:12.5px">${esc(shortName(r.f.owner))}</td>`:''}
+      ${rows.map(r=>`<tr data-fid="${esc(r.f.id)}"><td><b>${esc(r.m.sampleName||r.f.p.name)}</b>${r.f.pd?` <span class="chip info" style="font-size:11px" title="สูตรจาก Product Development ที่อนุมัติแล้ว">Product Development · ${esc(r.f.pd.code)}</span>`:''}${r.m.sampleName&&r.m.sampleName!==r.f.p.name?`<div class="muted" style="font-size:12px">${esc(r.f.p.name)}</div>`:''}</td><td>${esc(r.m.customer)||dash}</td><td>${esc(r.m.brand)||dash}</td><td class="mono">${esc(r.m.sampleCode)||dash}</td>${isAdminRole()?`<td class="muted" style="font-size:12.5px">${esc(shortName(r.f.owner))}</td>`:''}
         <td><div class="doc-pills">${pills(r)}</div></td>
         ${canIssue?`<td><select class="doc-new" aria-label="ออกเอกสารฉบับใหม่"><option value="">ออกเอกสาร…</option>${DOC_ORDER.map((k,i)=>`<option value="${k}">${i+1}. ${esc(DOC_META[k].t)}</option>`).join('')}</select></td>`:''}</tr>`).join('')
-      || `<tr><td colspan="9" class="empty">${fs.length?'ไม่พบสูตรที่ตรงกับคำค้น':'ยังไม่มีสูตรในทะเบียน นำเข้าสูตรที่ Perfumer › คำนวณต้นทุนก่อน'}</td></tr>`}
+      || `<tr><td colspan="9" class="empty">${fs.length?'ไม่พบสูตรที่ตรงกับคำค้น':'ยังไม่มีสูตรในทะเบียน นำเข้าสูตรที่ Perfumer › คำนวณต้นทุน หรืออนุมัติสูตรที่ Product Development ก่อน'}</td></tr>`}
     </tbody></table></div>
     <div id="docForm"></div>
     <details class="card" style="margin-top:16px"><summary style="cursor:pointer;font-weight:700">ประวัติเอกสารทั้งหมด (${DOCS.length})</summary>
@@ -3180,7 +3188,7 @@ function drawDocs(){
         ${DOCS.map(d=>`<tr><td class="mono">${esc(d.docNo)}</td><td>${esc(d.type)}</td><td>${esc(d.product)}</td><td>${esc(d.customer)||dash}</td><td class="muted" style="white-space:nowrap">${fmtSeen(d.issuedAt)}</td><td class="muted">${esc(shortName(d.issuedBy))}</td>
           <td>${d.status==='void'?'<span class="chip bad">ยกเลิก</span>':'<span class="chip ok">ใช้งาน</span>'}</td><td><div class="adm-actions"><button class="btn small" type="button" data-docopen="${esc(d.id)}">เปิด</button>${isAdminRole()&&d.status!=='void'?`<button class="btn small danger" type="button" data-docvoid="${esc(d.id)}">ยกเลิก</button>`:''}</div></td></tr>`).join('') || '<tr><td colspan="8" class="empty">ยังไม่มีเอกสาร</td></tr>'}
       </tbody></table></div></details>
-    <div class="note-box" style="margin-top:14px">ทะเบียนนี้รวมสูตรที่บันทึกในระบบ${isAdminRole()?'ของทุกคน':'ของคุณ'} · ชื่อผลิตภัณฑ์ ลูกค้า แบรนด์ มาจากข้อมูลหัวฟอร์มของสูตร แก้ได้ที่ Perfumer › คำนวณต้นทุน (ขั้นตอนที่ 2) · เอกสารที่ออกแล้วแก้ไม่ได้ ถ้าต้องแก้ให้ออกฉบับใหม่ (เลขที่ใหม่ Rev ถัดไป) และผู้ดูแลระบบยกเลิกฉบับเดิมได้</div>`;
+    <div class="note-box" style="margin-top:14px">ทะเบียนนี้รวมสูตรที่บันทึกในระบบ${isAdminRole()?'ของทุกคน':'ของคุณ'} · ชื่อผลิตภัณฑ์ ลูกค้า แบรนด์ มาจากข้อมูลหัวฟอร์มของสูตร แก้ได้ที่ Perfumer › คำนวณต้นทุน (ขั้นตอนที่ 2) · สูตรจาก Product Development จะแสดงในทะเบียนนี้เมื่อสถานะเป็น "อนุมัติ" (แก้ที่หน้า Product Development) · เอกสารที่ออกแล้วแก้ไม่ได้ ถ้าต้องแก้ให้ออกฉบับใหม่ (เลขที่ใหม่ Rev ถัดไป) และผู้ดูแลระบบยกเลิกฉบับเดิมได้</div>`;
 }
 /* --- ฟอร์มออกเอกสาร --- */
 function openDocForm(type, fid){

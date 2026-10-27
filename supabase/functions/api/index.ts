@@ -725,7 +725,14 @@ const docOut = (r: Any, withData: boolean) => {
   if (withData) o.data = String(r.data || "");
   return o;
 };
-const docVisible = (m: Me, r: Any) => isAdmin(m) || String(r.owner).toLowerCase() === m.email;
+/** สูตรจาก Product Development (pd_formulas) ใช้ id ขึ้นต้น pdf- (สร้างในระบบ) หรือ imp-fm03- (นำเข้าจากไฟล์) · เอกสารของสูตรกลุ่มนี้ทุกคนที่มีสิทธิ์ calc เห็น เพราะสูตร PD เป็นของทีม */
+const isPdDocId = (id: unknown) => /^(pdf|imp-fm03)-/.test(String(id || ""));
+const docVisible = (m: Me, r: Any) => isAdmin(m) || String(r.owner).toLowerCase() === m.email || isPdDocId(r.formula_id);
+/** สูตร Product Development ที่อนุมัติแล้ว ให้หมวด "เอกสารวัตถุดิบ" ใช้ออกเอกสาร (Stability · Packaging · MSDS · IFRA · Spec) */
+async function listPdDocFormulas(ctx: Ctx) {
+  const m = await need(ctx, "calc");
+  return (await ctx.db`select * from costing.pd_formulas where status = 'approved' order by updated_at desc limit 3000`).map((x: Any) => maskPd(m, fmOut(x)));
+}
 async function listDocs(ctx: Ctx) {
   const m = await need(ctx, "calc");
   return (await ctx.db`select * from costing.docs order by issued_at desc`).filter((r: Any) => docVisible(m, r)).map((r: Any) => docOut(r, false));
@@ -743,10 +750,19 @@ async function issueDoc(ctx: Ctx, type: string, formulaId: string, data: string)
     if (!DOC_TYPES[type]) throw new Error("ประเภทเอกสารไม่ถูกต้อง");
     formulaId = String(formulaId || "");
     if (!/^[A-Za-z0-9_-]{3,40}$/.test(formulaId)) throw new Error("รหัสสูตรไม่ถูกต้อง");
-    const fr = await db`select id, owner, name from costing.formulas where id = ${formulaId} limit 1`;
-    if (!fr.length) throw new Error("ไม่พบสูตรนี้ในระบบ (บันทึกสูตรก่อนออกเอกสาร)");
-    const f = fr[0];
-    if (!isAdmin(m) && String(f.owner).toLowerCase() !== m.email) throw new Error("FORBIDDEN");
+    let f: Any;
+    if (isPdDocId(formulaId)) {   /* สูตร Product Development: ออกได้เมื่ออนุมัติแล้วเท่านั้น */
+      const pr = await db`select id, name, status, updated_by from costing.pd_formulas where id = ${formulaId} limit 1`;
+      if (!pr.length) throw new Error("ไม่พบสูตรนี้ในระบบ");
+      if (String(pr[0].status) !== "approved") throw new Error("ออกเอกสารได้เฉพาะสูตร Product Development ที่อนุมัติแล้ว");
+      const ow = String(pr[0].updated_by || "").toLowerCase();
+      f = { id: pr[0].id, owner: /@/.test(ow) ? ow : m.email, name: pr[0].name };
+    } else {
+      const fr = await db`select id, owner, name from costing.formulas where id = ${formulaId} limit 1`;
+      if (!fr.length) throw new Error("ไม่พบสูตรนี้ในระบบ (บันทึกสูตรก่อนออกเอกสาร)");
+      f = fr[0];
+      if (!isAdmin(m) && String(f.owner).toLowerCase() !== m.email) throw new Error("FORBIDDEN");
+    }
     let d: Any = {};
     try { d = JSON.parse(String(data || "{}")); } catch (_e) { throw new Error("ข้อมูลเอกสารไม่ถูกต้อง"); }
     const product = String(d.product || f.name || "").trim().slice(0, 200);
@@ -2621,7 +2637,7 @@ const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   listBriefs, saveBrief, deleteBrief, listScents, saveScent, deleteScent, getTypeformStatus, saveTypeformToken, syncTypeform, disconnectTypeform,
   pwLogin, setMyPassword, pwLogout, resetUserPassword,
   listCustomers, saveCustomer, listProjects, getProject, saveProject, setStage, bulkStage, raCheck, issueProjectDoc, uploadProjectDoc, getProjectDocFile, deleteProjectDoc, listSamples, saveSample, sendSample, deleteSample, evalSummary, importRd,
-  listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases, importPdFormulas, searchPdImported, getPdFormula,
+  listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases, importPdFormulas, searchPdImported, getPdFormula, listPdDocFormulas,
   listPdTrials, savePdTrial, sendPdTrial, decidePdTrial, issuePdTrialStock,
   listRdStock, listRdStockTx, saveRdStockItem, deleteRdStockItem, addRdStockTx, importRdStock,
   listFda, saveFdaReg, renewFdaReg, deleteFdaReg, saveFdaRequest, deleteFdaRequest, getFdaAlert, saveFdaAlert, resetFdaAlertSecret,

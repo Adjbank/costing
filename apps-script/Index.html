@@ -2488,7 +2488,7 @@ function evaluate(){
 
 /* --- สูตรของฉัน: เก็บบนเซิร์ฟเวอร์ (ชีต Formulas) เจ้าของเห็นของตัวเอง แอดมินเห็นทุกคนในหน้าจัดการ ---
    ซิงก์แบบหน่วงเวลา 1.5 วินาทีหลังแก้ไข · สูตรตัวอย่าง (sample) ไม่ถูกส่งขึ้นเซิร์ฟเวอร์ */
-const SYNC = {timer:null, busy:false, dirty:false, loaded:false};
+const SYNC = {timer:null, busy:false, dirty:false, loaded:false, known:new Set()};   /* known = รหัสสูตรที่เครื่องนี้เคยโหลด/บันทึก · เซิร์ฟเวอร์ลบเฉพาะที่อยู่ในนี้ (กันสูตรที่ถูกนำเข้า/ใส่จากที่อื่นถูกลบทับ) */
 function setSyncStatus(kind){
   const el=$('#syncStatus'); if(!el) return;
   const m={pending:['กำลังบันทึก…',''], saved:['บันทึกบนเซิร์ฟเวอร์แล้ว','var(--ok)'], error:['บันทึกบนเซิร์ฟเวอร์ไม่สำเร็จ จะลองใหม่เมื่อแก้ไขครั้งถัดไป','var(--bad)'], offline:['','']}[kind]||['',''];
@@ -2505,7 +2505,7 @@ async function syncNow(){
   if(SYNC.busy){ SYNC.dirty=true; return; }
   if(!SYNC.loaded){ await loadFromServer(); if(!SYNC.loaded){ setSyncStatus('error'); return; } }
   SYNC.busy=true; SYNC.dirty=false;
-  try{ await api('saveMyFormulas', syncItems()); setSyncStatus(SYNC.dirty?'pending':'saved'); }
+  try{ const items=syncItems(); await api('saveMyFormulas', items, [...new Set([...SYNC.known, ...items.map(x=>x.id)])]); SYNC.known=new Set(items.map(x=>x.id)); setSyncStatus(SYNC.dirty?'pending':'saved'); }
   catch(e){ SYNC.dirty=true; setSyncStatus('error'); }
   finally{ SYNC.busy=false; if(SYNC.dirty && !SYNC.timer) SYNC.timer=setTimeout(syncNow, 1500); }
 }
@@ -2523,6 +2523,7 @@ async function loadFromServer(){
       if(!state.products.find(p=>p.id===state.activeId)) state.activeId = state.products[0].id;
       store.set('ss-cost-state:'+mine, state);
     }
+    SYNC.known = new Set(server.map(p=>p.id));
     SYNC.loaded = true;
     if(!S.admin) renderAll();
     if(localOnly.length) scheduleSync(); else setSyncStatus(server.length?'saved':'offline');

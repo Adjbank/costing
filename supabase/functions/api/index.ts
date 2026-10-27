@@ -515,7 +515,7 @@ async function loadMyFormulas(ctx: Ctx) {
   const m = await need(ctx, "calc");
   return (await ctx.db`select id, owner, name, updated_at, data from costing.formulas where owner = ${m.email} order by updated_at, id`).map(formulaOut);
 }
-async function saveMyFormulas(ctx: Ctx, items: Any) {
+async function saveMyFormulas(ctx: Ctx, items: Any, known?: Any) {
   return await locked(ctx, async (c) => {
     const m = await need(c, "calc"), db = c.db;
     if (!Array.isArray(items) || items.length > FORMULA_MAX) throw new Error("บันทึกได้ไม่เกิน " + FORMULA_MAX + " สูตร");
@@ -530,7 +530,9 @@ async function saveMyFormulas(ctx: Ctx, items: Any) {
     });
     const mine = await db`select id, name, data from costing.formulas where owner = ${m.email}`;
     const cur: Record<string, Any> = {}; mine.forEach((r: Any) => { cur[String(r.id)] = r; });
-    const gone = mine.filter((r: Any) => !keep[String(r.id)]).map((r: Any) => String(r.id));
+    /* ลบเฉพาะสูตรที่เครื่องนี้เคยโหลด/บันทึกไว้ (known) · สูตรที่เพิ่งถูกใส่จากที่อื่น (นำเข้า/แอดมิน) แต่เครื่องที่เปิดค้างยังไม่เห็น จะไม่ถูกลบทับ · ไคลเอนต์รุ่นเก่าไม่ส่ง known = ลบตามเดิม */
+    const knownSet = Array.isArray(known) ? new Set(known.map(String)) : null;
+    const gone = mine.filter((r: Any) => !keep[String(r.id)] && (!knownSet || knownSet.has(String(r.id)))).map((r: Any) => String(r.id));
     if (gone.length) await db`delete from costing.formulas where owner = ${m.email} and id in ${db(gone)}`;
     const now = new Date(); let changed = 0;
     for (const id of Object.keys(keep)) {
@@ -1399,6 +1401,44 @@ async function gateCheck(db: Db, pr: Any, to: string): Promise<string> {
     case "done": return !(d.bom && d.bom.released) ? "ออก BOM และบันทึกส่งมอบสูตร (FM-RD-09) ก่อน" : d.newFormula && !(d.pilot && d.pilot.result === "pass") ? "สูตรใหม่ต้องทำ Pilot Batch ให้ผ่านก่อน (FM-RD-07)" : "";
     default: return "";
   }
+}
+/** นำเข้าสูตรกลิ่น (ชีตละกลิ่นจากไฟล์ FM-RD-02 ของ Perfumer) ส่งมาเป็นรายการตรงๆ (สูตรเป็นความลับ ไม่เก็บใน GitHub สาธารณะ) · เจ้าของระบบเท่านั้น
+ *  รหัสสูตรกลิ่น (PF…) ที่มีในคลังกลิ่นแล้ว = เติมสูตรให้กลิ่นที่ยังไม่มีสูตร (ไม่ทับสูตรเดิม) · รหัสใหม่ = สร้างกลิ่นใหม่ · สูตรเก็บเป็นสูตรของ owner ในเครื่องคิดต้นทุน (หน่วย Drops, batch 5 g) */
+async function importScentFormulas(ctx: Ctx, items: Any, owner: string) {
+  if (ctx.email !== MIGRATION_OWNER) throw new Error("FORBIDDEN");
+  if (!Array.isArray(items) || !items.length || items.length > 120) throw new Error("ส่งได้ครั้งละ 1–120 กลิ่น");
+  const chunk = items.map((x: Any) => ({ code: str(x && x.code, 40).toUpperCase(), name: str(x && x.name, 160), brand: str(x && x.brand, 200), lines: Array.isArray(x && x.lines) ? x.lines.slice(0, 80) : [] })).filter((x: Any) => /^PF[0-9][0-9A-Z]*$/.test(x.code) && x.lines.length);
+  return await locked(ctx, async (c) => {
+    const db = c.db; owner = str(owner || ctx.email, 200).toLowerCase();
+    if (!(await db`select 1 from costing.users where email = ${owner}`).length) throw new Error("ไม่พบผู้ใช้เจ้าของสูตร");
+    const row = (await db`
+      with src as (select * from jsonb_to_recordset(${db.json(chunk)}::jsonb) as x(code text, name text, brand text, lines jsonb)),
+      known as (select code from costing.prices union select code from costing.prices_builtin),
+      cm as (select customer_code cc, count(*) n, min(id) pid from costing.projects where customer_code <> '' group by 1),
+      prj as (select s.code, coalesce(
+          case when substring(s.code from 3 for 4) ~ '^10[0-9]{2}$' and exists (select 1 from cm where cc = substring(s.code from 3 for 4)) then (select case when n = 1 then pid else '' end from cm where cc = substring(s.code from 3 for 4)) end,
+          (select case when n = 1 then pid else '' end from cm where cc = substring(s.code from 3 for 3)), '') proj from src s),
+      st as (select s.*, p.proj,
+          exists (select 1 from costing.scents e where upper(e.formula_code) = s.code) has_scent,
+          exists (select 1 from costing.scents e where upper(e.formula_code) = s.code and e.formula_id <> '') has_formula from src s join prj p on p.code = s.code),
+      todo as (select * from st where not has_formula),
+      mx as (select coalesce(max(substring(code from 9)::int), 0) m from costing.scents where code ~ '^SC-2026-[0-9]+$'),
+      newn as (select t.*, row_number() over (order by t.code) rn from todo t where not has_scent),
+      f as (insert into costing.formulas (id, owner, name, updated_at, data)
+        select 'pfm-' || lower(t.code), ${owner}, left(t.name || ' · ' || t.code, 120), now(),
+          jsonb_build_object('id', 'pfm-' || lower(t.code), 'name', left(t.name || ' · ' || t.code, 120), 'unit', 'drop', 'src', 'นำเข้าจากไฟล์ FM-RD-02 (Perfumer)', 'batchKg', 0.005, 'lossPct', 0, 'overhead', 0, 'sell', 0, 'ver', 1,
+            'lines', (select jsonb_agg(jsonb_build_object('code', coalesce(l->>0, ''), 'nameIn', case when exists (select 1 from known k where k.code = l->>0) then '' else coalesce(l->>2, '') end, 'amt', l->>1) order by o) from jsonb_array_elements(t.lines) with ordinality q(l, o)),
+            'sample', false, 'unitMig', 2, 'link', case when t.proj <> '' then jsonb_build_object('projectId', t.proj) else '{}'::jsonb end, 'meta', jsonb_build_object('brand', left(t.brand, 120), 'sampleCode', t.code, 'sampleName', left(t.name, 120)), 'design', jsonb_build_object('items', '[]'::jsonb))::text
+        from todo t on conflict (owner, id) do nothing returning id),
+      u as (update costing.scents e set formula_id = 'pfm-' || lower(t.code), owner = case when e.owner in ('import', '') then ${owner} else e.owner end, updated_at = now(), updated_by = 'import:fm02-perfumers'
+        from todo t where t.has_scent and upper(e.formula_code) = t.code and e.formula_id = '' returning e.id),
+      sc as (insert into costing.scents (id, code, name, brief_id, family, status, owner, formula_id, created_at, updated_at, updated_by, data, project_id, formula_code)
+        select 's' || substr(md5(n.code), 1, 12), 'SC-2026-' || lpad((mx.m + n.rn)::text, 4, '0'), left(n.name, 160), '', '', 'draft', ${owner}, 'pfm-' || lower(n.code), now(), now(), 'import:fm02-perfumers',
+          jsonb_build_object('note', 'นำเข้าจากไฟล์สูตร FM-RD-02 (Perfumer)', 'brandText', left(n.brand, 200)), n.proj, n.code from newn n, mx on conflict (id) do nothing returning id)
+      select (select count(*) from src)::int items, (select count(*) from st where has_formula)::int skipped_has_formula, (select count(*) from f)::int formulas, (select count(*) from u)::int attached, (select count(*) from sc)::int created`)[0];
+    await log(db, ctx.email, "importScentFormulas", chunk.length + " กลิ่น · สร้าง " + row.created + " · เติมสูตร " + row.attached);
+    return { sent: items.length, valid: chunk.length, ...row };
+  });
 }
 /** ข้อมูลกลิ่นของวัตถุดิบ (ชั้นโน้ต + ตระกูลกลิ่น) ใช้คำนวณกราฟลักษณะกลิ่นและ Fragrance Wheel จากสูตรจริง */
 const OLF_AX = ["citrus", "green", "aquatic", "floral", "spicy", "gourmand", "woody", "amber"], OLF_LAYER: Record<string, number> = { top: 1, heart: 1, base: 1, none: 1 };
@@ -2882,7 +2922,7 @@ const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   listBriefs, saveBrief, deleteBrief, listScents, saveScent, deleteScent, getTypeformStatus, saveTypeformToken, syncTypeform, disconnectTypeform,
   pwLogin, setMyPassword, pwLogout, resetUserPassword,
   listCustomers, saveCustomer, listProjects, getProject, saveProject, setStage, bulkStage, raCheck, issueProjectDoc, uploadProjectDoc, getProjectDocFile, deleteProjectDoc, listSamples, saveSample, sendSample, deleteSample, evalSummary, importRd,
-  listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases, importPdFormulas, searchPdImported, getPdFormula, listPdDocFormulas, listPdCustomers, listPdByCustomer, searchPdFormulas, listLabelArchive, getLabelArchive, saveLabelArchive, deleteLabelArchive, listPdDupKeys, listPriceQuotes, importPriceQuotes, saveProjectMockups, setUserName, listPeopleNames, saveProjectScentDesign, listRmOlf, saveRmOlf, seedRmOlf,
+  listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases, importPdFormulas, searchPdImported, getPdFormula, listPdDocFormulas, listPdCustomers, listPdByCustomer, searchPdFormulas, listLabelArchive, getLabelArchive, saveLabelArchive, deleteLabelArchive, listPdDupKeys, listPriceQuotes, importPriceQuotes, saveProjectMockups, setUserName, listPeopleNames, saveProjectScentDesign, listRmOlf, saveRmOlf, seedRmOlf, importScentFormulas,
   listPdTrials, savePdTrial, sendPdTrial, decidePdTrial, issuePdTrialStock,
   listRdStock, listRdStockTx, saveRdStockItem, deleteRdStockItem, addRdStockTx, importRdStock,
   listFda, saveFdaReg, renewFdaReg, deleteFdaReg, saveFdaRequest, deleteFdaRequest, getFdaAlert, saveFdaAlert, resetFdaAlertSecret,

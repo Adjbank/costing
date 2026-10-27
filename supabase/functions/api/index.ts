@@ -1294,7 +1294,7 @@ async function getProject(ctx: Ctx, id: string) {
 }
 /* ---------- เอกสารแนบโครงการ (PDR FM-RD-01 ฯลฯ): ไฟล์อยู่ใน bucket rd-docs (private) · รายการไฟล์อยู่ใน projects.data.pdrFiles ---------- */
 const PDR_MIME: Record<string, string> = { pdf: "application/pdf", xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", xls: "application/vnd.ms-excel", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", doc: "application/msword", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg" };
-const PDR_MAX_BYTES = 15 * 1024 * 1024, PDR_MAX_FILES = 20, PDR_KINDS: Record<string, string> = { pdr: "PDR (FM-RD-01)", other: "เอกสารอื่น" };
+const PDR_MAX_BYTES = 15 * 1024 * 1024, PDR_MAX_FILES = 20, PDR_KINDS: Record<string, string> = { pdr: "PDR (FM-RD-01)", other: "เอกสารอื่น", design: "รูปงานออกแบบกลิ่น" };
 function pdrMagicOk(ext: string, b: Uint8Array) {
   const is = (...h: number[]) => h.every((v, i) => b[i] === v);
   if (ext === "pdf") return is(0x25, 0x50, 0x44, 0x46);
@@ -1397,6 +1397,25 @@ async function gateCheck(db: Db, pr: Any, to: string): Promise<string> {
     case "done": return !(d.bom && d.bom.released) ? "ออก BOM และบันทึกส่งมอบสูตร (FM-RD-09) ก่อน" : d.newFormula && !(d.pilot && d.pilot.result === "pass") ? "สูตรใหม่ต้องทำ Pilot Batch ให้ผ่านก่อน (FM-RD-07)" : "";
     default: return "";
   }
+}
+/** ข้อมูลออกแบบกลิ่นของโครงการ (data.scentDesign): Brand Story · Archetype · Concept · Heart Ingredients · Mood & Tone · รายละเอียด
+ *  ทุกสูตร/ทุกแนวทางของโครงการใช้ชุดเดียวกัน · รูปแนบใช้ uploadProjectDoc kind "design" */
+const SD_TOKEN = /^[a-z][a-z0-9_-]{1,23}$/;
+async function saveProjectScentDesign(ctx: Ctx, id: string, d: Any) {
+  return await locked(ctx, async (c) => {
+    const m = await needAny(c, [...RD_EDIT, "calc"]), db = c.db;
+    const pr = (await db`select * from costing.projects where id = ${str(id, 80)}`)[0];
+    if (!pr) throw new Error("ไม่พบโครงการนี้");
+    d = d && typeof d === "object" ? d : {};
+    const arch = SD_TOKEN.test(String(d.arch || "")) ? String(d.arch) : "";
+    const moods = (Array.isArray(d.moods) ? d.moods : []).map(String).filter((x: string) => SD_TOKEN.test(x)).filter((x: string, i: number, a: string[]) => a.indexOf(x) === i).slice(0, 3);
+    const sd = { story: str(d.story, 3000), arch, concept: str(d.concept, 3000), heart: str(d.heart, 1000), moods, tone: str(d.tone, 500), details: str(d.details, 3000), at: new Date().toISOString(), by: m.email };
+    const data = { ...(pr.data || {}), scentDesign: sd };
+    if (JSON.stringify(data).length > RD_DATA_MAX) throw new Error("ข้อมูลโครงการใหญ่เกินไป");
+    await db`update costing.projects set data = ${db.json(data)}, updated_at = now(), updated_by = ${m.email} where id = ${String(pr.id)}`;
+    await log(db, m.email, "saveProjectScentDesign", String(pr.pdr_no));
+    return projOut({ ...pr, data, updated_by: m.email, updated_at: new Date() });
+  });
 }
 /** แก้ไข Mockup ของโครงการ (data.mockups) · ทับรายการเดิมทั้งชุด · สิทธิ์เดียวกับการแก้โครงการ */
 async function saveProjectMockups(ctx: Ctx, id: string, items: Any) {
@@ -2792,7 +2811,7 @@ const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   listBriefs, saveBrief, deleteBrief, listScents, saveScent, deleteScent, getTypeformStatus, saveTypeformToken, syncTypeform, disconnectTypeform,
   pwLogin, setMyPassword, pwLogout, resetUserPassword,
   listCustomers, saveCustomer, listProjects, getProject, saveProject, setStage, bulkStage, raCheck, issueProjectDoc, uploadProjectDoc, getProjectDocFile, deleteProjectDoc, listSamples, saveSample, sendSample, deleteSample, evalSummary, importRd,
-  listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases, importPdFormulas, searchPdImported, getPdFormula, listPdDocFormulas, listPdCustomers, listPdByCustomer, searchPdFormulas, listLabelArchive, getLabelArchive, saveLabelArchive, deleteLabelArchive, listPdDupKeys, listPriceQuotes, importPriceQuotes, saveProjectMockups, setUserName, listPeopleNames,
+  listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases, importPdFormulas, searchPdImported, getPdFormula, listPdDocFormulas, listPdCustomers, listPdByCustomer, searchPdFormulas, listLabelArchive, getLabelArchive, saveLabelArchive, deleteLabelArchive, listPdDupKeys, listPriceQuotes, importPriceQuotes, saveProjectMockups, setUserName, listPeopleNames, saveProjectScentDesign,
   listPdTrials, savePdTrial, sendPdTrial, decidePdTrial, issuePdTrialStock,
   listRdStock, listRdStockTx, saveRdStockItem, deleteRdStockItem, addRdStockTx, importRdStock,
   listFda, saveFdaReg, renewFdaReg, deleteFdaReg, saveFdaRequest, deleteFdaRequest, getFdaAlert, saveFdaAlert, resetFdaAlertSecret,

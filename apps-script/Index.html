@@ -177,6 +177,16 @@ select.doc-new{border:1px solid var(--line-strong);border-radius:8px;padding:5px
 .sc-chip small{color:var(--ink-muted);font-size:11px}
 .sc-chip[aria-pressed=true]{background:var(--primary);color:var(--primary-ink);border-color:var(--primary)}
 .sc-chip[aria-pressed=true] small{color:inherit;opacity:.8}
+.sd-box{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0 0 14px;background:var(--card)}
+.sd-box>summary{cursor:pointer;font-size:14px}
+.sd-grid{margin-top:10px}.sd-grid .sd-wide{grid-column:1/-1}
+.sd-charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:12px}
+.sd-chart{border:1px solid var(--line);border-radius:10px;padding:10px 12px;text-align:center}.sd-chart h5{margin:0 0 4px;font-size:13px;text-align:left}
+.sd-imgs{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sd-img{position:relative;margin:0}.sd-img .x{position:absolute;top:-6px;right:-6px;background:var(--card);border-radius:50%}
+.sd-thumb{width:96px;height:96px;border:1px solid var(--line-strong);border-radius:8px;background:var(--input-bg);padding:0;overflow:hidden;cursor:zoom-in;display:flex;align-items:center;justify-content:center}
+.sd-thumb img{width:100%;height:100%;object-fit:cover}
+.sd-add{width:96px;height:96px;border:1px dashed var(--line-strong);border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;color:var(--ink-muted)}
 #scOut{background:var(--card);border-radius:10px;padding:12px 14px}
 .sc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:8px}
 .sc-name{font-family:var(--f-display);font-size:20px}
@@ -993,7 +1003,7 @@ main.wrap::after{content:"";display:block;height:52px;margin:36px 0 6px;border-r
   <div class="pagehead"><h1>กระบวนการออกแบบกลิ่น</h1><p>เลือกโปรเจคจากบรีฟหรือ PDR → ออกแบบสูตรจากฐานข้อมูลวัตถุดิบ → บันทึก Feedback ลูกค้าและพัฒนาเป็น Version ถัดไป · ต้นทุนคำนวณทันทีจากฐานราคา RM</p></div>
   <div class="dbcard" id="dbcard"></div>
   <div class="steps" id="stepsBar" aria-label="ขั้นตอน">
-    <span><b>1</b>เลือกโปรเจคออกแบบ</span><span><b>2</b>Scent Design Space</span><span><b>3</b>สูตรที่ออกแบบ · Feedback · Version</span>
+    <span><b>1</b>เลือกโปรเจคออกแบบ</span><span><b>2</b>Scent Design Space</span><span><b>3</b>ข้อมูลกลิ่นสำหรับโปรเจคนี้</span>
   </div>
 
   <div class="layout">
@@ -1026,12 +1036,19 @@ main.wrap::after{content:"";display:block;height:52px;margin:36px 0 6px;border-r
 
       <section class="block" id="s2">
         <div class="bh"><h2><span class="n">2</span>Scent Design Space</h2><span class="hint">เลือกวัตถุดิบจากฐานข้อมูล ปรับสัดส่วน ดูต้นทุนทันที · <span id="syncStatus" aria-live="polite"></span></span></div>
+        <div id="sdBrief"></div>
+        <h3 style="font-size:15px;margin:4px 0 6px">สารประกอบ · สูตรของโปรเจค</h3>
         <div class="ptabs" id="ptabs"></div>
         <div id="editor"></div>
       </section>
 
+      <section class="block" id="s3p">
+        <div class="bh"><h2><span class="n">3</span>ข้อมูลกลิ่นสำหรับโปรเจคนี้</h2><span class="hint">บันทึกการออกแบบแต่ละแนวทาง · การส่งตัวอย่าง · ฟีดแบคและการยืนยันจากลูกค้า</span></div>
+        <div id="projScentPanel"></div>
+      </section>
+
       <section class="block" id="s4">
-        <div class="bh"><h2><span class="n">3</span>สูตรที่ออกแบบ · Feedback · Version</h2><span class="hint">คลิกชื่อเพื่อเปิดสูตร · บันทึก Feedback จากลูกค้า แล้วพัฒนาต่อเป็น Version ถัดไป</span></div>
+        <div class="bh"><h2>สูตรที่ออกแบบทั้งหมด · Feedback · Version</h2><span class="hint">คลิกชื่อเพื่อเปิดสูตร · บันทึก Feedback จากลูกค้า แล้วพัฒนาต่อเป็น Version ถัดไป</span></div>
         <div class="tablebox"><table id="overview"></table></div>
         <div id="versionPanel"></div>
       </section>
@@ -1502,22 +1519,25 @@ function calcBrandOf(p){
 function renderTabs(){
   const a=active(); const dot={ok:"🟢",warn:"🟠",bad:"🔴"};
   /* เลือกโครงการ/ลูกค้าแล้ว: รายการ "งานออกแบบที่เปิดอยู่" แสดงเฉพาะของแบรนด์นั้น (กดแสดงทั้งหมดได้) */
-  const bk=a?calcBrandOf(a):'', only=bk&&!CALC_LINK.allTabs, list=only?state.products.filter(p=>p.id===a.id||calcBrandOf(p)===bk):state.products;
+  const pid=calcCtxPid(), px=pid?calcProj(pid):null, bk=!pid&&a?calcBrandOf(a):'', only=!!(pid||bk)&&!CALC_LINK.allTabs;
+  const list=!only?state.products:pid?state.products.filter(p=>!p.sample&&p.link&&p.link.projectId===pid):state.products.filter(p=>p.id===a.id||calcBrandOf(p)===bk);
   const brandName=bk?((a.link&&a.link.projectId&&calcProj(a.link.projectId)&&(calcProj(a.link.projectId).brand||calcProj(a.link.projectId).company))||(a.link&&a.link.briefId&&calcBrief(a.link.briefId)&&calcBrief(a.link.briefId).brand)||bk):'';
-  const filt=bk?`<button type="button" class="btn small" id="btnTabsAll">${only?`แสดงทุกแบรนด์ (${state.products.length})`:'แสดงเฉพาะแบรนด์นี้'}</button>`:'';
-  $("#ptabs").innerHTML = state.products.length ? `<label class="muted" for="ptabSel" style="font-size:12px">งานออกแบบที่เปิดอยู่${only?` · เฉพาะแบรนด์ <b>${esc(brandName)}</b>`:''}</label><div class="ptab-row"><select id="ptabSel" class="ptab-sel" aria-label="เลือกงานออกแบบ">${list.map(p=>{ const h=health(compute(p)); return `<option value="${p.id}" ${p.id===a?.id?"selected":""}>${dot[h]||dot.ok} ${esc(p.name)} · v${p.ver||1}${p.sample?" (ตัวอย่าง)":""}</option>`; }).join("")}</select><button type="button" class="btn small" id="btnNewProd">+ งานออกแบบใหม่</button>${filt}<span class="muted" style="font-size:12px">${only?list.length+' จาก '+state.products.length:state.products.length} งาน</span></div>`
+  const scope=pid?`โปรเจค <b>${esc(px?(px.pdrNo+' '+(px.brand||px.company||'')).trim():'')}</b>`:`แบรนด์ <b>${esc(brandName)}</b>`;
+  const filt=(pid||bk)?`<button type="button" class="btn small" id="btnTabsAll">${only?`แสดงทั้งหมด (${state.products.length})`:pid?'แสดงเฉพาะโปรเจคนี้':'แสดงเฉพาะแบรนด์นี้'}</button>`:'';
+  $("#ptabs").innerHTML = state.products.length ? `<label class="muted" for="ptabSel" style="font-size:12px">งานออกแบบที่เปิดอยู่${only?` · เฉพาะ${scope}`:''}</label><div class="ptab-row"><select id="ptabSel" class="ptab-sel" aria-label="เลือกงานออกแบบ">${list.map(p=>{ const h=health(compute(p)); return `<option value="${p.id}" ${p.id===a?.id?"selected":""}>${dot[h]||dot.ok} ${esc(p.name)} · v${p.ver||1}${p.sample?" (ตัวอย่าง)":""}</option>`; }).join("")}</select><button type="button" class="btn small" id="btnNewProd">+ งานออกแบบใหม่</button>${filt}<span class="muted" style="font-size:12px">${only?list.length+' จาก '+state.products.length:state.products.length} งาน</span></div>`
     : `<div class="ptab-row"><button type="button" class="btn small" id="btnNewProd">+ งานออกแบบใหม่</button></div>`;
+  if(only&&!list.length) $("#ptabs").innerHTML=`<label class="muted" style="font-size:12px">งานออกแบบที่เปิดอยู่ · เฉพาะ${scope}</label><div class="ptab-row"><span class="muted" style="font-size:13px">ยังไม่มีสูตรของโปรเจคนี้</span><button type="button" class="btn small primary" id="btnNewProd">+ สร้างสูตรใหม่สำหรับโปรเจคนี้</button>${filt}</div>`;
 }
 function chip(status){ const s=STATUS[status]; return `<span class="chip ${s.c}">${s.t}</span>`; }
 /* ===== งานออกแบบกลิ่น: ผูกบรีฟ / PDR · ตั้งงบหัวน้ำหอม ===== */
 const CALC_APPS=[['','— เลือกประเภทสินค้า —',0],['edp','Eau de Parfum (EDP)',18],['edt','Eau de Toilette (EDT)',10],['edc','Eau de Cologne / Splash',4],['mist','Body mist / Hair mist',5],['room','Room / Linen spray',8],['reed','Reed diffuser',20],['candle','เทียนหอม',8],['soap','สบู่ก้อน',1.5],['wash','เจลอาบน้ำ / แชมพู',1],['lotion','โลชั่น / ครีม',0.5],['other','อื่น ๆ',0]];
 const CALC_APP_RX=[['mist',/mist|มิสท์|มิสต์|สเปรย์ฉีดตัว/i],['room',/room|linen|ปรับอากาศ|สเปรย์ห้อง/i],['reed',/reed|diffuser|ก้านไม้/i],['candle',/candle|เทียน/i],['soap',/soap|สบู่/i],['wash',/shampoo|wash|แชมพู|เจลอาบ/i],['lotion',/lotion|cream|โลชั่น|ครีม/i],['edt',/\bEDT\b|toilette/i],['edc',/cologne|\bEDC\b|splash/i],['edp',/\bEDP\b|parfum|เพอร์ฟูม|น้ำหอม/i]];
-const CALC_LINK={briefs:null, projects:null, loading:false, err:''};
+const CALC_LINK={briefs:null, projects:null, loading:false, err:'', pendingPid:''};   /* pendingPid: เลือกโครงการที่ยังไม่มีสูตร รอกดสร้างสูตรใหม่ */
 async function calcLoadLinks(){
   if(CALC_LINK.loading||CALC_LINK.briefs) return; CALC_LINK.loading=true;
   try{ const [b,p]=await Promise.all([api('listBriefs').catch(()=>[]), api('listProjects').catch(()=>({items:[]}))]); CALC_LINK.briefs=b||[]; CALC_LINK.projects=(p&&p.items)||[]; CALC_LINK.err=''; }
   catch(e){ CALC_LINK.err=errText(e); CALC_LINK.briefs=[]; CALC_LINK.projects=[]; }
-  CALC_LINK.loading=false; if(S.view==='calc'){ renderTabs(); if(active()) renderEditor(); else renderDesignPanel(); }   /* ยังไม่มีงาน: วาดกล่องผูก PDR/บรีฟ ใหม่ให้มีรายการ */
+  CALC_LINK.loading=false; if(S.view==='calc'){ renderTabs(); renderSdBrief(); renderProjScent(); if(active()) renderEditor(); else renderDesignPanel(); }   /* ยังไม่มีงาน: วาดกล่องผูก PDR/บรีฟ ใหม่ให้มีรายการ */
 }
 const calcNum=v=>{ const n=parseFloat(String(v??'').replace(/,/g,'')); return isFinite(n)?n:0; };
 /* อ่านข้อความ "EDP 30 ml × 1,000" จาก PDR เป็นประเภท ปริมาตร และจำนวน */
@@ -1633,9 +1653,12 @@ function calcBudgetHtml(p,c){
     ${multi?table():one(B.list[0])}</div>`;
 }
 /* ===== กระบวนการออกแบบ: โปรเจค · ตัวเลือกวัตถุดิบ · Feedback / Version ===== */
-function calcNewProduct(){ const p={id:newId(),name:'งานออกแบบ '+(state.products.length+1),unit:'drop',src:'ออกแบบในระบบ',...defaults(),ver:1,lines:[{code:'',nameIn:'',amt:''}]}; state.products.push(p); state.activeId=p.id; return p; }
+function calcNewProduct(){ const p={id:newId(),name:'งานออกแบบ '+(state.products.length+1),unit:'drop',src:'ออกแบบในระบบ',...defaults(),ver:1,lines:[{code:'',nameIn:'',amt:''}]}; state.products.push(p); state.activeId=p.id;
+  if(CALC_LINK.pendingPid){ const pid=CALC_LINK.pendingPid; CALC_LINK.pendingPid=''; calcApplyLink(p,'pdr',pid); }   /* สร้างสูตรแรกของโครงการที่เลือก */
+  return p; }
 function renderDesignPanel(){
   const el=$('#designPanel'); if(!el) return; const p=active();
+  if(CALC_LINK.pendingPid){ el.innerHTML=`<div class="empty" style="padding:14px 16px">โปรเจคนี้ยังไม่มีสูตรที่ออกแบบ · กด "+ สร้างสูตรใหม่สำหรับโปรเจคนี้" ในขั้นตอนที่ 2</div>${calcDesignHtml({design:{},link:{projectId:CALC_LINK.pendingPid},meta:{},name:''})}`; return; }
   if(!p){ el.innerHTML=`<div class="empty" style="padding:22px 16px">ยังไม่มีงานออกแบบ · กด "+ งานออกแบบใหม่" หรือเลือก PDR / บรีฟด้านล่างเพื่อเริ่ม</div>${calcDesignHtml({design:{},link:{},meta:{},name:''})}`; return; }
   el.innerHTML=`<div class="dp-cur"><span class="muted">งานที่กำลังออกแบบ</span> <b>${esc(p.name)}</b> <span class="vbadge">v${p.ver||1}</span>${p.src?` <span class="muted">· ${esc(p.src)}</span>`:''}</div>${calcDesignHtml(p)}`;
 }
@@ -1672,7 +1695,7 @@ async function fhMigrate(p){
 }
 function renderVersionPanel(){
   const el=$('#versionPanel'); if(!el) return; const p=active();
-  if(!p){ el.innerHTML=''; return; }
+  if(!p||CALC_LINK.pendingPid){ el.innerHTML=''; return; }
   if(p.sample){ el.innerHTML='<div class="muted" style="font-size:13px;margin-top:10px">สูตรตัวอย่างไม่มีประวัติเวอร์ชัน · เริ่มงานออกแบบใหม่ในขั้นตอนที่ 1</div>'; return; }
   const h=FH[p.id]; if(!h||(!h.versions&&!h.err)){ fhLoad(p); el.innerHTML='<div class="muted" style="font-size:13px;margin-top:10px">กำลังโหลดประวัติ…</div>'; return; }
   const c=compute(p), ver=p.ver||1, fbAll=h.feedback||[], fb=fbAll.filter(f=>Number(f.ver)===ver), vs=h.versions||[], w=fhCanWrite();
@@ -1691,6 +1714,7 @@ function renderVersionPanel(){
 }
 function renderEditor(){
   const p=active();
+  if(CALC_LINK.pendingPid){ const x=calcProj(CALC_LINK.pendingPid); $('#editor').innerHTML=`<div class="empty">โปรเจค <b>${esc(x?x.pdrNo:'')}</b> ${esc(x?(x.brand||x.company||''):'')} ยังไม่มีสูตรที่ออกแบบ<div style="margin-top:10px"><button class="btn primary" type="button" id="btnNewForProj">+ สร้างสูตรใหม่สำหรับโปรเจคนี้</button></div></div>`; return; }
   if(!p){ $('#editor').innerHTML=`<div class="empty">ยังไม่มีงานออกแบบ · เริ่มที่ขั้นตอนที่ 1 หรือกด "+ งานออกแบบใหม่"</div>`; return; }
   const c=compute(p);
   const maxShare=Math.max(0.0001,...c.rows.map(r=>r.share));
@@ -1735,12 +1759,12 @@ function renderEditor(){
     </table></div>
     <div class="row" style="margin-top:12px;justify-content:space-between">
       <div class="row"><button class="btn small" type="button" id="btnAddRow">+ เพิ่มวัตถุดิบ</button><span class="muted" style="font-size:12.5px">หรือพิมพ์ค้นหาในช่อง "เลือกวัตถุดิบจากฐานข้อมูล" ด้านบนแล้วกด "เพิ่ม"</span></div>
-      <div class="row" style="gap:10px;align-items:center"><button class="btn link" type="button" id="btnDelProd">ลบสูตรนี้</button><button class="btn primary" type="button" id="btnSaveProd">บันทึก</button></div>
+      <div class="row" style="gap:10px;align-items:center"><button class="btn link" type="button" id="btnDelProd">ลบสูตรนี้</button>${can('perfumer')&&!p.sample?'<button class="btn" type="button" id="btnToLib" title="สร้าง/อัปเดตกลิ่นในคลังกลิ่น (Perfumer) ผูกกับสูตรและโปรเจคนี้">บันทึกเข้าคลังกลิ่นของฉัน</button>':''}<button class="btn primary" type="button" id="btnSaveProd">บันทึก</button></div>
     </div>`;
 }
 function renderSummary(){
   const p=active();
-  if(!p){ $('#summary').innerHTML=''; return; }
+  if(!p||CALC_LINK.pendingPid){ $('#summary').innerHTML=''; return; }
   const c=compute(p);
   const top=[...c.rows].filter(r=>r.costKg!=null).sort((a,b)=>b.costKg-a.costKg).slice(0,4);
   const cov=c.knownFrac*100;
@@ -1801,7 +1825,7 @@ function renderDbFilters(){
   const cats=[...new Set(DB.entries.map(e=>e.code.split('-')[2]))].filter(c=>CAT[c]).sort();
   $('#dbc').innerHTML = '<option value="">ทุกหมวด</option>'+cats.map(c=>`<option value="${c}">${c} · ${esc(CAT[c])}</option>`).join('');
 }
-function renderWork(){ if(!can('calc')) return; renderDesignPanel(); renderTabs(); renderEditor(); renderSummary(); renderOverview(); renderVersionPanel(); }
+function renderWork(){ if(!can('calc')) return; renderDesignPanel(); renderSdBrief(); renderTabs(); renderEditor(); renderProjScent(); renderSummary(); renderOverview(); renderVersionPanel(); }
 function applyPermsToLayout(){
   const calc=can('calc'), view=can('viewDb');
   ['#stepsBar','#s1','#s2','#s4','#summary'].forEach(s=>$(s).hidden=!calc);
@@ -1829,9 +1853,177 @@ $('#btnPaste').onclick=()=>{
   r.products.forEach(p=>p.src='วางจาก Excel');
   addProducts(r.products, r.error?[r.error]:[]);
 };
-$('#ptabs').addEventListener('click',e=>{ if(e.target.closest('#btnNewProd')){ calcNewProduct(); save(); renderWork(); } });
+$('#ptabs').addEventListener('click',e=>{ if(e.target.closest('#btnNewProd')){ const pid=calcCtxPid(), np=calcNewProduct(); if(pid&&!(np.link&&np.link.projectId)) calcApplyLink(np,'pdr',pid); save(); renderWork(); } });   /* สูตรใหม่ผูกโครงการที่เลือกอยู่ */
 $('#ptabs').addEventListener('click',e=>{ if(e.target.id==='btnTabsAll'){ CALC_LINK.allTabs=!CALC_LINK.allTabs; renderTabs(); } });
-$('#ptabs').addEventListener('change',e=>{ if(e.target.id==='ptabSel'){ state.activeId=e.target.value; save(); renderWork(); } });
+/* ===== Scent Design Space: ข้อมูลออกแบบต่อโครงการ (data.scentDesign) · รูปแนบ · กราฟลักษณะกลิ่น + Fragrance Wheel ===== */
+const SD={draft:{}, imgs:{}, proj:{}, loading:'', upBusy:false};
+/* โครงการที่กำลังออกแบบ: โครงการที่เลือกแต่ยังไม่มีสูตร (pending) หรือโครงการของสูตรที่เปิดอยู่ */
+function calcCtxPid(){ const p=active(); return CALC_LINK.pendingPid || (p&&!p.sample&&p.link&&p.link.projectId) || ''; }
+const sdCanEdit=()=>['projects','perfumer','pd','calc'].some(can), sdCanUpload=()=>['projects','perfumer','pd'].some(can);
+const SD_FIELDS=['story','arch','concept','heart','moods','tone','details'];
+/* ค่าเริ่มต้นจากบรีฟที่ผูกกับโครงการ: Archetype จากแบบทดสอบ · Mood จากความรู้สึกที่ลูกค้าเลือก */
+function sdOf(x){
+  if(SD.draft[x.id]) return SD.draft[x.id];
+  const s=Object.assign({story:'',arch:'',concept:'',heart:'',moods:[],tone:'',details:''}, (x.data&&x.data.scentDesign)||{});
+  s.moods=Array.isArray(s.moods)?s.moods.slice():[];
+  if(!(x.data&&x.data.scentDesign)){
+    const b=(x.briefId&&typeof calcBrief==='function'&&calcBrief(x.briefId))||((typeof PF!=='undefined'&&PF.briefs)||[]).find(v=>v.id===x.briefId), d=(b&&b.data)||{};
+    if(d.arch&&d.arch.result) s.arch=d.arch.result;
+    pfList(d.feelings).forEach(f=>{ const m=SC_FEEL_REV[f]; if(m&&!s.moods.includes(m)&&s.moods.length<3) s.moods.push(m); });
+    if(!s.concept&&d.approach) s.concept=String(d.approach);
+  }
+  return s;
+}
+function sdDraft(pid){ const x=calcProj(pid); if(!x) return null; if(!SD.draft[pid]) SD.draft[pid]=JSON.parse(JSON.stringify(sdOf(x))); return SD.draft[pid]; }
+/* ใช้ตัวคำนวณของ Scent Composer: Archetype + Mood → โปรไฟล์ตระกูลกลิ่น โครงสร้าง Top/Heart/Base และความแรง */
+function sdCompose(sd){
+  const st={temp:0,lux:0,mod:0,energy:0,thai:false,arch:SC_ARCH.some(a=>a.id===sd.arch)?sd.arch:'innocent',moods:(sd.moods||[]).filter(m=>SC_MOOD.some(x=>x.id===m)),exp:'product'};
+  try{ return scCompose(st); }catch(e){ return null; }
+}
+const SD_COL={citrus:'#e9b730',green:'#6fa35a',aquatic:'#4f9fd8',floral:'#df7fa0',spicy:'#d4602f',gourmand:'#a8784f',woody:'#7d5f45',amber:'#c58f2c'};
+const sdPt=(cx,cy,r,a)=>[cx+r*Math.cos(a), cy+r*Math.sin(a)];
+/* Radar ลักษณะกลิ่น (Perfume Engineer) */
+function sdRadar(o){
+  const tot=o.prof.reduce((a,b)=>a+b,0)||1, p={}; SC_AX.forEach((a,k)=>{ p[a]=o.prof[k]/tot; });
+  const cl=v=>Math.max(0.04,Math.min(1,v));
+  const ax=[['สดชื่น',cl((p.citrus+p.aquatic+p.green)*1.6)],['หวาน',cl((p.gourmand+p.floral*.5)*2)],['ดอกไม้',cl(p.floral*2.2)],['อบอุ่น',cl((p.amber+p.spicy+p.woody*.5)*1.7)],
+    ['ความแรง',cl(o.intensity/5)],['ติดทน',cl(o.ratio[2]/50)],['ฟุ้งกระจาย',cl(o.ratio[0]/40)]];
+  const n=ax.length, cx=150, cy=135, R=95, ang=i=>-Math.PI/2+i*2*Math.PI/n;
+  const grid=[.25,.5,.75,1].map(f=>`<polygon points="${ax.map((_,i)=>sdPt(cx,cy,R*f,ang(i)).map(v=>v.toFixed(1)).join(',')).join(' ')}" fill="none" stroke="var(--line)" stroke-width="1"/>`).join('');
+  const spokes=ax.map((_,i)=>{ const [x,y]=sdPt(cx,cy,R,ang(i)); return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--line)"/>`; }).join('');
+  const poly=ax.map(([,v],i)=>sdPt(cx,cy,R*v,ang(i)).map(z=>z.toFixed(1)).join(',')).join(' ');
+  const lab=ax.map(([l,v],i)=>{ const [x,y]=sdPt(cx,cy,R+20,ang(i)), anc=Math.abs(x-cx)<8?'middle':x>cx?'start':'end'; return `<text x="${x.toFixed(1)}" y="${(y+4).toFixed(1)}" text-anchor="${anc}" font-size="11.5" fill="var(--ink)">${l} <tspan fill="var(--ink-muted)">${Math.round(v*100)}</tspan></text>`; }).join('');
+  return `<svg viewBox="0 0 300 270" role="img" aria-label="กราฟลักษณะกลิ่น" style="width:100%;max-width:320px;height:auto">${grid}${spokes}<polygon points="${poly}" fill="var(--accent,#b8864b)" fill-opacity=".28" stroke="var(--accent,#b8864b)" stroke-width="2"/>${lab}</svg>`;
+}
+/* Fragrance Wheel: 8 ตระกูลกลิ่น ความเข้มของสีตามสัดส่วนในโปรไฟล์ */
+function sdWheel(o){
+  const tot=o.prof.reduce((a,b)=>a+b,0)||1, mx=Math.max(...o.prof)||1, cx=150, cy=150, R=118, r0=46, n=SC_AX.length;
+  const seg=SC_AX.map((a,k)=>{ const a0=-Math.PI/2+(k-.5)*2*Math.PI/n+.012, a1=-Math.PI/2+(k+.5)*2*Math.PI/n-.012, w=o.prof[k]/mx, rr=r0+(R-r0)*(.35+.65*w);
+    const [x0,y0]=sdPt(cx,cy,rr,a0), [x1,y1]=sdPt(cx,cy,rr,a1), [x2,y2]=sdPt(cx,cy,r0,a1), [x3,y3]=sdPt(cx,cy,r0,a0), [lx,ly]=sdPt(cx,cy,R+16,(a0+a1)/2), pc=Math.round(o.prof[k]/tot*100);
+    return `<path d="M${x0.toFixed(1)},${y0.toFixed(1)} A${rr.toFixed(1)},${rr.toFixed(1)} 0 0 1 ${x1.toFixed(1)},${y1.toFixed(1)} L${x2.toFixed(1)},${y2.toFixed(1)} A${r0},${r0} 0 0 0 ${x3.toFixed(1)},${y3.toFixed(1)} Z" fill="${SD_COL[a]}" fill-opacity="${(.25+.75*w).toFixed(2)}"><title>${SC_AXL[a][0]} · ${SC_AXL[a][1]} ${pc}%</title></path>
+      <text x="${lx.toFixed(1)}" y="${(ly+4).toFixed(1)}" text-anchor="${Math.abs(lx-cx)<8?'middle':lx>cx?'start':'end'}" font-size="11" fill="var(--ink)">${SC_AXL[a][0]} <tspan fill="var(--ink-muted)">${pc}%</tspan></text>`; }).join('');
+  const top=o.order[0][0];
+  return `<svg viewBox="-40 0 380 300" role="img" aria-label="Fragrance Wheel" style="width:100%;max-width:360px;height:auto">${seg}<circle cx="${cx}" cy="${cy}" r="${r0-4}" fill="var(--card,#fff)"/><text x="${cx}" y="${cy-2}" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink)">${SC_AXL[top][0]}</text><text x="${cx}" y="${cy+14}" text-anchor="middle" font-size="10.5" fill="var(--ink-muted)">${SC_AXL[top][1]}</text></svg>`;
+}
+function sdChartsHtml(sd){
+  const o=sdCompose(sd); if(!o) return '';
+  const L={top:'Top',heart:'Heart',base:'Base'};
+  return `<div class="sd-charts"><div class="sd-chart"><h5>Perfume Engineer · ลักษณะกลิ่น</h5>${sdRadar(o)}<div class="muted" style="font-size:12px">โครงสร้าง Top / Heart / Base ${o.ratio.join(' / ')} · ความแรง ${o.intensity}/5 (${esc(SC_INT[o.intensity])})</div></div>
+    <div class="sd-chart"><h5>Fragrance Wheel</h5>${sdWheel(o)}<div class="muted" style="font-size:12px">${['top','heart','base'].map(l=>`<b>${L[l]}</b> ${o.layers[l].map(n=>esc(n.en)).join(', ')}`).join(' · ')}</div></div></div>
+    <div class="muted" style="font-size:11.5px;margin-top:4px">ประมาณการจาก Archetype + Mood & Tone ด้วยตัวคำนวณ Scent Composer · เป็นแนวทางเริ่มต้น ไม่ได้คำนวณจากสูตรจริง</div>`;
+}
+const sdImgs=x=>((x.data&&x.data.pdrFiles)||[]).filter(f=>f.kind==='design');
+function sdImgsHtml(x){
+  const ims=sdImgs(x), up=sdCanUpload();
+  return `<div class="sd-imgs">${ims.map(f=>`<figure class="sd-img"><button type="button" class="sd-thumb" data-sd-img="${esc(f.id)}" title="${esc(f.name)}">${SD.imgs[f.id]?`<img src="${SD.imgs[f.id]}" alt="${esc(f.name)}">`:'<span class="muted" style="font-size:11px">กำลังโหลด…</span>'}</button>${up?`<button type="button" class="x" data-sd-imgdel="${esc(f.id)}" aria-label="ลบรูป">×</button>`:''}</figure>`).join('')}
+    ${up?`<label class="sd-add" title="แนบรูป (png/jpg)"><input type="file" id="sdImg" accept="image/png,image/jpeg" multiple hidden><span>${SD.upBusy?'กำลังอัปโหลด…':'+ แนบรูป'}</span></label>`:''}
+    ${!ims.length&&!up?'<span class="muted" style="font-size:12.5px">ยังไม่มีรูปแนบ</span>':''}</div>`;
+}
+async function sdLoadImgs(x){
+  for(const f of sdImgs(x)){ if(SD.imgs[f.id]) continue; SD.imgs[f.id]='…';
+    try{ const r=await api('getProjectDocFile', x.id, f.id), bin=atob(r.b64), u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i);
+      SD.imgs[f.id]=URL.createObjectURL(new Blob([u],{type:r.mime})); const b=document.querySelector(`[data-sd-img="${f.id}"]`); if(b) b.innerHTML=`<img src="${SD.imgs[f.id]}" alt="${esc(f.name)}">`; }
+    catch(e){ delete SD.imgs[f.id]; } }
+}
+function sdHtml(){
+  const pid=calcCtxPid(), x=pid?calcProj(pid):null;
+  if(!x) return `<div class="sd-box"><div class="muted" style="font-size:13px">เลือกโครงการ (PDR) ในขั้นตอนที่ 1 เพื่อกรอก Brand Story, Archetype, Concept, Heart Ingredients และ Mood &amp; Tone ของโปรเจค${CALC_LINK.loading?' · กำลังโหลดรายการโครงการ…':''}</div></div>`;
+  const sd=sdOf(x), ed=sdCanEdit(), ro=ed?'':'disabled', saved=x.data&&x.data.scentDesign, dirty=!!SD.draft[pid], o=sdCompose(sd);
+  const ta=(k,l,ph,rows)=>`<div class="field sd-wide"><label for="sd_${k}">${l}</label><textarea id="sd_${k}" data-sd="${k}" rows="${rows||2}" maxlength="3000" placeholder="${esc(ph)}" ${ro}>${esc(sd[k]||'')}</textarea></div>`;
+  const sug=o?o.layers.heart.map(n=>n.en).filter(n=>!String(sd.heart||'').toLowerCase().includes(n.toLowerCase())):[];
+  return `<details class="sd-box" id="sdBox" open><summary><b>ข้อมูลออกแบบของโปรเจค</b> <span class="muted" style="font-weight:400">· ${esc(x.pdrNo||'')} ${esc(x.brand||x.company||'')} · ใช้ร่วมกันทุกสูตร/ทุกแนวทางของโปรเจคนี้</span></summary>
+    <div class="settings sd-grid">
+      ${ta('story','Brand Story','เรื่องราวของแบรนด์ ที่มา คุณค่า กลุ่มลูกค้า',3)}
+      <div class="field"><label for="sd_arch">Brand Archetype</label><select id="sd_arch" data-sd="arch" ${ro}><option value="">— เลือก Archetype —</option>${SC_ARCH.map(a=>`<option value="${a.id}" ${sd.arch===a.id?'selected':''}>${esc(a.en)} · ${esc(a.th)} — ${esc(a.dir)}</option>`).join('')}</select></div>
+      <div class="field"><label for="sd_tone">Tone</label><input id="sd_tone" data-sd="tone" maxlength="500" value="${esc(sd.tone||'')}" placeholder="เช่น อบอุ่น หรูหรา เรียบง่าย" ${ro}></div>
+      ${ta('concept','Concept','แนวคิดของกลิ่น เรื่องที่อยากเล่า',2)}
+      <div class="field sd-wide"><label>Mood (เลือกได้ 3)</label><div class="sc-chips">${SC_MOOD.map(m=>`<button type="button" class="sc-chip" data-sd-mood="${m.id}" aria-pressed="${sd.moods.includes(m.id)}" ${ro}>${esc(m.th)} · ${esc(m.en)}</button>`).join('')}</div></div>
+      <div class="field sd-wide"><label for="sd_heart">Heart Ingredients</label><input id="sd_heart" data-sd="heart" maxlength="1000" value="${esc(sd.heart||'')}" placeholder="วัตถุดิบหัวใจของกลิ่น เช่น Rose, Jasmine, Sandalwood" ${ro}>
+        ${ed&&sug.length?`<div class="muted" style="font-size:12px;margin-top:4px">แนะนำจาก Archetype + Mood: ${sug.map(n=>`<button type="button" class="btn link" data-sd-heart="${esc(n)}" style="padding:0 4px">+ ${esc(n)}</button>`).join('')}</div>`:''}</div>
+      ${ta('details','รายละเอียดเพิ่มเติม','ข้อกำหนด สิ่งที่ต้องหลีกเลี่ยง กลิ่นอ้างอิง',2)}
+      <div class="field sd-wide"><label>รูปแนบ (Mood board / Packaging / อ้างอิง)</label>${sdImgsHtml(x)}</div>
+    </div>
+    <div id="sdCharts">${sdChartsHtml(sd)}</div>
+    ${ed?`<div class="row" style="gap:10px;align-items:center;margin-top:10px"><button class="btn primary small" type="button" id="sdSave">บันทึกข้อมูลออกแบบ</button><span class="muted" style="font-size:12px" id="sdState">${dirty?'มีการแก้ไขที่ยังไม่บันทึก':saved?`บันทึกล่าสุด ${rdDate(saved.at)}${saved.by?' โดย '+esc(shortName(saved.by)):''}`:'ยังไม่เคยบันทึก · ค่าเริ่มต้นดึงจากบรีฟลูกค้า'}</span></div>`:''}
+  </details>`;
+}
+function renderSdBrief(){ const el=$('#sdBrief'); if(!el) return; el.innerHTML=sdHtml(); const pid=calcCtxPid(), x=pid?calcProj(pid):null; if(x) sdLoadImgs(x); }
+function sdRefreshCharts(pid){ const c=$('#sdCharts'), d=SD.draft[pid]; if(c&&d) c.innerHTML=sdChartsHtml(d); const s=$('#sdState'); if(s) s.textContent='มีการแก้ไขที่ยังไม่บันทึก'; }
+function sdPutProj(r){ const L=CALC_LINK.projects||[], i=L.findIndex(v=>v.id===r.id); if(i>=0) L[i]=Object.assign({}, L[i], r); }
+$('#sdBrief').addEventListener('input',e=>{
+  const k=e.target.dataset.sd; if(!k) return; const pid=calcCtxPid(), d=sdDraft(pid); if(!d) return;
+  d[k]=e.target.value; if(k==='arch') renderSdBrief(); else sdRefreshCharts(pid);
+});
+$('#sdBrief').addEventListener('click',async e=>{
+  const t=e.target.closest('button'); if(!t) return; const pid=calcCtxPid(), x=pid?calcProj(pid):null; if(!x) return;
+  if(t.dataset.sdMood){ const d=sdDraft(pid), id=t.dataset.sdMood; d.moods=d.moods.includes(id)?d.moods.filter(m=>m!==id):d.moods.concat(id).slice(-3); renderSdBrief(); return; }
+  if(t.dataset.sdHeart){ const d=sdDraft(pid); d.heart=[d.heart,t.dataset.sdHeart].filter(v=>String(v||'').trim()).join(', '); renderSdBrief(); return; }
+  if(t.dataset.sdImg){ const u=SD.imgs[t.dataset.sdImg]; if(u&&u!=='…') window.open(u,'_blank','noopener'); return; }
+  if(t.dataset.sdImgdel){ if(!confirm('ลบรูปนี้?')) return; t.disabled=true;
+    try{ const r=await api('deleteProjectDoc', pid, t.dataset.sdImgdel); x.data=Object.assign({}, x.data, {pdrFiles:r.files}); renderSdBrief(); toast('ลบรูปแล้ว'); }catch(err){ toast(errText(err)); t.disabled=false; } return; }
+  if(t.id==='sdSave'){ const d=sdDraft(pid); t.disabled=true;
+    try{ const r=await api('saveProjectScentDesign', pid, d); sdPutProj(r); delete SD.draft[pid]; renderSdBrief(); toast('บันทึกข้อมูลออกแบบของโปรเจคแล้ว'); }catch(err){ toast(errText(err)); t.disabled=false; } return; }
+});
+$('#sdBrief').addEventListener('change',async e=>{
+  if(e.target.id!=='sdImg') return; const files=[...e.target.files]; e.target.value=''; const pid=calcCtxPid(), x=pid?calcProj(pid):null; if(!x||!files.length) return;
+  SD.upBusy=true; renderSdBrief();
+  try{ for(const f of files){ if(!/^image\/(png|jpeg)$/.test(f.type)){ toast('รองรับรูป png / jpg เท่านั้น'); continue; }
+      const b64=await btResize(f), nm=(f.name.replace(/\.[^.]+$/,'')||'design').slice(0,100)+'.jpg';
+      const r=await api('uploadProjectDoc', pid, {file:nm, kind:'design'}, b64); x.data=Object.assign({}, x.data, {pdrFiles:r.files}); }
+    toast('แนบรูปแล้ว'); }
+  catch(err){ toast(errText(err)); }
+  SD.upBusy=false; renderSdBrief();
+});
+/* บันทึกสูตรเข้าคลังกลิ่นของตนเอง (Perfumer) · ผูกสูตรและโครงการ · กดซ้ำ = อัปเดตชื่อ */
+async function calcToLibrary(p, btn){
+  if(!p||p.sample) return; if(btn) btn.disabled=true;
+  try{
+    save();
+    if(!PF.scents||!PF.scents.length) await loadPf(false);
+    const ex=(PF.scents||[]).find(s=>s.formulaId===p.id), pid=(p.link&&p.link.projectId)||'', x=pid?calcProj(pid):null, sd=x?sdOf(x):null, o=sd&&sd.arch?sdCompose(sd):null;
+    const body=ex?Object.assign({}, ex, {name:p.name, projectId:ex.projectId||pid})
+      :{name:p.name, formulaId:p.id, projectId:pid, briefId:(p.link&&p.link.briefId)||(x&&x.briefId)||'', family:o?SC_AXL[o.order[0][0]][0]:'', status:'draft',
+        data:{concept:(sd&&sd.concept)||'', archetype:(sd&&sd.arch)||'', subfamilies:o?o.order.slice(1,3).map(([a])=>SC_AXL[a][0]):[], note:'บันทึกจาก Scent Design Space'}};
+    const r=await api('saveScent', body), i=(PF.scents||[]).findIndex(s=>s.id===r.id); if(PF.scents){ if(i>=0) PF.scents[i]=r; else PF.scents.unshift(r); }
+    if(pid) delete SD.proj[pid];
+    toast(ex?`อัปเดตในคลังกลิ่นแล้ว · ${r.formulaCode||r.code}`:`บันทึกเข้าคลังกลิ่นของคุณแล้ว · ${r.formulaCode||r.code}`); renderProjScent();
+  }catch(err){ toast(errText(err)); }
+  if(btn) btn.disabled=false;
+}
+/* ขั้นตอนที่ 3: ข้อมูลกลิ่นของโปรเจค · แนวทางกลิ่น การส่งตัวอย่าง ฟีดแบค และการยืนยัน (ดูอย่างเดียว · ทำรายการที่หน้าโครงการ) */
+async function renderProjScent(){
+  const el=$('#projScentPanel'); if(!el) return; const pid=calcCtxPid();
+  if(!pid){ el.innerHTML='<div class="empty">เลือกโครงการ (PDR) ในขั้นตอนที่ 1 เพื่อดูแนวทางกลิ่น การส่งตัวอย่าง ฟีดแบค และการยืนยันของลูกค้า</div>'; return; }
+  const c=SD.proj[pid];
+  if(!c){ el.innerHTML='<div class="muted" style="font-size:13px">กำลังโหลดข้อมูลโครงการ…</div>'; if(SD.loading!==pid){ SD.loading=pid; try{ SD.proj[pid]=await api('getProject', pid); }catch(e){ SD.proj[pid]={err:errText(e)}; } SD.loading=''; if(calcCtxPid()===pid) renderProjScent(); } return; }
+  if(c.err){ el.innerHTML=`<div class="msg bad">${esc(c.err)}</div><button class="btn small" type="button" data-sd-reload>ลองใหม่</button>`; return; }
+  const x=c.project, st=RD_STAGE_MAP[x.stage], ch=x.data&&x.data.chosenScent, sc=(c.scents||[]).filter(s=>s.status!=='retired'), smp=(c.samples||[]).filter(s=>s.kind==='scent');
+  const evOf=s=>{ const out=[]; smp.forEach(m=>pfList(m.eval&&m.eval.items).forEach(it=>{ if(it.scentId===s.id||(it.code&&(it.code===s.formulaCode||it.code===s.code))) out.push({m,it}); })); return out; };
+  const mine=id=>state.products.some(p=>p.id===id);
+  const rows=[]; for(let i=0;i<Math.max(RD_DIRECTIONS, sc.length);i++){ const s=sc[i];
+    if(!s){ rows.push(`<tr><td class="muted">แนวทาง ${i+1}</td><td colspan="5" class="muted" style="font-size:12.5px">ยังไม่มีกลิ่น · ออกแบบสูตรในขั้นตอนที่ 2 แล้วกด "บันทึกเข้าคลังกลิ่นของฉัน"</td></tr>`); continue; }
+    const d=s.data||{}, ev=evOf(s), last=ev[ev.length-1], tot=last?EVAL_CRIT.reduce((a,k)=>a+(Number((last.it.scores||{})[k[0]])||0),0):null, chosen=ch&&(ch.scentId===s.id);
+    rows.push(`<tr${chosen?' style="background:var(--ok-bg,#eef7ee)"':''}><td style="white-space:nowrap"><b>แนวทาง ${i+1}</b>${chosen?`<div><span class="chip ok">ลูกค้าเลือก${ch.action&&RD_DEC[ch.action]?' · '+esc(RD_DEC[ch.action][0]):''}</span></div>`:''}</td>
+      <td><span class="mono">${esc(s.formulaCode||s.code)}</span><div><b>${esc(s.name)}</b></div>${s.family?`<div class="muted" style="font-size:12px">${esc(s.family)}</div>`:''}</td>
+      <td style="font-size:12.5px;max-width:280px">${d.concept?esc(String(d.concept).slice(0,220)):'<span class="muted">—</span>'}${pfList(d.versions).length?`<div class="muted" style="font-size:11.5px">บันทึกการปรับ ${pfList(d.versions).length} ครั้ง</div>`:''}</td>
+      <td>${pfChip(s.status,PF_SSTAT)}<div class="muted" style="font-size:11.5px">${esc(shortName(s.owner||''))}</div></td>
+      <td style="font-size:12.5px">${last?`<b>${tot}/30</b> · ${esc(rdDate(last.m.eval.submittedAt||last.m.updatedAt))}${last.it.comment?`<div class="muted">${esc(String(last.it.comment).slice(0,160))}</div>`:''}`:ev.length===0&&smp.some(m=>m.status==='sent'&&pfList(m.items).some(it=>it.scentId===s.id))?'<span class="chip warn">ส่งแล้ว รอประเมิน</span>':'<span class="muted">ยังไม่มีฟีดแบค</span>'}</td>
+      <td>${s.formulaId&&mine(s.formulaId)?`<button class="btn small" type="button" data-sd-open="${esc(s.formulaId)}">เปิดสูตร</button>`:''}</td></tr>`); }
+  el.innerHTML=`<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px"><div><b class="mono">${esc(x.pdrNo)}</b> · ${esc(x.company||'')}${x.brand?' / '+esc(x.brand):''}${st?` <span class="chip info">${esc(st[1])}</span>`:''}${ch?` <span class="chip ok">ยืนยันกลิ่นแล้ว · ${esc(ch.code||'')}</span>`:''}</div>
+      <div class="row" style="gap:6px"><button class="btn small" type="button" data-sd-reload>รีเฟรช</button><button class="btn small primary" type="button" data-sd-goproj="${esc(x.id)}">เปิดหน้าโครงการ · ส่งตัวอย่าง / บันทึกผล</button></div></div>
+    <h4 style="margin:6px 0">แนวทางกลิ่น (${sc.length}/${RD_DIRECTIONS})</h4>
+    <div class="tablebox"><table><thead><tr><th>แนวทาง</th><th>กลิ่น</th><th>บันทึกการออกแบบ</th><th>สถานะ</th><th>ฟีดแบคล่าสุด</th><th></th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
+    <h4 style="margin:14px 0 6px">การส่งตัวอย่างกลิ่นให้ลูกค้า (${smp.length})</h4>
+    ${smp.length?smp.map(s=>rdSampleCard(s,false)).join(''):'<div class="muted" style="font-size:13px">ยังไม่ได้ส่งตัวอย่าง · ส่งตัวอย่างและสร้างลิงก์ประเมินได้ที่หน้าโครงการ</div>'}`;
+}
+$('#projScentPanel').addEventListener('click',e=>{
+  const t=e.target.closest('button'); if(!t) return;
+  if(t.dataset.sdReload!==undefined){ const pid=calcCtxPid(); delete SD.proj[pid]; renderProjScent(); return; }
+  if(t.dataset.sdGoproj){ const id=t.dataset.sdGoproj; showView('rd').then(()=>rdOpen(id)); return; }
+  if(t.dataset.sdOpen){ state.activeId=t.dataset.sdOpen; CALC_LINK.pendingPid=''; save(); renderWork(); const s=$('#s2'); if(s) s.scrollIntoView({behavior:'smooth',block:'start'}); return; }
+});
+
+$('#ptabs').addEventListener('change',e=>{ if(e.target.id==='ptabSel'){ CALC_LINK.pendingPid=''; state.activeId=e.target.value; save(); renderWork(); } });
 $('#editor').addEventListener('change',e=>{
   const p=active(); if(!p) return; const t=e.target;
   if(t.id==='pname'){ p.name=t.value.trim()||p.name; p.sample=false; }
@@ -1853,6 +2045,15 @@ $('#designPanel').addEventListener('input',e=>{
 });
 $('#designPanel').addEventListener('change',e=>{
   const t=e.target; let p=active(); if(p&&p.sample) p=null; /* สูตรตัวอย่างไม่ถูกแก้ทับ: เริ่มงานใหม่แทน */
+  if(t.id==='lnkPdr'){ CALC_LINK.q=''; const pid=t.value, cur=active();   /* เลือกโครงการ = เปิดสูตรของโครงการนั้น · ยังไม่มีสูตร = รอกดสร้างใหม่ */
+    if(!pid){ if(CALC_LINK.pendingPid){ CALC_LINK.pendingPid=''; renderWork(); return; } if(cur&&!cur.sample){ cur.link=Object.assign({},cur.link,{projectId:''}); save(); } renderWork(); return; }
+    CALC_LINK.pendingPid='';
+    if(cur&&!cur.sample&&cur.link&&cur.link.projectId===pid){ renderWork(); return; }
+    const mine=state.products.filter(x=>!x.sample&&x.link&&x.link.projectId===pid);
+    if(mine.length){ state.activeId=mine[mine.length-1].id; save(); renderWork(); toast('เปิดสูตรของโปรเจคนี้ ('+mine.length+' สูตร)'); return; }
+    if(cur&&!cur.sample&&!(cur.link&&cur.link.projectId)&&!(cur.lines||[]).some(l=>l.code||l.nameIn)){ calcApplyLink(cur,'pdr',pid); save(); renderWork(); return; }   /* สูตรเปล่าที่ยังไม่ผูก: ใช้ต่อได้เลย */
+    CALC_LINK.pendingPid=pid; renderWork(); return; }
+  if(CALC_LINK.pendingPid) p=null;
   if(t.id==='lnkPdr'||t.id==='lnkBrief'){ CALC_LINK.q=''; if(!p){ if(!t.value) return; p=calcNewProduct(); } const k=t.id==='lnkPdr'?'pdr':'brief'; if(t.value) calcApplyLink(p,k,t.value); else p.link=Object.assign({},p.link,{[k==='pdr'?'projectId':'briefId']:''}); p.sample=false; save(); renderWork(); return; }
   if(t.dataset.dapp){ if(!p){ if(!t.checked) return; p=calcNewProduct(); }
     const a=t.dataset.dapp, its=calcEnsureItems(p), i=its.findIndex(x=>(x.app||'')===a);
@@ -1885,7 +2086,9 @@ $('#versionPanel').addEventListener('click',async e=>{
   }catch(err){ toast('ทำไม่สำเร็จ: '+errText(err)); renderVersionPanel(); }
 });
 $('#editor').addEventListener('click',e=>{
+  if(e.target.id==='btnNewForProj'){ calcNewProduct(); save(); renderWork(); return; }
   const p=active(); if(!p) return;
+  if(e.target.id==='btnToLib'){ calcToLibrary(p, e.target); return; }
   const ad=e.target.closest('[data-add]'); if(ad){ calcAddLine(p, ad.dataset.add, ad.dataset.name); return; }
   if(e.target.id==='btnSaveProd'){ calcSaveNow(e.target); return; }
   if(e.target.id==='btnAddRow'){ p.lines.push({code:'',nameIn:'',amt:''}); save(); renderWork(); const ins=document.querySelectorAll('#editor input.code'); ins[ins.length-1]?.focus(); return; }

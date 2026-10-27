@@ -1808,6 +1808,14 @@ async function searchPdFormulas(ctx: Ctx, q: string, customer?: string) {
     and (${cu} = '' or data->>'customer' = ${cu}) order by (code ilike ${q}) desc, updated_at desc, code limit 100`;
   return rows.map((x: Any) => ({ id: String(x.id), code: String(x.code || ""), name: String(x.name), status: String(x.status), brand: String(x.brand || ""), customer: String(x.customer || ""), nLines: Number(x.n_lines) || 0, updatedAt: iso(x.updated_at) }));
 }
+/** คีย์สำหรับตัดสูตร Perfumer ที่ซ้ำกับสูตร PD ออก (ชื่อสูตร/ชื่อตัวอย่างน้ำหอม + รหัสสูตร/รหัสสินค้า/รหัสตัวอย่าง ตัวพิมพ์เล็ก) */
+async function listPdDupKeys(ctx: Ctx) {
+  await needAny(ctx, RD_VIEW);
+  const rows = await ctx.db`select lower(btrim(name)) as n, lower(btrim(code)) as c, lower(btrim(coalesce(data->>'fragranceCode', ''))) as fc, lower(btrim(coalesce(data->>'fgCode', ''))) as fg, lower(btrim(coalesce(data->>'fragranceName', ''))) as fn from costing.pd_formulas`;
+  const names = new Set<string>(), codes = new Set<string>();
+  rows.forEach((x: Any) => { if (x.n) names.add(String(x.n)); if (x.fn) names.add(String(x.fn)); [x.c, x.fc, x.fg].forEach((v: Any) => { if (v) codes.add(String(v)); }); });
+  return { names: [...names], codes: [...codes] };
+}
 async function getPdFormula(ctx: Ctx, id: string) {
   const m = await needAny(ctx, RD_VIEW);
   const x = (await ctx.db`select * from costing.pd_formulas where id = ${str(id, 60)}`)[0];
@@ -2717,7 +2725,7 @@ const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   listBriefs, saveBrief, deleteBrief, listScents, saveScent, deleteScent, getTypeformStatus, saveTypeformToken, syncTypeform, disconnectTypeform,
   pwLogin, setMyPassword, pwLogout, resetUserPassword,
   listCustomers, saveCustomer, listProjects, getProject, saveProject, setStage, bulkStage, raCheck, issueProjectDoc, uploadProjectDoc, getProjectDocFile, deleteProjectDoc, listSamples, saveSample, sendSample, deleteSample, evalSummary, importRd,
-  listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases, importPdFormulas, searchPdImported, getPdFormula, listPdDocFormulas, listPdCustomers, listPdByCustomer, searchPdFormulas, listLabelArchive, getLabelArchive, saveLabelArchive, deleteLabelArchive,
+  listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases, importPdFormulas, searchPdImported, getPdFormula, listPdDocFormulas, listPdCustomers, listPdByCustomer, searchPdFormulas, listLabelArchive, getLabelArchive, saveLabelArchive, deleteLabelArchive, listPdDupKeys,
   listPdTrials, savePdTrial, sendPdTrial, decidePdTrial, issuePdTrialStock,
   listRdStock, listRdStockTx, saveRdStockItem, deleteRdStockItem, addRdStockTx, importRdStock,
   listFda, saveFdaReg, renewFdaReg, deleteFdaReg, saveFdaRequest, deleteFdaRequest, getFdaAlert, saveFdaAlert, resetFdaAlertSecret,

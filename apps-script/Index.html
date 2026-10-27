@@ -186,6 +186,12 @@ select.doc-new{border:1px solid var(--line-strong);border-radius:8px;padding:5px
 .sd-img{position:relative;margin:0}.sd-img .x{position:absolute;top:-6px;right:-6px;background:var(--card);border-radius:50%}
 .sd-thumb{width:96px;height:96px;border:1px solid var(--line-strong);border-radius:8px;background:var(--input-bg);padding:0;overflow:hidden;cursor:zoom-in;display:flex;align-items:center;justify-content:center}
 .sd-thumb img{width:100%;height:100%;object-fit:cover}
+.olf-chip{font-size:11px;margin-left:4px;cursor:pointer;border:1px solid var(--line-strong);background:var(--card)}span.olf-chip{cursor:default}
+.olf-chip.olf-top{background:#fdf3d6;color:#7a5a00;border-color:#efd27a}.olf-chip.olf-heart{background:#fbe4ec;color:#8a2f52;border-color:#efb2c7}.olf-chip.olf-base{background:#efe5da;color:#5e4330;border-color:#d4bfa8}.olf-chip.olf-none{color:var(--ink-muted)}
+.olf-chip.olf-auto{border-style:dashed}
+.olf-form{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:flex-end}.olf-form label{display:flex;flex-direction:column;font-size:12px;color:var(--ink-muted);gap:2px}
+.olf-form select,.olf-form input{font-size:13px;padding:4px 6px;border:1px solid var(--line-strong);border-radius:6px;background:var(--input-bg);color:var(--ink)}
+.sd-leg{display:flex;gap:14px;justify-content:center;font-size:12px;margin:2px 0 4px}.sd-leg i{display:inline-block;width:22px;vertical-align:middle;margin-right:5px}
 .sd-add{width:96px;height:96px;border:1px dashed var(--line-strong);border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;color:var(--ink-muted)}
 #scOut{background:var(--card);border-radius:10px;padding:12px 14px}
 .sc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:8px}
@@ -1747,14 +1753,14 @@ function renderEditor(){
         return `<tr>
           <td class="muted">${k+1}</td>
           <td><input class="code" data-i="${r.i}" data-f="code" value="${esc(r.ln.code)}" aria-label="รหัส RM"></td>
-          <td><div class="nm">${esc(nm)}<br>${chip(r.status)}${r.e&&r.e.disc?' <span class="chip bad">เลิกใช้/ห้ามใช้</span>':''}${note}</div></td>
+          <td><div class="nm">${esc(nm)}<br>${chip(r.status)}${olfChip((r.e&&r.e.code)||r.ln.code)}${r.e&&r.e.disc?' <span class="chip bad">เลิกใช้/ห้ามใช้</span>':''}${note}</div></td>
           <td class="num"><input class="amt" data-i="${r.i}" data-f="amt" type="number" step="any" min="0" value="${esc(r.ln.amt)}" aria-label="ปริมาณ"></td>
           <td class="num">${fmt(r.pct,2)}</td>
           <td class="num">${priceCell}</td>
           <td class="num">${r.costKg!=null?fmt(r.costKg,2):'–'}</td>
           <td><div class="share"><i style="width:${(r.share/maxShare*64).toFixed(1)}px"></i><span>${r.costKg!=null?fmt(r.share*100,1)+'%':''}</span></div></td>
           <td class="num">${fmt(r.gBatch,1)}</td>
-          <td><button type="button" class="x" data-del="${r.i}" aria-label="ลบแถว">×</button></td></tr>`; }).join('')}</tbody>
+          <td><button type="button" class="x" data-del="${r.i}" aria-label="ลบแถว">×</button></td></tr>${OLF_EDIT&&OLF_EDIT===((r.e&&r.e.code)||r.ln.code)?olfEditRow(OLF_EDIT,10):''}`; }).join('')}</tbody>
       <tfoot><tr><td></td><td colspan="2">รวม ${c.rows.length} รายการ</td><td class="num">${fmtP(c.W)}</td><td class="num">${c.W>0?'100.00':'–'}</td><td></td><td class="num">${c.complete?'':'≥ '}${fmt(c.rm,2)}</td><td></td><td class="num">${fmt(c.inputKg*1000,1)}</td><td></td></tr></tfoot>
     </table></div>
     <div class="row" style="margin-top:12px;justify-content:space-between">
@@ -1815,9 +1821,9 @@ function renderDbTable(){
   const q=$('#dbq').value.trim().toLowerCase(), f=$('#dbf').value, cat=$('#dbc').value;
   const list=DB.entries.filter(e=>(!f||e.status===f) && (!cat||e.code.split('-')[2]===cat) && (!q || e.code.toLowerCase().includes(q) || e.name.toLowerCase().includes(q)));
   const shown=list.slice(0,60);
-  $('#dbtable').innerHTML = `<thead><tr><th>รหัส</th><th>รายละเอียด</th><th>หมวด</th><th class="num">บาท/กรัม</th><th>สถานะ</th><th></th></tr></thead>
-    <tbody>${shown.map(e=>`<tr><td class="mono">${esc(e.code)}</td><td><div class="nm">${esc(e.name)}${e.note?`<span class="note">${esc(e.note)}</span>`:''}</div></td><td class="muted" style="white-space:nowrap">${esc(catOf(e.code))}</td>
-      <td class="num">${e.price!=null?fmtP(e.price):'–'}</td><td>${chip(e.status)}</td><td>${can('calc')?`<button class="btn small" type="button" data-add="${esc(e.code)}" data-name="${esc(e.name)}">เพิ่ม</button>`:''}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">ไม่พบรายการที่ตรงกับคำค้น</td></tr>'}</tbody>`;
+  $('#dbtable').innerHTML = `<thead><tr><th>รหัส</th><th>รายละเอียด</th><th>หมวด</th><th>โน้ต / ตระกูล</th><th class="num">บาท/กรัม</th><th>สถานะ</th><th></th></tr></thead>
+    <tbody>${shown.map(e=>`<tr><td class="mono">${esc(e.code)}</td><td><div class="nm">${esc(e.name)}${e.note?`<span class="note">${esc(e.note)}</span>`:''}</div></td><td class="muted" style="white-space:nowrap">${esc(catOf(e.code))}</td><td>${olfChip(e.code,true)}</td>
+      <td class="num">${e.price!=null?fmtP(e.price):'–'}</td><td>${chip(e.status)}</td><td>${can('calc')?`<button class="btn small" type="button" data-add="${esc(e.code)}" data-name="${esc(e.name)}">เพิ่ม</button>`:''}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">ไม่พบรายการที่ตรงกับคำค้น</td></tr>'}</tbody>`; if(!RMOLF) olfLoad();
   $('#dbcount').textContent = `แสดง ${shown.length.toLocaleString('th-TH')} จาก ${list.length.toLocaleString('th-TH')} รายการ` + (list.length>60?' · พิมพ์คำค้นเพิ่มเพื่อกรอง':'');
   $('#dbHint').textContent = `${DB.entries.length.toLocaleString('th-TH')} รายการ · ราคาเป็น บาท/กรัม`;
 }
@@ -1828,7 +1834,7 @@ function renderDbFilters(){
 function renderWork(){ if(!can('calc')) return; renderDesignPanel(); renderSdBrief(); renderTabs(); renderEditor(); renderProjScent(); renderSummary(); renderOverview(); renderVersionPanel(); }
 function applyPermsToLayout(){
   const calc=can('calc'), view=can('viewDb');
-  ['#stepsBar','#s1','#s2','#s4','#summary'].forEach(s=>$(s).hidden=!calc);
+  ['#stepsBar','#s1','#s2','#s3p','#s4','#summary'].forEach(s=>$(s).hidden=!calc);
   $('#s5').hidden=!view||calc;   /* ตารางฐานราคาไม่แสดงในหมวด Perfumer (เลือกวัตถุดิบผ่านช่องค้นหาในตัวออกแบบ) · แสดงเฉพาะผู้ที่มีสิทธิ์ดูราคาอย่างเดียว */
   $('.layout').style.gridTemplateColumns = calc ? '' : 'minmax(0,1fr)';
   let none=$('#noPerm');
@@ -1855,6 +1861,43 @@ $('#btnPaste').onclick=()=>{
 };
 $('#ptabs').addEventListener('click',e=>{ if(e.target.closest('#btnNewProd')){ const pid=calcCtxPid(), np=calcNewProduct(); if(pid&&!(np.link&&np.link.projectId)) calcApplyLink(np,'pdr',pid); save(); renderWork(); } });   /* สูตรใหม่ผูกโครงการที่เลือกอยู่ */
 $('#ptabs').addEventListener('click',e=>{ if(e.target.id==='btnTabsAll'){ CALC_LINK.allTabs=!CALC_LINK.allTabs; renderTabs(); } });
+/* ===== ข้อมูลกลิ่นของวัตถุดิบ (ชั้นโน้ต + ตระกูลกลิ่น) · costing.rm_olf ===== */
+let RMOLF=null, OLF_LOADING=false, OLF_EDIT='';
+const OLF_LAY={top:['Top','โน้ตบน'],heart:['Heart','โน้ตกลาง'],base:['Base','โน้ตฐาน'],none:['ไม่มีกลิ่น','สารเนื้อผลิตภัณฑ์']};
+const olfCanEdit=()=>can('perfumer')||can('editPrices');
+async function olfLoad(force){
+  if(OLF_LOADING||(RMOLF&&!force)) return; OLF_LOADING=true;
+  try{ const L=await api('listRmOlf'), m={}; L.forEach(o=>{ m[o.code]=o; }); RMOLF=m; }catch(e){ if(!RMOLF) RMOLF={}; }
+  OLF_LOADING=false; if(S.view==='calc'){ renderEditor(); renderSdBrief(); } if(can('viewDb')&&$('#dbtable')) renderDbTable();
+}
+function olfTop(o){ return Object.entries((o&&o.fam)||{}).sort((a,b)=>b[1]-a[1]); }
+/* ป้ายในตาราง: Top · Citrus · กดเพื่อแก้ (คนที่มีสิทธิ์ Perfumer / แก้ราคา) */
+function olfChip(code, ro){
+  if(!code||!RMOLF) return '';
+  const o=RMOLF[code], ed=!ro&&olfCanEdit();
+  if(!o||!o.layer) return ed?`<button type="button" class="chip olf-chip olf-none" data-olf="${esc(code)}" title="ยังไม่มีข้อมูลโน้ต/ตระกูลกลิ่น · กดเพื่อใส่">+ โน้ต/ตระกูล</button>`:'';
+  const fam=olfTop(o).slice(0,2).map(([a])=>SC_AXL[a]?SC_AXL[a][0]:a).join(' · '), lab=o.layer==='none'?'ไม่มีกลิ่น':OLF_LAY[o.layer][0]+(fam?' · '+fam:'');
+  const tip=(o.odor||'')+(o.src==='auto'?' (จัดอัตโนมัติจากชื่อ ตรวจและแก้ได้)':'');
+  return ed?`<button type="button" class="chip olf-chip olf-${o.layer}${o.src==='auto'?' olf-auto':''}" data-olf="${esc(code)}" title="${esc(tip)}">${esc(lab)}</button>`:`<span class="chip olf-chip olf-${o.layer}" title="${esc(tip)}">${esc(lab)}</span>`;
+}
+function olfEditRow(code, cols){
+  const o=(RMOLF&&RMOLF[code])||{}, t=olfTop(o), f1=(t[0]||[])[0]||'', f2=(t[1]||[])[0]||'';
+  const fo=(sel)=>`<option value="">—</option>${SC_AX.map(a=>`<option value="${a}" ${sel===a?'selected':''}>${esc(SC_AXL[a][0])} · ${esc(SC_AXL[a][1])}</option>`).join('')}`;
+  return `<tr class="olf-edit"><td colspan="${cols}"><div class="olf-form" data-olf-code="${esc(code)}"><b class="mono" style="font-size:12px">${esc(code)}</b>
+    <label>ชั้นโน้ต <select data-olfk="layer">${Object.entries(OLF_LAY).map(([k,[en,th]])=>`<option value="${k}" ${o.layer===k?'selected':''}>${en} · ${th}</option>`).join('')}</select></label>
+    <label>ตระกูลหลัก <select data-olfk="f1">${fo(f1)}</select></label><label>ตระกูลรอง <select data-olfk="f2">${fo(f2)}</select></label>
+    <label style="flex:1 1 200px">ลักษณะกลิ่น <input data-olfk="odor" maxlength="200" value="${esc(o.odor||'')}" placeholder="เช่น ส้มสด เปลือกขม"></label>
+    <span class="row" style="gap:6px"><button type="button" class="btn small primary" data-olf-save>บันทึก</button><button type="button" class="btn small" data-olf-cancel>ยกเลิก</button></span></div>
+    <div class="muted" style="font-size:11.5px;margin-top:4px">ข้อมูลนี้ใช้ร่วมกันทุกสูตร · ใช้คำนวณกราฟลักษณะกลิ่นและ Fragrance Wheel ของสูตรจริง${o.updatedBy&&o.src==='manual'?` · แก้ล่าสุดโดย ${esc(shortName(o.updatedBy))}`:o.src==='auto'?' · ตอนนี้เป็นค่าที่ระบบจัดจากชื่อวัตถุดิบ':''}</div></td></tr>`;
+}
+async function olfSaveFrom(box, btn){
+  const code=box.dataset.olfCode, g=k=>(box.querySelector(`[data-olfk="${k}"]`)||{}).value||'';
+  const layer=g('layer'), fam={}; if(layer!=='none'){ if(g('f1')) fam[g('f1')]=0.9; if(g('f2')&&g('f2')!==g('f1')) fam[g('f2')]=0.45; }
+  if(layer!=='none'&&!Object.keys(fam).length){ toast('เลือกตระกูลกลิ่นหลักอย่างน้อย 1 กลุ่ม'); return; }
+  if(btn) btn.disabled=true;
+  try{ const r=await api('saveRmOlf', code, {layer, fam, odor:g('odor')}); RMOLF=RMOLF||{}; if(r.layer) RMOLF[code]=r; else delete RMOLF[code]; OLF_EDIT=''; renderEditor(); renderSdBrief(); toast('บันทึกข้อมูลกลิ่นของวัตถุดิบแล้ว'); }
+  catch(err){ toast(errText(err)); if(btn) btn.disabled=false; }
+}
 /* ===== Scent Design Space: ข้อมูลออกแบบต่อโครงการ (data.scentDesign) · รูปแนบ · กราฟลักษณะกลิ่น + Fragrance Wheel ===== */
 const SD={draft:{}, imgs:{}, proj:{}, loading:'', upBusy:false};
 /* โครงการที่กำลังออกแบบ: โครงการที่เลือกแต่ยังไม่มีสูตร (pending) หรือโครงการของสูตรที่เปิดอยู่ */
@@ -1882,19 +1925,6 @@ function sdCompose(sd){
 }
 const SD_COL={citrus:'#e9b730',green:'#6fa35a',aquatic:'#4f9fd8',floral:'#df7fa0',spicy:'#d4602f',gourmand:'#a8784f',woody:'#7d5f45',amber:'#c58f2c'};
 const sdPt=(cx,cy,r,a)=>[cx+r*Math.cos(a), cy+r*Math.sin(a)];
-/* Radar ลักษณะกลิ่น (Perfume Engineer) */
-function sdRadar(o){
-  const tot=o.prof.reduce((a,b)=>a+b,0)||1, p={}; SC_AX.forEach((a,k)=>{ p[a]=o.prof[k]/tot; });
-  const cl=v=>Math.max(0.04,Math.min(1,v));
-  const ax=[['สดชื่น',cl((p.citrus+p.aquatic+p.green)*1.6)],['หวาน',cl((p.gourmand+p.floral*.5)*2)],['ดอกไม้',cl(p.floral*2.2)],['อบอุ่น',cl((p.amber+p.spicy+p.woody*.5)*1.7)],
-    ['ความแรง',cl(o.intensity/5)],['ติดทน',cl(o.ratio[2]/50)],['ฟุ้งกระจาย',cl(o.ratio[0]/40)]];
-  const n=ax.length, cx=150, cy=135, R=95, ang=i=>-Math.PI/2+i*2*Math.PI/n;
-  const grid=[.25,.5,.75,1].map(f=>`<polygon points="${ax.map((_,i)=>sdPt(cx,cy,R*f,ang(i)).map(v=>v.toFixed(1)).join(',')).join(' ')}" fill="none" stroke="var(--line)" stroke-width="1"/>`).join('');
-  const spokes=ax.map((_,i)=>{ const [x,y]=sdPt(cx,cy,R,ang(i)); return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--line)"/>`; }).join('');
-  const poly=ax.map(([,v],i)=>sdPt(cx,cy,R*v,ang(i)).map(z=>z.toFixed(1)).join(',')).join(' ');
-  const lab=ax.map(([l,v],i)=>{ const [x,y]=sdPt(cx,cy,R+20,ang(i)), anc=Math.abs(x-cx)<8?'middle':x>cx?'start':'end'; return `<text x="${x.toFixed(1)}" y="${(y+4).toFixed(1)}" text-anchor="${anc}" font-size="11.5" fill="var(--ink)">${l} <tspan fill="var(--ink-muted)">${Math.round(v*100)}</tspan></text>`; }).join('');
-  return `<svg viewBox="-55 0 410 270" role="img" aria-label="กราฟลักษณะกลิ่น" style="width:100%;max-width:400px;height:auto">${grid}${spokes}<polygon points="${poly}" fill="var(--accent,#b8864b)" fill-opacity=".28" stroke="var(--accent,#b8864b)" stroke-width="2"/>${lab}</svg>`;
-}
 /* Fragrance Wheel: 8 ตระกูลกลิ่น ความเข้มของสีตามสัดส่วนในโปรไฟล์ */
 function sdWheel(o){
   const tot=o.prof.reduce((a,b)=>a+b,0)||1, mx=Math.max(...o.prof)||1, cx=150, cy=150, R=118, r0=46, n=SC_AX.length;
@@ -1905,12 +1935,47 @@ function sdWheel(o){
   const top=o.order[0][0];
   return `<svg viewBox="-40 0 380 300" role="img" aria-label="Fragrance Wheel" style="width:100%;max-width:360px;height:auto">${seg}<circle cx="${cx}" cy="${cy}" r="${r0-4}" fill="var(--card,#fff)"/><text x="${cx}" y="${cy-2}" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink)">${SC_AXL[top][0]}</text><text x="${cx}" y="${cy+14}" text-anchor="middle" font-size="10.5" fill="var(--ink-muted)">${SC_AXL[top][1]}</text></svg>`;
 }
+/* Radar ลักษณะกลิ่น (Perfume Engineer) · เทียบเป้าหมาย (Archetype + Mood) กับสูตรจริง */
+function sdAxVals(prof, ratio, intensity){
+  const tot=prof.reduce((a,b)=>a+b,0)||1, p={}; SC_AX.forEach((a,k)=>{ p[a]=prof[k]/tot; });
+  const cl=v=>Math.max(0.04,Math.min(1,v));
+  return [['สดชื่น',cl((p.citrus+p.aquatic+p.green)*1.6)],['หวาน',cl((p.gourmand+p.floral*.5)*2)],['ดอกไม้',cl(p.floral*2.2)],['อบอุ่น',cl((p.amber+p.spicy+p.woody*.5)*1.7)],
+    ['ความแรง',cl(intensity/5)],['ติดทน',cl(ratio[2]/50)],['ฟุ้งกระจาย',cl(ratio[0]/40)]];
+}
+function sdRadar(series){
+  const ax=series[0].vals, n=ax.length, cx=150, cy=135, R=95, ang=i=>-Math.PI/2+i*2*Math.PI/n;
+  const grid=[.25,.5,.75,1].map(f=>`<polygon points="${ax.map((_,i)=>sdPt(cx,cy,R*f,ang(i)).map(v=>v.toFixed(1)).join(',')).join(' ')}" fill="none" stroke="var(--line)" stroke-width="1"/>`).join('');
+  const spokes=ax.map((_,i)=>{ const [x,y]=sdPt(cx,cy,R,ang(i)); return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--line)"/>`; }).join('');
+  const polys=series.map(s=>`<polygon points="${s.vals.map(([,v],i)=>sdPt(cx,cy,R*v,ang(i)).map(z=>z.toFixed(1)).join(',')).join(' ')}" fill="${s.color}" fill-opacity="${s.dash?'.06':'.28'}" stroke="${s.color}" stroke-width="2" ${s.dash?'stroke-dasharray="5 4"':''}/>`).join('');
+  const main=series[series.length-1].vals;
+  const lab=ax.map(([l],i)=>{ const [x,y]=sdPt(cx,cy,R+20,ang(i)), anc=Math.abs(x-cx)<8?'middle':x>cx?'start':'end'; return `<text x="${x.toFixed(1)}" y="${(y+4).toFixed(1)}" text-anchor="${anc}" font-size="11.5" fill="var(--ink)">${l} <tspan fill="var(--ink-muted)">${Math.round(main[i][1]*100)}</tspan></text>`; }).join('');
+  return `<svg viewBox="-55 0 410 270" role="img" aria-label="กราฟลักษณะกลิ่น" style="width:100%;max-width:400px;height:auto">${grid}${spokes}${polys}${lab}</svg>`;
+}
+/* โปรไฟล์จากสูตรจริง: ตระกูลกลิ่นและชั้นโน้ตของวัตถุดิบแต่ละตัว × % ในสูตร (ไม่นับสารที่ไม่มีกลิ่น) */
+function sdFormulaProfile(p){
+  if(!p||!RMOLF) return null;
+  let c; try{ c=compute(p); }catch(e){ return null; }
+  const prof=SC_AX.map(()=>0), lay={top:0,heart:0,base:0}; let known=0, unknown=0, none=0, nUnk=0;
+  c.rows.forEach(r=>{ const pct=+r.pct||0; if(pct<=0) return; const code=(r.e&&r.e.code)||r.ln.code, o=code?RMOLF[code]:null;
+    if(!o||!o.layer){ unknown+=pct; nUnk++; return; } if(o.layer==='none'){ none+=pct; return; }
+    const f=o.fam||{}, s=Object.values(f).reduce((a,b)=>a+(+b||0),0)||1; SC_AX.forEach((a,k)=>{ prof[k]+=pct*(+f[a]||0)/s; }); lay[o.layer]+=pct; known+=pct; });
+  if(known<=0) return {cover:0, unknown:nUnk};
+  const t=lay.top+lay.heart+lay.base||1, ratio=[lay.top,lay.heart,lay.base].map(v=>Math.round(v/t*100));
+  const order=SC_AX.map((a,k)=>[a,prof[k]]).sort((a,b)=>b[1]-a[1]);
+  return {prof, ratio, order, cover:Math.round(known/(known+unknown)*100), unknown:nUnk, none:Math.round(none)};
+}
 function sdChartsHtml(sd){
   const o=sdCompose(sd); if(!o) return '';
+  const p=active(), pid=calcCtxPid(), mine=p&&!p.sample&&!CALC_LINK.pendingPid&&p.link&&p.link.projectId===pid, a=mine?sdFormulaProfile(p):null, has=a&&a.cover>0;
+  const series=[{vals:sdAxVals(o.prof,o.ratio,o.intensity), color:'var(--ink-muted)', dash:has}]; if(has) series.push({vals:sdAxVals(a.prof,a.ratio,o.intensity), color:'var(--accent,#b8864b)'});
   const L={top:'Top',heart:'Heart',base:'Base'};
-  return `<div class="sd-charts"><div class="sd-chart"><h5>Perfume Engineer · ลักษณะกลิ่น</h5>${sdRadar(o)}<div class="muted" style="font-size:12px">โครงสร้าง Top / Heart / Base ${o.ratio.join(' / ')} · ความแรง ${o.intensity}/5 (${esc(SC_INT[o.intensity])})</div></div>
-    <div class="sd-chart"><h5>Fragrance Wheel</h5>${sdWheel(o)}<div class="muted" style="font-size:12px">${['top','heart','base'].map(l=>`<b>${L[l]}</b> ${o.layers[l].map(n=>esc(n.en)).join(', ')}`).join(' · ')}</div></div></div>
-    <div class="muted" style="font-size:11.5px;margin-top:4px">ประมาณการจาก Archetype + Mood & Tone ด้วยตัวคำนวณ Scent Composer · เป็นแนวทางเริ่มต้น ไม่ได้คำนวณจากสูตรจริง</div>`;
+  const leg=has?`<div class="sd-leg"><span><i style="border-top:2px dashed var(--ink-muted)"></i>เป้าหมาย (Archetype + Mood)</span><span><i style="border-top:2px solid var(--accent,#b8864b)"></i>สูตร ${esc(p.name)}</span></div>`:'';
+  const cov=mine?(!RMOLF?'กำลังโหลดข้อมูลกลิ่นของวัตถุดิบ…':has?`ข้อมูลกลิ่นวัตถุดิบครอบคลุม ${a.cover}% ของสูตร${a.unknown?` · ยังไม่มีข้อมูล ${a.unknown} ตัว (กดป้ายในตารางสารประกอบเพื่อใส่)`:''}`:'วัตถุดิบในสูตรยังไม่มีข้อมูลตระกูลกลิ่น แสดงเฉพาะเป้าหมาย'):'ยังไม่ได้เปิดสูตรของโปรเจคนี้ แสดงเฉพาะเป้าหมาย';
+  const wheel=has?{prof:a.prof, order:a.order}:o;
+  return `<div class="sd-charts"><div class="sd-chart"><h5>Perfume Engineer · ลักษณะกลิ่น</h5>${sdRadar(series)}${leg}
+      <div class="muted" style="font-size:12px">Top / Heart / Base · เป้าหมาย ${o.ratio.join(' / ')}${has?` · สูตรจริง <b>${a.ratio.join(' / ')}</b>`:''} · ความแรง ${o.intensity}/5 (${esc(SC_INT[o.intensity])}, ประมาณจาก Archetype)</div></div>
+    <div class="sd-chart"><h5>Fragrance Wheel · ${has?'จากสูตรจริง':'เป้าหมาย'}</h5>${sdWheel(wheel)}<div class="muted" style="font-size:12px">${has?'':['top','heart','base'].map(l=>`<b>${L[l]}</b> ${o.layers[l].map(n=>esc(n.en)).join(', ')}`).join(' · ')}</div></div></div>
+    <div class="muted" style="font-size:11.5px;margin-top:4px">${cov}</div>`;
 }
 const sdImgs=x=>((x.data&&x.data.pdrFiles)||[]).filter(f=>f.kind==='design');
 function sdImgsHtml(x){
@@ -1947,7 +2012,7 @@ function sdHtml(){
     ${ed?`<div class="row" style="gap:10px;align-items:center;margin-top:10px"><button class="btn primary small" type="button" id="sdSave">บันทึกข้อมูลออกแบบ</button><span class="muted" style="font-size:12px" id="sdState">${dirty?'มีการแก้ไขที่ยังไม่บันทึก':saved?`บันทึกล่าสุด ${rdDate(saved.at)}${saved.by?' โดย '+esc(shortName(saved.by)):''}`:'ยังไม่เคยบันทึก · ค่าเริ่มต้นดึงจากบรีฟลูกค้า'}</span></div>`:''}
   </details>`;
 }
-function renderSdBrief(){ const el=$('#sdBrief'); if(!el) return; el.innerHTML=sdHtml(); const pid=calcCtxPid(), x=pid?calcProj(pid):null; if(x) sdLoadImgs(x); }
+function renderSdBrief(){ const el=$('#sdBrief'); if(!el) return; if(!RMOLF) olfLoad(); el.innerHTML=sdHtml(); const pid=calcCtxPid(), x=pid?calcProj(pid):null; if(x) sdLoadImgs(x); }
 function sdRefreshCharts(pid){ const c=$('#sdCharts'), d=SD.draft[pid]; if(c&&d) c.innerHTML=sdChartsHtml(d); const s=$('#sdState'); if(s) s.textContent='มีการแก้ไขที่ยังไม่บันทึก'; }
 function sdPutProj(r){ const L=CALC_LINK.projects||[], i=L.findIndex(v=>v.id===r.id); if(i>=0) L[i]=Object.assign({}, L[i], r); }
 $('#sdBrief').addEventListener('input',e=>{
@@ -2089,6 +2154,9 @@ $('#editor').addEventListener('click',e=>{
   if(e.target.id==='btnNewForProj'){ calcNewProduct(); save(); renderWork(); return; }
   const p=active(); if(!p) return;
   if(e.target.id==='btnToLib'){ calcToLibrary(p, e.target); return; }
+  const oc=e.target.closest('[data-olf]'); if(oc){ OLF_EDIT=OLF_EDIT===oc.dataset.olf?'':oc.dataset.olf; renderEditor(); return; }
+  if(e.target.closest('[data-olf-save]')){ olfSaveFrom(e.target.closest('.olf-form'), e.target); return; }
+  if(e.target.closest('[data-olf-cancel]')){ OLF_EDIT=''; renderEditor(); return; }
   const ad=e.target.closest('[data-add]'); if(ad){ calcAddLine(p, ad.dataset.add, ad.dataset.name); return; }
   if(e.target.id==='btnSaveProd'){ calcSaveNow(e.target); return; }
   if(e.target.id==='btnAddRow'){ p.lines.push({code:'',nameIn:'',amt:''}); save(); renderWork(); const ins=document.querySelectorAll('#editor input.code'); ins[ins.length-1]?.focus(); return; }

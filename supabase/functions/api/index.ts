@@ -1398,6 +1398,45 @@ async function gateCheck(db: Db, pr: Any, to: string): Promise<string> {
     default: return "";
   }
 }
+/** ข้อมูลกลิ่นของวัตถุดิบ (ชั้นโน้ต + ตระกูลกลิ่น) ใช้คำนวณกราฟลักษณะกลิ่นและ Fragrance Wheel จากสูตรจริง */
+const OLF_AX = ["citrus", "green", "aquatic", "floral", "spicy", "gourmand", "woody", "amber"], OLF_LAYER: Record<string, number> = { top: 1, heart: 1, base: 1, none: 1 };
+const olfOut = (r: Any) => ({ code: String(r.code), layer: String(r.layer || ""), fam: r.fam || {}, odor: String(r.odor || ""), src: String(r.src || ""), updatedAt: iso(r.updated_at), updatedBy: String(r.updated_by || "") });
+async function listRmOlf(ctx: Ctx) {
+  await needAny(ctx, PF_VIEW);
+  return (await ctx.db`select * from costing.rm_olf order by code`).map(olfOut);
+}
+async function saveRmOlf(ctx: Ctx, code: string, o: Any) {
+  return await locked(ctx, async (c) => {
+    const m = await needAny(c, ["perfumer", "editPrices"]), db = c.db;
+    code = str(code, 40); if (!/^RM-[A-Z0-9-]{3,36}$/i.test(code)) throw new Error("รหัสวัตถุดิบไม่ถูกต้อง");
+    o = o && typeof o === "object" ? o : {};
+    const layer = OLF_LAYER[String(o.layer)] ? String(o.layer) : "";
+    const fam: Record<string, number> = {};
+    if (layer !== "none" && o.fam && typeof o.fam === "object") for (const k of OLF_AX) { const n = Number(o.fam[k]); if (isFinite(n) && n > 0) fam[k] = Math.round(Math.min(1, n) * 100) / 100; }
+    if (Object.keys(fam).length > 4) throw new Error("เลือกตระกูลกลิ่นได้ไม่เกิน 4 กลุ่ม");
+    if (!layer && !Object.keys(fam).length) { await db`delete from costing.rm_olf where code = ${code}`; await log(db, m.email, "saveRmOlf", code + " · ล้าง"); return { code, layer: "", fam: {}, odor: "", src: "", updatedAt: "", updatedBy: "" }; }
+    const row = { code, layer, fam: db.json(fam), odor: str(o.odor, 200), src: "manual", updated_at: new Date(), updated_by: m.email };
+    await db`insert into costing.rm_olf ${db(row)} on conflict (code) do update set layer = excluded.layer, fam = excluded.fam, odor = excluded.odor, src = excluded.src, updated_at = excluded.updated_at, updated_by = excluded.updated_by`;
+    await log(db, m.email, "saveRmOlf", code + " · " + layer + " " + Object.keys(fam).join("/"));
+    return olfOut({ ...row, fam });
+  });
+}
+/** นำเข้าข้อมูลกลิ่นวัตถุดิบที่จัดอัตโนมัติจากชื่อ (ไฟล์ supabase/seed/rm_olf.json ใน GitHub ตาม commit) · เจ้าของระบบเท่านั้น · ไม่ทับแถวที่มีอยู่ */
+async function seedRmOlf(ctx: Ctx, sha: string) {
+  if (ctx.email !== MIGRATION_OWNER) throw new Error("FORBIDDEN");
+  if (!/^[0-9a-f]{40}$/.test(String(sha || ""))) throw new Error("commit sha ไม่ถูกต้อง");
+  const res = await fetch(`https://raw.githubusercontent.com/Adjbank/costing/${sha}/supabase/seed/rm_olf.json`);
+  if (!res.ok) throw new Error("ดึงไฟล์ข้อมูลไม่สำเร็จ (" + res.status + ")");
+  const j = await res.json(), rules: Any[] = Array.isArray(j.rules) ? j.rules : [], rows: Any[] = Array.isArray(j.rows) ? j.rows : [];
+  return await locked(ctx, async (c) => {
+    const db = c.db, now = new Date(); let n = 0;
+    const list = rows.map((x: Any) => { const ru = rules[Number(x[1])] || []; return { code: str(x[0], 40), layer: OLF_LAYER[String(ru[0])] ? String(ru[0]) : "", fam: db.json(ru[1] && typeof ru[1] === "object" ? ru[1] : {}), odor: str(ru[2], 200), src: "auto", updated_at: now, updated_by: "auto-classify" }; })
+      .filter((x: Any) => /^RM-[A-Z0-9-]{3,36}$/i.test(x.code) && x.layer);
+    for (let i = 0; i < list.length; i += 300) n += (await db`insert into costing.rm_olf ${db(list.slice(i, i + 300))} on conflict (code) do nothing returning code`).length;
+    await log(db, ctx.email, "seedRmOlf", sha.slice(0, 7) + " · " + n + "/" + list.length);
+    return { inserted: n, total: list.length };
+  });
+}
 /** ข้อมูลออกแบบกลิ่นของโครงการ (data.scentDesign): Brand Story · Archetype · Concept · Heart Ingredients · Mood & Tone · รายละเอียด
  *  ทุกสูตร/ทุกแนวทางของโครงการใช้ชุดเดียวกัน · รูปแนบใช้ uploadProjectDoc kind "design" */
 const SD_TOKEN = /^[a-z][a-z0-9_-]{1,23}$/;
@@ -2811,7 +2850,7 @@ const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   listBriefs, saveBrief, deleteBrief, listScents, saveScent, deleteScent, getTypeformStatus, saveTypeformToken, syncTypeform, disconnectTypeform,
   pwLogin, setMyPassword, pwLogout, resetUserPassword,
   listCustomers, saveCustomer, listProjects, getProject, saveProject, setStage, bulkStage, raCheck, issueProjectDoc, uploadProjectDoc, getProjectDocFile, deleteProjectDoc, listSamples, saveSample, sendSample, deleteSample, evalSummary, importRd,
-  listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases, importPdFormulas, searchPdImported, getPdFormula, listPdDocFormulas, listPdCustomers, listPdByCustomer, searchPdFormulas, listLabelArchive, getLabelArchive, saveLabelArchive, deleteLabelArchive, listPdDupKeys, listPriceQuotes, importPriceQuotes, saveProjectMockups, setUserName, listPeopleNames, saveProjectScentDesign,
+  listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases, importPdFormulas, searchPdImported, getPdFormula, listPdDocFormulas, listPdCustomers, listPdByCustomer, searchPdFormulas, listLabelArchive, getLabelArchive, saveLabelArchive, deleteLabelArchive, listPdDupKeys, listPriceQuotes, importPriceQuotes, saveProjectMockups, setUserName, listPeopleNames, saveProjectScentDesign, listRmOlf, saveRmOlf, seedRmOlf,
   listPdTrials, savePdTrial, sendPdTrial, decidePdTrial, issuePdTrialStock,
   listRdStock, listRdStockTx, saveRdStockItem, deleteRdStockItem, addRdStockTx, importRdStock,
   listFda, saveFdaReg, renewFdaReg, deleteFdaReg, saveFdaRequest, deleteFdaRequest, getFdaAlert, saveFdaAlert, resetFdaAlertSecret,

@@ -892,6 +892,7 @@ main.wrap::after{content:"";display:block;height:52px;margin:36px 0 6px;border-r
 .doc-sheet .fm3 td.ctr{text-align:center}.doc-sheet .fm3 td.num{text-align:right;white-space:nowrap}
 .doc-sheet .fm3 tr.sub td{color:#444;font-size:9.5px;height:auto;padding-top:2px;padding-bottom:2px}
 .doc-sheet .fm3 tr.tot td{font-weight:600}
+.doc-sheet .fm3 .fm3-ap th{text-align:left;font-weight:600;height:30px}.doc-sheet .fm3 .fm3-ap td{height:30px}.doc-sheet .fm3 .fm3-ap th:nth-child(1),.doc-sheet .fm3 .fm3-ap td:nth-child(1){width:22%}.doc-sheet .fm3 .fm3-ap th:nth-child(2),.doc-sheet .fm3 .fm3-ap td:nth-child(2){width:30%}.doc-sheet .fm3 .fm3-ap th:nth-child(3),.doc-sheet .fm3 .fm3-ap td:nth-child(3){width:27%}
 .doc-sheet .fm3-c .cl{margin:8px 0 8px 22px;font-size:11.5px}.doc-sheet .fm3-c .ul{display:inline-block;border-bottom:1px solid #111;vertical-align:bottom;padding:0 4px}
 .doc-sheet .fm3-page+.fm3-page{margin-top:34px;padding-top:26px;border-top:1px dashed #bbb}
 @media print{.doc-sheet .fm3-page+.fm3-page{break-before:page;margin-top:0;padding-top:0;border-top:0}
@@ -5582,15 +5583,13 @@ function pdPrintHtml(f){
   const sample=[f.fragranceName, f.fragranceCode?'('+f.fragranceCode+')':''].filter(Boolean).join(' ');
   const kv=(l1,v1,l2,v2,tall)=>`<tr${tall?' style="height:46px"':''}><td class="lab">${l1}</td><td>${e(v1==null?'':v1)}</td><td class="lab">${l2}</td><td>${e(v2==null?'':v2)}</td></tr>`;
   const info=[
-    kv('ชื่อตัวอย่าง',f.fragranceName,'รหัสตัวอย่าง',f.fragranceCode),
+    kv('ชื่อตัวอย่าง (Sample Name)',f.fragranceName,'รหัสตัวอย่าง (Sample Code)',f.fragranceCode),
+    kv('ชื่อผลิตภัณฑ์ (Product Name)',f.productName||f.name,'รหัสผลิตภัณฑ์ (Product Code)',f.fgCode),
     kv('ชื่อกิจการ (บริษัท/ลูกค้า)',f.customer,'ชื่อแบรนด์ (Brand)',f.brand),
-    kv('Product',f.productName,'รหัส Product',f.fgCode),
-    kv('จุดประสงค์',f.purpose,'บรรจุภัณฑ์ (ประเภท/ขนาด)',f.packaging),
-    kv('ปริมาณบรรจุ',f.fillQty,'จำนวน (ชิ้น)',f.qty!=null&&f.qty!==''?Number(f.qty).toLocaleString('en-GB'):''),
-    kv('Batch size',fmt(batch,0)+' g','กำหนดส่งตัวอย่าง (SA)',th(f.sampleDue)),
-    kv('วันออกแบบสูตร',th(f.designDate),'วันที่ทำ Mock Up',th(f.mockupDate)),
-    kv('ผู้ออกแบบกลิ่น',who(f.perfumer),'ผู้ออกแบบผลิตภัณฑ์',who(f.designer)),
-    `<tr><td class="lab">ผู้ปฏิบัติการ</td><td colspan="3">${e(who(f.operator))}</td></tr>`
+    kv('ประเภทผลิตภัณฑ์ (Product Type)',f.category,'รอบแก้ไข (Revision)',f.revision!=null?String(f.revision):''),
+    kv('จุดประสงค์',f.purpose,'กำหนดส่งตัวอย่าง (SA)',th(f.sampleDue)),
+    `<tr style="height:46px"><td class="lab">บรรจุภัณฑ์<br>(ประเภท/ขนาด)</td><td>${e(f.packaging||'')}</td><td class="lab">จำนวน (ชิ้น)</td><td>${e(f.qty!=null&&f.qty!==''?Number(f.qty).toLocaleString('en-GB'):'')}</td></tr>`,
+    kv('ปริมาณบรรจุ',f.fillQty,'Batch size',fmt(batch,0)+' g')
   ].join('');
   const blank8='<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
   const rows=[];
@@ -5605,6 +5604,8 @@ function pdPrintHtml(f){
   const stabRows=PD_STAB.map(([lab,opts],i)=>{ const s=(f.stab||[])[i]||{}; return `<tr><td><b>${e(lab)}</b></td><td>${opts.map((o,k)=>(String(s.obs)===String(k)?'☑':'☐')+' '+e(o)).join('&nbsp;&nbsp;&nbsp;')}</td><td class="ctr">${s.pf==='pass'?'Pass':s.pf==='fail'?'Fail':''}</td><td>${e(s.note||'')}</td></tr>`; }).join('');
   const cc=f.concl||{}, ul=(t,min)=>`<span class="ul" style="min-width:${min}px">${t?e(t):'&nbsp;'}</span>`;
   const concl=[`${cc.result==='pass'?'☑':'☐'} ผ่าน เหมาะสำหรับการพัฒนาในสูตรนี้`, `${cc.result==='cond'?'☑':'☐'} ผ่านแบบมีเงื่อนไข (โปรดปรับสูตร / สารช่วยกระจายกลิ่น) ${ul(cc.cond,260)}`, `${cc.result==='fail'?'☑':'☐'} ไม่ผ่าน เนื่องจาก ${ul(cc.fail,420)}`].map(x=>`<div class="cl">${x}</div>`).join('');
+  /* ผู้ลงนาม: ใช้ชื่อจากสูตรถ้ามี ไม่มีใช้ชื่อตามแบบฟอร์ม · วันที่เว้นว่างให้เซ็น */
+  const apprRows=[['ผู้ปฏิบัติการ','Product Development',who(f.operator)||'โยษิตา สว่างแจ้ง'],['ผู้ออกแบบผลิตภัณฑ์','Product Development',who(f.designer)||'โยษิตา สว่างแจ้ง'],['ผู้ออกแบบกลิ่น','Perfumer',who(f.perfumer)||'บุณฑริญา จำปาทอง'],['ผู้ตรวจสอบ','Product Development Senior','ปกิตา เจริญวงษ์']].map(([a,b,c])=>`<tr><td>${e(a)}</td><td>${e(b)}</td><td>${e(c)}</td><td></td></tr>`).join('');
   const top=`<div class="fm3-top">${FM3_REV}</div>`;
   return `<div class="fm3">
     <div class="fm3-page">${top}
@@ -5620,6 +5621,7 @@ function pdPrintHtml(f){
     </div>
     <div class="fm3-page">${top}
       <h2>Conclusion &amp; Recommendation</h2><div class="fm3-c"><div style="margin-bottom:8px">สรุปผลการประเมินโดยทีม R&amp;D</div>${concl}</div>
+      <h2>Final Review &amp; Approval</h2><table class="fm3-ap"><thead><tr><th>Role</th><th>Responsible Position</th><th>Name</th><th>Date</th></tr></thead><tbody>${apprRows}</tbody></table>
     </div>
   </div>`;
 }

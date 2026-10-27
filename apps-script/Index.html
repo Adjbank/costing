@@ -1963,10 +1963,8 @@ function sdEvapSvg(ev){
 }
 /* Radar ลักษณะกลิ่น (Perfume Engineer) · เทียบเป้าหมาย (Archetype + Mood) กับสูตรจริง */
 function sdAxVals(prof, ratio, intensity, ext){
-  const tot=prof.reduce((a,b)=>a+b,0)||1, p={}; SC_AX.forEach((a,k)=>{ p[a]=prof[k]/tot; });
-  const cl=v=>Math.max(0.04,Math.min(1,v));
-  return [['สดชื่น',cl((p.citrus+p.aquatic+p.green)*1.6)],['หวาน',cl((p.gourmand+p.floral*.5)*2)],['ดอกไม้',cl(p.floral*2.2)],['อบอุ่น',cl((p.amber+p.spicy+p.woody*.5)*1.7)],
-    ['ความแรง',cl(intensity/5)],['ติดทน',cl(ext?ext.ten:ratio[2]/50)],['ฟุ้งกระจาย',cl(ext?ext.dif:ratio[0]/40)]];
+  const cl=v=>Math.max(0.04,Math.min(1,v));   /* 3 แกนเชิงวิศวกรรมกลิ่น · โทนกลิ่นดูที่ Fragrance Wheel */
+  return [['ความแรง',cl(intensity/5)],['ติดทน',cl(ext?ext.ten:ratio[2]/50)],['ฟุ้งกระจาย',cl(ext?ext.dif:ratio[0]/40)]];
 }
 function sdRadar(series){
   const ax=series[0].vals, n=ax.length, cx=150, cy=135, R=95, ang=i=>-Math.PI/2+i*2*Math.PI/n;

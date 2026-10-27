@@ -3016,6 +3016,21 @@ function docComposition(p){
   listed.forEach(r=>rows.push({name:(r.name||'').toUpperCase()||r.cas, cas:r.cas, ec:'-', range:docBand(r.level)}));
   return rows;
 }
+/* Section 3 ของ SDS: แสดงสูตรจริง — แตกวัตถุดิบเป็นชื่อ INCI ตามฐานส่วนประกอบ INCI (รวมสารชื่อเดียวกัน เรียงมากไปน้อย) ใส่ช่วง % ตามแบบเอกสาร ·
+   ถ้าไม่มีฐาน INCI ใช้วิธีเดิม (ตารางองค์ประกอบ CAS แล้วรวมส่วนที่เหลือเป็น FRAGRANCE) · วัตถุดิบที่ยังไม่มีข้อมูล INCI แสดงเป็นชื่อวัตถุดิบ */
+function docCompositionF(f){
+  if(typeof INC!=='undefined' && INC && INC.items){
+    try{
+      const lines=algLines(f);
+      if(lines.length){
+        const calc=incCalc(lines, {list:'a83', type:'leave', fragName:'FRAGRANCE'}), tot=calc.lineSum||100, unk=calc.rows.filter(a=>a.unknown).reduce((t,a)=>t+a.pct,0);
+        const rows=calc.rows.filter(a=>a.pct>=0.001).sort((a,b)=>b.pct-a.pct).map(a=>({name:String(a.inci||'').replace(/^\[|\]$/g,'').toUpperCase(), cas:a.cas||'-', ec:'-', range:docBand(a.pct)}));
+        if(rows.length) return {rows, coverage:Math.max(0, Math.min(100, (tot-unk)/tot*100))};
+      }
+    }catch(e){ /* ใช้วิธีเดิม */ }
+  }
+  return {rows:docComposition(f.p), coverage:docLevels(f.p).coverage};
+}
 /* ระดับสูงสุดที่ใช้ได้ต่อหมวด IFRA (%) จากข้อกำหนดที่โหลดไว้ · null = ไม่มีข้อกำหนดที่เกี่ยวกับสูตรนี้ */
 function docIfraMax(p){
   const L=docLevels(p), out={}; if(!CHK) return out;
@@ -3123,7 +3138,7 @@ function docDefaults(type, f){
   if(ALG_TYPES[type]) return algDefaults(type, f, base);
   if(type==='IFRA') return Object.assign(base, {amendment:'51st Amendment to the IFRA Standards (July 2023)', cats:[{cls:'9', level:''},{cls:'7B', level:''}], maxByCat:docIfraMax(p), preparedBy:'', approvedBy:''});
   if(DOC_GEN[type]) return docGenDefaults(type, base, f);
-  return Object.assign(base, {preparedBy:'', approvedBy:'', application:'For blending into various finished products', hazards:['H226','H315','H319'], comp:docComposition(p), coverage:docLevels(p).coverage,
+  return Object.assign(base, {preparedBy:'', approvedBy:'', application:'For blending into various finished products', hazards:['H226','H315','H319'], comp:docCompositionF(f).rows, coverage:docCompositionF(f).coverage,
     props:{appearance:'Clear liquid', odour:'Characteristic odour', flash:'60 °C', density:'Not available', solubility:'Insoluble', shelf:'2 years'}, transport:'UN1266'});
 }
 /* รหัสของเหลวไวไฟที่สอดคล้องกับจุดวาบไฟ (เกณฑ์ GHS/CLP ข้อ 2.6) */
@@ -3312,7 +3327,7 @@ function drawDocs(){
 /* --- ฟอร์มออกเอกสาร --- */
 async function openDocForm(type, fid){
   if(PDDOCF.some(x=>x.id===fid)){ try{ await pdDocFull(fid); }catch(e){ toast(errText(e)); return; } }
-  if(ALG_TYPES[type]){ try{ await Promise.all([INC.items?null:loadInci(), loadPf(false).catch(()=>{})]); }catch(e){ toast(errText(e)); } }   /* ต้องมีฐาน INCI และสูตรน้ำหอมก่อนคำนวณปริมาณ allergen */
+  if(ALG_TYPES[type]||type==='SDS'){ try{ await Promise.all([INC.items?null:loadInci(), loadPf(false).catch(()=>{})]); }catch(e){ toast(errText(e)); } }   /* ต้องมีฐาน INCI และสูตรน้ำหอมก่อนคำนวณปริมาณ allergen */
   const f=docFormulas().find(x=>x.id===fid); if(!f) return;
   DOCF={type, f, d:docDefaults(type, f)}; drawDocForm(); $('#docForm').scrollIntoView({behavior:'smooth', block:'start'});
 }
@@ -3547,7 +3562,7 @@ docv.addEventListener('click', async e=>{
   if(t.id==='algRecalc'){ collectDocForm(); const r=algCompute(DOCF.type, DOCF.f); Object.assign(DOCF.d, {items:r.items, missing:r.missing, lineSum:r.lineSum, noInci:r.noInci}); drawDocForm(); toast('คำนวณใหม่จากสูตรแล้ว'); return; }
   if(t.id==='docCompAdd'){ collectDocForm(); DOCF.d.comp.push({name:'', cas:'', ec:'-', range:'0.1-1'}); drawDocForm(); return; }
   if(t.dataset.compdel!=null){ collectDocForm(); DOCF.d.comp.splice(+t.dataset.compdel,1); drawDocForm(); return; }
-  if(t.id==='docCompReset'){ collectDocForm(); DOCF.d.comp=docComposition(DOCF.f.p); DOCF.d.coverage=docLevels(DOCF.f.p).coverage; drawDocForm(); return; }
+  if(t.id==='docCompReset'){ collectDocForm(); { const dc=docCompositionF(DOCF.f); DOCF.d.comp=dc.rows; DOCF.d.coverage=dc.coverage; } drawDocForm(); return; }
   if(t.id==='docPreview'){ collectDocForm(); const err=validateDoc(true); if(err){ toast(err); return; } showDoc(DOCF.type, DOCF.d, {}); return; }
   if(t.id==='docIssue'){
     collectDocForm(); const err=validateDoc(); if(err){ toast(err); return; }

@@ -1410,7 +1410,7 @@ async function importScentFormulas(ctx: Ctx, items: Any, owner: string) {
   const chunk = items.map((x: Any) => ({ code: str(x && x.code, 40).toUpperCase(), name: str(x && x.name, 160), brand: str(x && x.brand, 200), lines: Array.isArray(x && x.lines) ? x.lines.slice(0, 80) : [] })).filter((x: Any) => /^PF[0-9][0-9A-Z]*$/.test(x.code) && x.lines.length);
   return await locked(ctx, async (c) => {
     const db = c.db; owner = str(owner || ctx.email, 200).toLowerCase();
-    if (!(await db`select 1 from costing.users where email = ${owner}`).length) throw new Error("ไม่พบผู้ใช้เจ้าของสูตร");
+    if (owner !== ctx.email && !(await db`select 1 from costing.users where email = ${owner}`).length) throw new Error("ไม่พบผู้ใช้เจ้าของสูตร");
     const row = (await db`
       with src as (select * from jsonb_to_recordset(${db.json(chunk)}::jsonb) as x(code text, name text, brand text, lines jsonb)),
       known as (select code from costing.prices union select code from costing.prices_builtin),

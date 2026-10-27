@@ -1526,6 +1526,10 @@ function calcBrandOf(p){
   const nm=(x&&(x.brand||x.company))||(b&&(b.brand||(b.data&&b.data.company)))||'';
   return String(nm).trim().toLowerCase();
 }
+/* ผู้ดูแลระบบเห็นสูตรของทุกคนในรายการงานออกแบบ (ดูอย่างเดียว · คัดลอกเป็นสูตรของตัวเองได้) */
+const calcExtList=()=>{ if(!isAdminRole()||!ADM_FORMS) return []; const me=S.me.email, pid=calcCtxPid(), own=new Set(state.products.map(p=>p.id));
+  return ADM_FORMS.filter(f=>f.owner!==me&&!(f.owner===me&&own.has(f.id))&&(!pid||(f.p.link&&f.p.link.projectId===pid))).sort((a,b)=>a.owner.localeCompare(b.owner)||String(a.p.name).localeCompare(b.p.name)); };
+const calcExt=()=>{ const x=CALC_LINK.ext; return x&&isAdminRole()&&ADM_FORMS?ADM_FORMS.find(f=>f.id===x.id&&f.owner===x.owner)||null:null; };
 function renderTabs(){
   const a=active(); const dot={ok:"🟢",warn:"🟠",bad:"🔴"};
   /* เลือกโครงการ/ลูกค้าแล้ว: รายการ "งานออกแบบที่เปิดอยู่" แสดงเฉพาะของแบรนด์นั้น (กดแสดงทั้งหมดได้) */
@@ -1534,7 +1538,7 @@ function renderTabs(){
   const brandName=bk?((a.link&&a.link.projectId&&calcProj(a.link.projectId)&&(calcProj(a.link.projectId).brand||calcProj(a.link.projectId).company))||(a.link&&a.link.briefId&&calcBrief(a.link.briefId)&&calcBrief(a.link.briefId).brand)||bk):'';
   const scope=pid?`โปรเจค <b>${esc(px?(px.pdrNo+' '+(px.brand||px.company||'')).trim():'')}</b>`:`แบรนด์ <b>${esc(brandName)}</b>`;
   const filt=(pid||bk)?`<button type="button" class="btn small" id="btnTabsAll">${only?`แสดงทั้งหมด (${state.products.length})`:pid?'แสดงเฉพาะโปรเจคนี้':'แสดงเฉพาะแบรนด์นี้'}</button>`:'';
-  $("#ptabs").innerHTML = state.products.length ? `<label class="muted" for="ptabSel" style="font-size:12px">งานออกแบบที่เปิดอยู่${only?` · เฉพาะ${scope}`:''}</label><div class="ptab-row"><select id="ptabSel" class="ptab-sel" aria-label="เลือกงานออกแบบ">${list.map(p=>{ const h=health(compute(p)); return `<option value="${p.id}" ${p.id===a?.id?"selected":""}>${dot[h]||dot.ok} ${esc(p.name)} · v${p.ver||1}${p.sample?" (ตัวอย่าง)":""}</option>`; }).join("")}</select><button type="button" class="btn small" id="btnNewProd">+ งานออกแบบใหม่</button>${filt}<span class="muted" style="font-size:12px">${only?list.length+' จาก '+state.products.length:state.products.length} งาน</span></div>`
+  $("#ptabs").innerHTML = state.products.length ? `<label class="muted" for="ptabSel" style="font-size:12px">งานออกแบบที่เปิดอยู่${only?` · เฉพาะ${scope}`:''}</label><div class="ptab-row"><select id="ptabSel" class="ptab-sel" aria-label="เลือกงานออกแบบ">${list.map(p=>{ const h=health(compute(p)); return `<option value="${p.id}" ${p.id===a?.id&&!CALC_LINK.ext?"selected":""}>${dot[h]||dot.ok} ${esc(p.name)} · v${p.ver||1}${p.sample?" (ตัวอย่าง)":""}</option>`; }).join("")}${(()=>{ const ex=calcExtList(); if(!ex.length) return ""; const byOwner={}; ex.forEach(f=>{ (byOwner[f.owner]=byOwner[f.owner]||[]).push(f); }); return Object.entries(byOwner).map(([o,fs])=>`<optgroup label="สูตรของ ${esc(shortName(o))} (ดูอย่างเดียว · ${fs.length})">${fs.map(f=>`<option value="ext:${esc(f.owner)}|${esc(f.id)}" ${CALC_LINK.ext&&CALC_LINK.ext.id===f.id&&CALC_LINK.ext.owner===f.owner?"selected":""}>${esc(f.p.name)}</option>`).join("")}</optgroup>`).join(""); })()}</select><button type="button" class="btn small" id="btnNewProd">+ งานออกแบบใหม่</button>${filt}<span class="muted" style="font-size:12px">${only?list.length+' จาก '+state.products.length:state.products.length} งาน</span></div>`
     : `<div class="ptab-row"><button type="button" class="btn small" id="btnNewProd">+ งานออกแบบใหม่</button></div>`;
   if(only&&!list.length) $("#ptabs").innerHTML=`<label class="muted" style="font-size:12px">งานออกแบบที่เปิดอยู่ · เฉพาะ${scope}</label><div class="ptab-row"><span class="muted" style="font-size:13px">ยังไม่มีสูตรของโปรเจคนี้</span><button type="button" class="btn small primary" id="btnNewProd">+ สร้างสูตรใหม่สำหรับโปรเจคนี้</button>${filt}</div>`;
 }
@@ -1705,7 +1709,7 @@ async function fhMigrate(p){
 }
 function renderVersionPanel(){
   const el=$('#versionPanel'); if(!el) return; const p=active();
-  if(!p||CALC_LINK.pendingPid){ el.innerHTML=''; return; }
+  if(!p||CALC_LINK.pendingPid||CALC_LINK.ext){ el.innerHTML=''; return; }
   if(p.sample){ el.innerHTML='<div class="muted" style="font-size:13px;margin-top:10px">สูตรตัวอย่างไม่มีประวัติเวอร์ชัน · เริ่มงานออกแบบใหม่ในขั้นตอนที่ 1</div>'; return; }
   const h=FH[p.id]; if(!h||(!h.versions&&!h.err)){ fhLoad(p); el.innerHTML='<div class="muted" style="font-size:13px;margin-top:10px">กำลังโหลดประวัติ…</div>'; return; }
   const c=compute(p), ver=p.ver||1, fbAll=h.feedback||[], fb=fbAll.filter(f=>Number(f.ver)===ver), vs=h.versions||[], w=fhCanWrite();
@@ -1724,6 +1728,12 @@ function renderVersionPanel(){
 }
 function renderEditor(){
   const p=active();
+  const xf=calcExt();
+  if(xf){ const xp=xf.p, c=safeCompute(xp)||compute(Object.assign({lines:[]},xp)), un=xp.unit==='g'?'กรัม':xp.unit==='drop'?'Drops':'%';
+    $('#editor').innerHTML=`<div class="card" style="margin:0 0 12px"><div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px"><div><span class="chip info">ดูอย่างเดียว</span> <b>${esc(xp.name)}</b><div class="muted" style="font-size:12.5px">เจ้าของ ${esc(xf.owner)} · อัปเดต ${fmtSeen(xf.updatedAt)} · หน่วย ${un} · batch ${fmtP(c.batchKg)} กก.</div></div>
+      <div class="row" style="gap:6px"><button class="btn primary small" type="button" id="btnExtCopy">คัดลอกเป็นสูตรของฉัน</button><button class="btn small" type="button" id="btnExtClose">ปิด</button></div></div>
+      <div class="tablebox" style="margin-top:10px"><table><thead><tr><th>#</th><th>รหัส RM</th><th>ชื่อวัตถุดิบ</th><th class="num">${un}</th><th class="num">% สูตร</th><th class="num">บาท/กก.</th></tr></thead><tbody>${c.rows.map((x,k)=>`<tr><td class="muted">${k+1}</td><td class="mono">${esc(x.e?x.e.code:normCode(x.ln.code))}</td><td>${esc(x.e?x.e.name:(x.ln.nameIn||'—'))}${olfChip(x.e?x.e.code:normCode(x.ln.code),true)}</td><td class="num">${fmtP(x.amt)}</td><td class="num">${fmt(x.pct,2)}</td><td class="num">${x.costKg!=null?fmt(x.costKg,2):'–'}</td></tr>`).join('')}</tbody></table></div>
+      <div class="muted" style="font-size:12px;margin-top:8px">แก้ไขสูตรของผู้อื่นโดยตรงไม่ได้ · กด "คัดลอกเป็นสูตรของฉัน" เพื่อสร้างสำเนาไว้แก้ในบัญชีของคุณ</div></div>`; return; }
   if(CALC_LINK.pendingPid){ const x=calcProj(CALC_LINK.pendingPid); $('#editor').innerHTML=`<div class="empty">โปรเจค <b>${esc(x?x.pdrNo:'')}</b> ${esc(x?(x.brand||x.company||''):'')} ยังไม่มีสูตรที่ออกแบบ<div style="margin-top:10px"><button class="btn primary" type="button" id="btnNewForProj">+ สร้างสูตรใหม่สำหรับโปรเจคนี้</button></div></div>`; return; }
   if(!p){ $('#editor').innerHTML=`<div class="empty">ยังไม่มีงานออกแบบ · เริ่มที่ขั้นตอนที่ 1 หรือกด "+ งานออกแบบใหม่"</div>`; return; }
   const c=compute(p);
@@ -1774,7 +1784,7 @@ function renderEditor(){
 }
 function renderSummary(){
   const p=active();
-  if(!p||CALC_LINK.pendingPid){ $('#summary').innerHTML=''; return; }
+  if(!p||CALC_LINK.pendingPid||CALC_LINK.ext){ $('#summary').innerHTML=''; return; }
   const c=compute(p);
   const top=[...c.rows].filter(r=>r.costKg!=null).sort((a,b)=>b.costKg-a.costKg).slice(0,4);
   const cov=c.knownFrac*100;
@@ -1835,7 +1845,7 @@ function renderDbFilters(){
   const cats=[...new Set(DB.entries.map(e=>e.code.split('-')[2]))].filter(c=>CAT[c]).sort();
   $('#dbc').innerHTML = '<option value="">ทุกหมวด</option>'+cats.map(c=>`<option value="${c}">${c} · ${esc(CAT[c])}</option>`).join('');
 }
-function renderWork(){ if(!can('calc')) return; renderDesignPanel(); renderSdBrief(); renderTabs(); renderEditor(); renderProjScent(); renderSummary(); renderOverview(); renderVersionPanel(); }
+function renderWork(){ if(!can('calc')) return; if(isAdminRole()&&!ADM_FORMS&&!renderWork._ld){ renderWork._ld=true; loadAdminForms().then(()=>{ renderWork._ld=false; if(S.view==='calc') renderTabs(); }).catch(()=>{ renderWork._ld=false; }); } renderDesignPanel(); renderSdBrief(); renderTabs(); renderEditor(); renderProjScent(); renderSummary(); renderOverview(); renderVersionPanel(); }
 function applyPermsToLayout(){
   const calc=can('calc'), view=can('viewDb');
   ['#stepsBar','#s1','#s2','#s3p','#summary'].forEach(s=>$(s).hidden=!calc);
@@ -2181,7 +2191,8 @@ $('#projScentPanel').addEventListener('click',e=>{
   if(t.dataset.sdOpen){ state.activeId=t.dataset.sdOpen; CALC_LINK.pendingPid=''; save(); renderWork(); const s=$('#s2'); if(s) s.scrollIntoView({behavior:'smooth',block:'start'}); return; }
 });
 
-$('#ptabs').addEventListener('change',e=>{ if(e.target.id==='ptabSel'){ CALC_LINK.pendingPid=''; state.activeId=e.target.value; save(); renderWork(); } });
+$('#ptabs').addEventListener('change',e=>{ if(e.target.id==='ptabSel'&&String(e.target.value).startsWith('ext:')){ const v=e.target.value.slice(4), i=v.indexOf('|'); CALC_LINK.ext={owner:v.slice(0,i), id:v.slice(i+1)}; CALC_LINK.pendingPid=''; renderWork(); return; }
+  if(e.target.id==='ptabSel'){ CALC_LINK.ext=null; CALC_LINK.pendingPid=''; state.activeId=e.target.value; save(); renderWork(); } });
 $('#editor').addEventListener('change',e=>{
   const p=active(); if(!p) return; const t=e.target;
   if(t.id==='pname'){ p.name=t.value.trim()||p.name; p.sample=false; }
@@ -2247,6 +2258,9 @@ $('#versionPanel').addEventListener('click',async e=>{
   }catch(err){ toast('ทำไม่สำเร็จ: '+errText(err)); renderVersionPanel(); }
 });
 $('#editor').addEventListener('click',e=>{
+  if(e.target.id==='btnExtClose'){ CALC_LINK.ext=null; renderWork(); return; }
+  if(e.target.id==='btnExtCopy'){ const xf=calcExt(); if(!xf) return; const np=JSON.parse(JSON.stringify(xf.p)); np.id=newId(); np.name=(np.name+' (สำเนา)').slice(0,120); np.sample=false; np.unitMig=2; np.ver=1; np.src='คัดลอกจากสูตรของ '+shortName(xf.owner);
+    state.products.push(np); state.activeId=np.id; CALC_LINK.ext=null; save(); renderWork(); toast('คัดลอกสูตรเป็นของคุณแล้ว'); return; }
   if(e.target.id==='btnNewForProj'){ calcNewProduct(); save(); renderWork(); return; }
   const p=active(); if(!p) return;
   if(e.target.id==='btnToLib'){ calcToLibrary(p, e.target); return; }

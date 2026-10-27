@@ -1493,9 +1493,19 @@ function renderDbCard(){
   }
   if(DB.source.by){ const el=$('#dbBy'); if(el) el.textContent=' โดย '+DB.source.by; }
 }
+/* แบรนด์ของงานออกแบบ: จากโครงการ (PDR) ที่ผูก ไม่มีใช้จากบรีฟ · ยังไม่ผูก = ไม่รู้แบรนด์ (ไม่กรอง) */
+function calcBrandOf(p){
+  const L=(p&&p.link)||{}, x=L.projectId?calcProj(L.projectId):null, b=L.briefId?calcBrief(L.briefId):null;
+  const nm=(x&&(x.brand||x.company))||(b&&(b.brand||(b.data&&b.data.company)))||'';
+  return String(nm).trim().toLowerCase();
+}
 function renderTabs(){
   const a=active(); const dot={ok:"🟢",warn:"🟠",bad:"🔴"};
-  $("#ptabs").innerHTML = state.products.length ? `<label class="muted" for="ptabSel" style="font-size:12px">งานออกแบบที่เปิดอยู่</label><div class="ptab-row"><select id="ptabSel" class="ptab-sel" aria-label="เลือกงานออกแบบ">${state.products.map(p=>{ const h=health(compute(p)); return `<option value="${p.id}" ${p.id===a?.id?"selected":""}>${dot[h]||dot.ok} ${esc(p.name)} · v${p.ver||1}${p.sample?" (ตัวอย่าง)":""}</option>`; }).join("")}</select><button type="button" class="btn small" id="btnNewProd">+ งานออกแบบใหม่</button><span class="muted" style="font-size:12px">${state.products.length} งาน</span></div>`
+  /* เลือกโครงการ/ลูกค้าแล้ว: รายการ "งานออกแบบที่เปิดอยู่" แสดงเฉพาะของแบรนด์นั้น (กดแสดงทั้งหมดได้) */
+  const bk=a?calcBrandOf(a):'', only=bk&&!CALC_LINK.allTabs, list=only?state.products.filter(p=>p.id===a.id||calcBrandOf(p)===bk):state.products;
+  const brandName=bk?((a.link&&a.link.projectId&&calcProj(a.link.projectId)&&(calcProj(a.link.projectId).brand||calcProj(a.link.projectId).company))||(a.link&&a.link.briefId&&calcBrief(a.link.briefId)&&calcBrief(a.link.briefId).brand)||bk):'';
+  const filt=bk?`<button type="button" class="btn small" id="btnTabsAll">${only?`แสดงทุกแบรนด์ (${state.products.length})`:'แสดงเฉพาะแบรนด์นี้'}</button>`:'';
+  $("#ptabs").innerHTML = state.products.length ? `<label class="muted" for="ptabSel" style="font-size:12px">งานออกแบบที่เปิดอยู่${only?` · เฉพาะแบรนด์ <b>${esc(brandName)}</b>`:''}</label><div class="ptab-row"><select id="ptabSel" class="ptab-sel" aria-label="เลือกงานออกแบบ">${list.map(p=>{ const h=health(compute(p)); return `<option value="${p.id}" ${p.id===a?.id?"selected":""}>${dot[h]||dot.ok} ${esc(p.name)} · v${p.ver||1}${p.sample?" (ตัวอย่าง)":""}</option>`; }).join("")}</select><button type="button" class="btn small" id="btnNewProd">+ งานออกแบบใหม่</button>${filt}<span class="muted" style="font-size:12px">${only?list.length+' จาก '+state.products.length:state.products.length} งาน</span></div>`
     : `<div class="ptab-row"><button type="button" class="btn small" id="btnNewProd">+ งานออกแบบใหม่</button></div>`;
 }
 function chip(status){ const s=STATUS[status]; return `<span class="chip ${s.c}">${s.t}</span>`; }
@@ -1507,7 +1517,7 @@ async function calcLoadLinks(){
   if(CALC_LINK.loading||CALC_LINK.briefs) return; CALC_LINK.loading=true;
   try{ const [b,p]=await Promise.all([api('listBriefs').catch(()=>[]), api('listProjects').catch(()=>({items:[]}))]); CALC_LINK.briefs=b||[]; CALC_LINK.projects=(p&&p.items)||[]; CALC_LINK.err=''; }
   catch(e){ CALC_LINK.err=errText(e); CALC_LINK.briefs=[]; CALC_LINK.projects=[]; }
-  CALC_LINK.loading=false; if(S.view==='calc'){ if(active()) renderEditor(); else renderDesignPanel(); }   /* ยังไม่มีงาน: วาดกล่องผูก PDR/บรีฟ ใหม่ให้มีรายการ */
+  CALC_LINK.loading=false; if(S.view==='calc'){ renderTabs(); if(active()) renderEditor(); else renderDesignPanel(); }   /* ยังไม่มีงาน: วาดกล่องผูก PDR/บรีฟ ใหม่ให้มีรายการ */
 }
 const calcNum=v=>{ const n=parseFloat(String(v??'').replace(/,/g,'')); return isFinite(n)?n:0; };
 /* อ่านข้อความ "EDP 30 ml × 1,000" จาก PDR เป็นประเภท ปริมาตร และจำนวน */
@@ -1820,6 +1830,7 @@ $('#btnPaste').onclick=()=>{
   addProducts(r.products, r.error?[r.error]:[]);
 };
 $('#ptabs').addEventListener('click',e=>{ if(e.target.closest('#btnNewProd')){ calcNewProduct(); save(); renderWork(); } });
+$('#ptabs').addEventListener('click',e=>{ if(e.target.id==='btnTabsAll'){ CALC_LINK.allTabs=!CALC_LINK.allTabs; renderTabs(); } });
 $('#ptabs').addEventListener('change',e=>{ if(e.target.id==='ptabSel'){ state.activeId=e.target.value; save(); renderWork(); } });
 $('#editor').addEventListener('change',e=>{
   const p=active(); if(!p) return; const t=e.target;

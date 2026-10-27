@@ -1968,7 +1968,11 @@ function sdPalette(sd){
   const m=((sd&&sd.moods)||[]).find(x=>SD_MOOD_PAL[x]); if(m) return SD_MOOD_PAL[m];
   return ['#f3efe4','#c7b38c'];
 }
-const sdShort=n=>{ let t=String(n||'').replace(/\(.*?\)|\[.*?\]/g,' ').split(/[,/]/)[0].replace(/\b(essential|oil|abs\.?|absolute|es\.?|fema[- ]?\d+|\d+(\.\d+)?\s*%.*|in dpg|natural|pure)\b/ig,' ').replace(/\s+/g,' ').trim(); return t.length>22?t.slice(0,21)+'…':t; };
+const sdShort=n=>{   /* ชื่อสั้นสำหรับปิรามิด: ตัดรหัส ตัวเลข และคำประกอบ เลือกส่วนที่เป็นชื่อกลิ่น */
+  const parts=String(n||'').replace(/\(.*?\)|\[.*?\]/g,' ').split(/[,/]/).map(x=>x.replace(/\S*\d\S*/g,' ').replace(/\b(essential|oil|abs\.?|absolute|es\.?|fema|in dpg|natural|pure|copy|fragrance|frag\.?|hh-cp|hh-sg|hh|mod|flavou?r|aroma|base)\b/ig,' ').replace(/น้ำมันหอมระเหย|น้ำมันสกัด|กลิ่น/g,' ').replace(/\s+/g,' ').trim()).filter(x=>/[a-zก-๙]{3}/i.test(x));
+  let t=parts[0]||''; if(t.length>18&&parts.length>1) t=parts.slice().sort((x,y)=>x.length-y.length)[0];   /* ชื่อเคมียาว → ใช้ชื่อการค้าที่สั้นกว่า */
+  if(t&&t===t.toUpperCase()) t=t.toLowerCase().replace(/(^|\s)([a-z])/g,(m,s1,c)=>s1+c.toUpperCase());
+  return t.length>22?t.slice(0,21)+'…':t; };
 function sdPyrNames(a, o){
   const out={}; ['top','heart','base'].forEach(l=>{
     let ns=a&&a.items?a.items.filter(i=>i.layer===l).sort((x,y)=>y.w-x.w).map(i=>sdShort(i.name)).filter(Boolean):[];

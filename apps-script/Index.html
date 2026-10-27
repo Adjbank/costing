@@ -181,6 +181,7 @@ select.doc-new{border:1px solid var(--line-strong);border-radius:8px;padding:5px
 .sd-box>summary{cursor:pointer;font-size:14px}
 .sd-grid{margin-top:10px}.sd-grid .sd-wide{grid-column:1/-1}.sd-grid textarea,.sd-grid input,.sd-grid select{width:100%;box-sizing:border-box}
 .sd-charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:12px}
+.pyr-ed{text-align:left;margin-top:6px;font-size:13px}.pyr-ed>summary{cursor:pointer;color:var(--ink-muted)}.pyr-form{display:grid;gap:6px;margin-top:6px}.pyr-form label{display:flex;flex-direction:column;font-size:12px;color:var(--ink-muted);gap:2px}.pyr-form input{font-size:13px;padding:5px 8px;border:1px solid var(--line-strong);border-radius:6px;background:var(--input-bg);color:var(--ink)}
 .sd-chart{border:1px solid var(--line);border-radius:10px;padding:10px 12px;text-align:center}.sd-chart h5{margin:0 0 4px;font-size:13px;text-align:left}
 .sd-imgs{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .sd-img{position:relative;margin:0}.sd-img .x{position:absolute;top:-6px;right:-6px;background:var(--card);border-radius:50%}
@@ -1979,18 +1980,34 @@ function sdPyrNames(a, o){
     ns=[...new Set(ns)].slice(0,3); if(!ns.length&&o) ns=o.layers[l].map(n=>n.en); out[l]=ns; });
   return out;
 }
-function sdPyramid(sd, names, title, img){
+function sdPyramid(sd, names, title, img, tagIn){
   const [c1,c2]=sdPalette(sd), id='pyr'+Math.random().toString(36).slice(2,8), W=360, top=[180,14], bl=[16,300], br=[344,300];
   const tri=`${top.join(',')} ${br.join(',')} ${bl.join(',')}`, cuts=[126,213], xAt=y=>(y-14)/286*164;
   const band=(y)=>`<line x1="${(180-xAt(y)).toFixed(1)}" x2="${(180+xAt(y)).toFixed(1)}" y1="${y}" y2="${y}" stroke="#ffffff" stroke-opacity=".7" stroke-width="1.2"/>`;
   const L=[['TOP',names.top,88],['MIDDLE',names.heart,175],['LAST',names.base,262]];
   const txt=L.map(([h,ns,y])=>`<text x="180" y="${y}" text-anchor="middle" class="pyr-h">${h}</text><text x="180" y="${y+19}" text-anchor="middle" class="pyr-n">${esc(ns.join(', ')||'—')}</text>`).join('');
-  const tag=String(sd&&(sd.concept||sd.tone)||'').split(/\n|(?<=[.!?。])\s/)[0].slice(0,90);
+  const tag=tagIn!=null?String(tagIn).slice(0,120):String(sd&&(sd.concept||sd.tone)||'').split(/\n|(?<=[.!?。])\s/)[0].slice(0,90);
   return `${title?`<div style="font-weight:700;letter-spacing:.14em;margin:2px 0 4px">${esc(String(title).toUpperCase())}</div>`:""}<svg viewBox="0 0 ${W} ${tag?352:318}" role="img" aria-label="Fragrance Pyramid" style="width:100%;max-width:380px;height:auto">
     <defs><linearGradient id="${id}g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient><clipPath id="${id}c"><polygon points="${tri}"/></clipPath></defs>
     <g clip-path="url(#${id}c)">${img?`<image href="${img}" x="0" y="0" width="${W}" height="300" preserveAspectRatio="xMidYMid slice"/>`:''}<rect x="0" y="0" width="${W}" height="300" fill="url(#${id}g)" opacity="${img?.72:1}"/>${band(cuts[0])}${band(cuts[1])}</g>
     <style>.pyr-h{font:700 13px var(--font,system-ui);letter-spacing:.08em;fill:#14213d;paint-order:stroke;stroke:#ffffffb0;stroke-width:3px}.pyr-n{font:500 12.5px var(--font,system-ui);fill:#14213d;paint-order:stroke;stroke:#ffffffc0;stroke-width:3px}</style>
     ${txt}${tag?`<text x="180" y="334" text-anchor="middle" font-size="12.5" fill="var(--ink-muted)">${esc(tag)}</text>`:''}</svg>`;
+}
+/* ข้อความบนพีระมิด: อัตโนมัติจากสูตร · แก้เองได้ต่อสูตร (design.pyr {title, top, heart, base, tag}) · ช่องว่าง = ใช้ข้อความอัตโนมัติ */
+function sdPyrCtx(sd){
+  const o=sdCompose(sd), p=active(), pid=calcCtxPid(), mine=!!(p&&!p.sample&&!CALC_LINK.pendingPid&&p.link&&p.link.projectId===pid), a=mine?sdFormulaProfile(p):null, has=!!(a&&a.cover>0);
+  const auto=sdPyrNames(has?a:null,o), ov=(mine&&p.design&&p.design.pyr)||{};
+  return {mine, has, auto, ov, autoTitle:has?p.name:'', autoTag:String(sd&&(sd.concept||sd.tone)||'').split(/\n|(?<=[.!?。])\s/)[0].slice(0,90)};
+}
+function sdPyrSvg(sd){
+  const c=sdPyrCtx(sd), v=k=>String(c.ov[k]||'').trim(), pick=k=>v(k)?[v(k)]:c.auto[k];
+  return sdPyramid(sd, {top:pick('top'),heart:pick('heart'),base:pick('base')}, v('title')||c.autoTitle, sdPyrImg(), v('tag')||c.autoTag);
+}
+function sdPyrEdit(sd){
+  const c=sdPyrCtx(sd); if(!c.mine) return '<div class="muted" style="font-size:11.5px;margin-top:4px">เปิดสูตรของโปรเจคนี้เพื่อแก้ข้อความบนพีระมิด</div>';
+  const F=[['title','ชื่อกลิ่น',c.autoTitle],['top','TOP',c.auto.top.join(', ')],['heart','MIDDLE',c.auto.heart.join(', ')],['base','LAST',c.auto.base.join(', ')],['tag','คำโปรย',c.autoTag]];
+  return `<details class="pyr-ed" ${SD.pyrOpen?'open':''}><summary>แก้ข้อความบนพีระมิด</summary><div class="pyr-form">${F.map(([k,l,ph])=>`<label>${l}<input data-pyr="${k}" maxlength="120" value="${esc(c.ov[k]||'')}" placeholder="${esc(ph||'')}"></label>`).join('')}
+    <div class="row" style="gap:8px;align-items:center"><button type="button" class="btn small" data-pyr-reset>ใช้ข้อความอัตโนมัติทั้งหมด</button><span class="muted" style="font-size:11.5px">ช่องว่าง = ใช้ข้อความอัตโนมัติ · บันทึกกับสูตรนี้</span></div></div></details>`;
 }
 function sdPyrImg(){ const pid=calcCtxPid(), x=pid?calcProj(pid):null, f=x?sdImgs(x)[0]:null, u=f&&SD.imgs[f.id]; return u&&u!=='…'?u:''; }
 /* Radar ลักษณะกลิ่น (Perfume Engineer) · เทียบเป้าหมาย (Archetype + Mood) กับสูตรจริง */
@@ -2042,7 +2059,7 @@ function sdChartsHtml(sd){
       <div class="muted" style="font-size:12px">Top / Heart / Base · เป้าหมาย ${o.ratio.join(' / ')}${has?` · สูตรจริง <b>${a.ratio.join(' / ')}</b>`:''} · ความแรง ${has?`เป้าหมาย ${o.intensity}/5 · หัวน้ำหอม ${a.intensity}/5${doses.length?' · '+doses.map(x=>{ const v=sdDoseLevel(a.lvl,x.d); return `ใน ${esc(x.name)} ${fmt(x.d,x.d<1?2:1)}% <b>${v}/5</b> (${esc(SC_INT[v])})`; }).join(' · '):` (${esc(SC_INT[a.intensity])}) · ใส่ % หัวน้ำหอมในขั้นตอนที่ 1 เพื่อดูความแรงในสินค้า`}`:`${o.intensity}/5 (${esc(SC_INT[o.intensity])}, ประมาณจาก Archetype)`}</div></div>
     <div class="sd-chart"><h5>Fragrance Wheel · ${has?'จากสูตรจริง':'เป้าหมาย'}</h5>${sdWheel(wheel)}<div class="muted" style="font-size:12px">${has?'':['top','heart','base'].map(l=>`<b>${L[l]}</b> ${o.layers[l].map(n=>esc(n.en)).join(', ')}`).join(' · ')}</div></div>
     ${has?`<div class="sd-chart"><h5>การระเหยตามเวลา · สูตรจริง</h5>${sdEvapSvg(a.evap)}<div class="muted" style="font-size:12px">กลิ่นลดเหลือครึ่งหนึ่งใน ~${sdHrs(a.evap.half)} · เหลือ 10% ใน ~${sdHrs(a.evap.tenth)}</div></div>`:''}
-    <div class="sd-chart sd-pyr"><h5>Fragrance Pyramid${has?' · สูตรจริง':' · เป้าหมาย'}</h5>${sdPyramid(sd, sdPyrNames(has?a:null,o), has?p.name:'', sdPyrImg())}</div></div>
+    <div class="sd-chart sd-pyr"><h5>Fragrance Pyramid${has?' · สูตรจริง':' · เป้าหมาย'}</h5><div id="pyrSvg">${sdPyrSvg(sd)}</div>${sdPyrEdit(sd)}</div></div>
     <div class="muted" style="font-size:11.5px;margin-top:4px">${cov}</div>`;
 }
 const sdImgs=x=>((x.data&&x.data.pdrFiles)||[]).filter(f=>f.kind==='design');
@@ -2085,10 +2102,14 @@ function renderSdBrief(){ const el=$('#sdBrief'); if(!el) return; if(!RMOLF) olf
 function sdRefreshCharts(pid){ const c=$('#sdCharts'), d=SD.draft[pid]; if(c&&d) c.innerHTML=sdChartsHtml(d); const s=$('#sdState'); if(s) s.textContent='มีการแก้ไขที่ยังไม่บันทึก'; }
 function sdPutProj(r){ const L=CALC_LINK.projects||[], i=L.findIndex(v=>v.id===r.id); if(i>=0) L[i]=Object.assign({}, L[i], r); }
 $('#sdBrief').addEventListener('input',e=>{
+  if(e.target.dataset.pyr){ const p=active(); if(!p||p.sample) return; p.design=Object.assign({},p.design); p.design.pyr=Object.assign({},p.design.pyr,{[e.target.dataset.pyr]:e.target.value.slice(0,120)}); save();
+    const pid=calcCtxPid(), x=pid?calcProj(pid):null, v=$('#pyrSvg'); if(v&&x) v.innerHTML=sdPyrSvg(sdOf(x)); return; }   /* แก้ข้อความบนพีระมิด: วาดเฉพาะพีระมิด ไม่เสีย focus */
   const k=e.target.dataset.sd; if(!k) return; const pid=calcCtxPid(), d=sdDraft(pid); if(!d) return;
   d[k]=e.target.value; if(k==='arch') renderSdBrief(); else sdRefreshCharts(pid);
 });
 $('#sdBrief').addEventListener('click',async e=>{
+  if(e.target.closest('.pyr-ed>summary')) SD.pyrOpen=!SD.pyrOpen;
+  if(e.target.closest('[data-pyr-reset]')){ const p=active(); if(p&&p.design){ p.design=Object.assign({},p.design); delete p.design.pyr; save(); renderSdBrief(); } return; }
   const t=e.target.closest('button'); if(!t) return; const pid=calcCtxPid(), x=pid?calcProj(pid):null; if(!x) return;
   if(t.dataset.sdMood){ const d=sdDraft(pid), id=t.dataset.sdMood; d.moods=d.moods.includes(id)?d.moods.filter(m=>m!==id):d.moods.concat(id).slice(-3); renderSdBrief(); return; }
   if(t.dataset.sdColreset!==undefined){ const d=sdDraft(pid); d.c1=''; d.c2=''; renderSdBrief(); return; }

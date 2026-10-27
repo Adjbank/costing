@@ -909,6 +909,7 @@ main.wrap::after{content:"";display:block;height:52px;margin:36px 0 6px;border-r
 .doc-sheet .fm3 td.ctr{text-align:center}.doc-sheet .fm3 td.num{text-align:right;white-space:nowrap}
 .doc-sheet .fm3 tr.sub td{color:#444;font-size:9.5px;height:auto;padding-top:2px;padding-bottom:2px}
 .doc-sheet .fm3 tr.tot td{font-weight:600}
+.doc-sheet .fm3 .fm2-info td.lab{width:30%}.doc-sheet .fm3 .fm3-ev th{text-align:left;font-weight:600;height:30px}.doc-sheet .fm3 .fm3-ev td.lab{width:36%}
 .doc-sheet .fm3 .fm3-ap th{text-align:left;font-weight:600;height:30px}.doc-sheet .fm3 .fm3-ap td{height:30px}.doc-sheet .fm3 .fm3-ap th:nth-child(1),.doc-sheet .fm3 .fm3-ap td:nth-child(1){width:22%}.doc-sheet .fm3 .fm3-ap th:nth-child(2),.doc-sheet .fm3 .fm3-ap td:nth-child(2){width:30%}.doc-sheet .fm3 .fm3-ap th:nth-child(3),.doc-sheet .fm3 .fm3-ap td:nth-child(3){width:27%}
 .doc-sheet .fm3-c .cl{margin:8px 0 8px 22px;font-size:11.5px}.doc-sheet .fm3-c .ul{display:inline-block;border-bottom:1px solid #111;vertical-align:bottom;padding:0 4px}
 .doc-sheet .fm3-page+.fm3-page{margin-top:34px;padding-top:26px;border-top:1px dashed #bbb}
@@ -4613,7 +4614,7 @@ function drawPfTable(){
           <td style="font-size:12.5px;max-width:240px">${apps.length?apps.map(a=>esc(a.type)+(a.dosage?` <span class="muted">${esc(a.dosage)}%</span>`:'')).join('<br>'):'<span class="muted">–</span>'}</td>
           <td style="font-size:12.5px">${fc?esc(fc.name)+(fc.total!=null?`<div class="muted">${fc.total.toLocaleString('th-TH',{maximumFractionDigits:0})} ฿/กก.${fc.complete?'':' (ราคาไม่ครบ)'}</div>`:''):s.formulaId?'<span class="muted">สูตรไม่อยู่ในเครื่องนี้</span>':'<span class="muted">–</span>'}</td>
           <td class="num">${vers.length||'<span class="muted">0</span>'}</td><td class="muted" style="white-space:nowrap;font-size:12px">${fmtSeen(s.updatedAt)}<br>${esc(s.updatedBy.split('@')[0])}</td>
-          <td><button class="btn small" type="button" data-pf-open="${s.id}">${ed?'แก้ไข':'เปิดดู'}</button></td></tr>`; }).join('') || `<tr><td colspan="10" class="empty">${PF.scents.length?'ไม่พบกลิ่นที่ตรงกับคำค้น':'ยังไม่มีกลิ่นในคลัง'+(ed?' · สร้างจากบรีฟ หรือกด "+ สร้างกลิ่น"':'')}</td></tr>`}
+          <td style="white-space:nowrap"><button class="btn small" type="button" data-pf-open="${s.id}">${ed?'แก้ไข':'เปิดดู'}</button> <button class="btn small" type="button" data-pf-print="${s.id}" title="พิมพ์ใบสูตรกลิ่น FM-RD-02">พิมพ์</button></td></tr>`; }).join('') || `<tr><td colspan="10" class="empty">${PF.scents.length?'ไม่พบกลิ่นที่ตรงกับคำค้น':'ยังไม่มีกลิ่นในคลัง'+(ed?' · สร้างจากบรีฟ หรือกด "+ สร้างกลิ่น"':'')}</td></tr>`}
       </tbody></table></div>`;
   }
 }
@@ -4677,7 +4678,7 @@ function drawPfEdit(){
         <div class="tablebox"><table><thead><tr><th>เวอร์ชัน</th><th>วันที่</th><th>สิ่งที่ปรับ</th><th>ผลตอบรับ</th><th>ผล</th><th></th></tr></thead><tbody id="pfVers">${vers.map(verRow).join('')||'<tr class="pf-empty"><td colspan="6" class="empty" style="padding:12px">ยังไม่มีเวอร์ชันทดลอง</td></tr>'}</tbody></table></div></div>
       </fieldset>
       <div class="row" style="margin-top:14px;gap:8px;flex-wrap:wrap">${ro?'':'<button class="btn primary" type="submit">บันทึกกลิ่น</button>'}<button class="btn" type="button" id="pfCancel">${ro?'ปิด':'ยกเลิก'}</button>
-        ${s.id&&!ro?`<button class="btn" type="button" id="pfDel" style="margin-left:auto;color:var(--bad)">ลบกลิ่น</button>`:''}<span class="muted" id="pfErr" role="alert" style="color:var(--bad)"></span></div></form>`;
+        ${s.id?`<button class="btn" type="button" id="pfPrint">พิมพ์ใบสูตรกลิ่น (FM-RD-02)</button>`:''}${s.id&&!ro?`<button class="btn" type="button" id="pfDel" style="margin-left:auto;color:var(--bad)">ลบกลิ่น</button>`:''}<span class="muted" id="pfErr" role="alert" style="color:var(--bad)"></span></div></form>`;
     window.__pfRows={appRow, verRow};
   }
   el.scrollIntoView({behavior:'smooth', block:'start'});
@@ -5009,6 +5010,8 @@ pfv.addEventListener('click', async e=>{
   if(t.dataset.tab==='calc'){ pfEdit=null; showView('calc'); return; }
   if(t.dataset.tab){ if(pfEdit) pfSyncEdit(); pfTab=t.dataset.tab; pfStatus=''; pfEdit=null; drawPf(); return; }
   if(t.id==='pfNew'){ pfEdit={type:pfTab, obj:pfTab==='brief'?pfNewBrief():pfNewScent(null)}; drawPfEdit(); return; }
+  if(t.dataset.pfPrint){ const o=PF.scents.find(x=>x.id===t.dataset.pfPrint); if(o) pfPrintOpen(o); return; }
+  if(t.id==='pfPrint'){ pfSyncEdit(); pfPrintOpen(pfEdit.obj); return; }
   if(t.dataset.pfOpen){ const o=(pfTab==='brief'?PF.briefs:PF.scents).find(x=>x.id===t.dataset.pfOpen); if(o){ pfEdit={type:pfTab, obj:JSON.parse(JSON.stringify(o))}; drawPfEdit(); } return; }
   if(t.dataset.pfScentFrom || t.id==='pfScentFrom'){ let b; if(t.id==='pfScentFrom'){ pfSyncEdit(); b=pfEdit.obj; if(!b.id){ return; } } else b=PF.briefs.find(x=>x.id===t.dataset.pfScentFrom); if(!b) return; pfEdit={type:'scent', obj:pfNewScent(b)}; pfTab='scent'; drawPf(); return; }
   if(t.id==='pfCancel'){ pfEdit=null; drawPfEdit(); return; }
@@ -5975,6 +5978,56 @@ function pdRedraw(){
 const FM3_REV='FM-RD-03: Rev. No.01. 18/03/2569';
 let PEOPLE=null;
 async function pdPeople(){ if(PEOPLE) return PEOPLE; try{ PEOPLE=await api('listPeopleNames'); }catch(e){ PEOPLE={}; } return PEOPLE; }
+/* ===== พิมพ์ใบสูตรกลิ่น FM-RD-02 (Prototype Fragrance Formulation Record) จากคลังกลิ่น ===== */
+const FM2_REV='FM-RD-02: Rev. No.01. 18/03/2569';
+async function pfPrintScent(s){
+  await pdPeople();
+  if(!RD.list && typeof rdCanView==='function' && rdCanView()){ try{ await loadRd(); }catch(e){} }
+  const e=esc, th=v=>{ if(!v) return ''; const m=String(v).match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return `${+m[3]}/${+m[2]}/${+m[1]+543}`; const d=new Date(v); return isNaN(d)?'':`${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()+543}`; };
+  const who=v=>{ v=String(v||'').trim(); if(!v.includes('@')) return v; return (PEOPLE&&PEOPLE[v.toLowerCase()])||shortName(v); };
+  const d=s.data||{}, apps=pfList(d.applications), vers=pfList(d.versions);
+  const proj=s.projectId?(RD.list||[]).find(x=>x.id===s.projectId):null, brief=(PF.briefs||[]).find(x=>x.id===s.briefId);
+  const customer=(proj&&(proj.company||''))||(brief&&((brief.data&&brief.data.company)||brief.brand))||'', brand=(proj&&proj.brand)||(brief&&brief.brand)||'';
+  const fo=s.formulaId?pfFormulas().find(x=>x.id===s.formulaId):null, p=fo&&fo.p, c=p?compute(p):null;
+  /* ประเภทผลิตภัณฑ์: เดาจาก "ใช้ผลิตเป็น" ของกลิ่น */
+  const txt=apps.map(a=>String(a.type||'')).join(' ').toLowerCase(), has=re=>re.test(txt);
+  const cat=[['Skincare',has(/ครีม|โลชั่น|เซรั่ม|สกิน|บอดี้|เจล|สครับ|สบู่|lotion|cream|serum|skin|body|soap|scrub/)],['Hair Product',has(/ผม|แชมพู|ทรีตเมนต์|hair|shampoo|conditioner/)],['EDP Fragrance Oil',has(/edp|edt|น้ำหอม|perfume|roller|cologne|หัวน้ำหอม/)],['Home Fragrance',has(/เทียน|ก้านไม้|รูม|ลินิน|ดิฟฟิวเซอร์|candle|reed|room|linen|diffuser|home/)]];
+  const other=!cat.some(x=>x[1])&&apps.length;
+  const box=on=>on?'☑':'☐';
+  const rev=vers.length?String(vers[vers.length-1].v||vers.length):'';
+  const unitDrop=p&&p.unit==='drop';
+  const rows=[]; let sumDrop=0, sumPct=0, sumG=0;
+  if(c) c.rows.forEach((r,i)=>{ const ln=r.ln, nm=r.e?r.e.name:(ln.nameIn||''), dr=unitDrop&&ln.amt!==''&&ln.amt!=null?toNum(ln.amt):null;
+    if(dr!=null) sumDrop+=dr; sumPct+=r.pct||0; sumG+=r.gBatch||0;
+    rows.push(`<tr><td class="ctr">${i+1}</td><td>${e(r.e?r.e.code:(ln.code||''))}</td><td>${e(nm)}</td><td class="num">${dr!=null?fmt(dr,dr%1?2:0):''}</td><td class="num">${r.pct?fmt(r.pct,4):''}</td><td class="num">${r.gBatch?fmt(r.gBatch,2):''}</td></tr>`); });
+  while(rows.length<10) rows.push('<tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>');
+  const family=[s.family].concat(pfList(d.subfamilies)).filter(Boolean).join(', '), character=[family].concat(pfList(d.character)).filter(Boolean).join(' · ');
+  const kv=(l,v)=>`<tr><td class="lab">${l}</td><td>${e(v==null?'':v)}</td></tr>`;
+  const top=`<div class="fm3-top">${FM2_REV}</div>`;
+  return `<div class="fm3">
+    <div class="fm3-page">${top}
+      <div class="fm3-title"><div><h1>Prototype Fragrance Formulation Record</h1><div class="th">แบบฟอร์มบันทึกสูตรต้นแบบและการทดลองกลิ่น</div></div><img src="${LOGO.h}" alt="Scent &amp; Sense" style="height:56px;width:auto"></div>
+      <div class="fm3-doc">Document No: <u>&nbsp;${e(s.formulaCode||s.code||'')}&nbsp;&nbsp;&nbsp;</u> | Reversion No.: <u>&nbsp;${e(rev)}&nbsp;&nbsp;&nbsp;</u> | Date Created: <u>&nbsp;${e(th(s.createdAt))}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</u></div>
+      <h2>Project Information</h2><table class="fm2-info"><tbody>
+        ${kv('ชื่อบริษัท/ ลูกค้า',customer)}${kv('แบรนด์ (Brand)',brand)}${kv('รหัสสูตร (Formula Code) / วันที่สูตร',[s.formulaCode||s.code, th(s.updatedAt||s.createdAt)].filter(Boolean).join(' / '))}${kv('ผู้ปรุงกลิ่น (Perfumer)',who(s.owner))}
+        <tr style="height:112px"><td class="lab">หมวดหมู่สินค้า (Product Category)</td><td style="line-height:1.9">${cat.map(([l,on])=>`${box(on)} ${l}`).join('<br>')}<br>${box(other)} SDS etc. ${other?e(apps.map(a=>a.type).filter(Boolean).join(', ')):'............................................'}</td></tr>
+        ${kv('ชื่อผลิตภัณฑ์ (Product Name)',s.name)}</tbody></table>
+      <h2>Formulation Details</h2><table class="fm3-f"><thead><tr><th style="width:8%">ลำดับ</th><th style="width:18%">รหัสวัตถุดิบ</th><th>ชื่อสาร</th><th style="width:9%">drop</th><th style="width:11%">% (w/w)</th><th style="width:12%">ปริมาณ(g)</th></tr></thead><tbody>${rows.join('')}
+        <tr class="tot"><td colspan="3" class="ctr">ยอดรวม</td><td class="num">${sumDrop?fmt(sumDrop,sumDrop%1?2:0):''}</td><td class="num">${sumPct?fmt(sumPct,2):''}</td><td class="num">${sumG?fmt(sumG,2):''}</td></tr></tbody></table>
+    </div>
+    <div class="fm3-page">${top}
+      <h2>Fragrance Profile Evaluation</h2><table class="fm3-ev"><thead><tr><th style="width:36%;text-align:left">หัวข้อประเมิน</th><th style="text-align:left">รายละเอียด / คำอธิบาย</th></tr></thead><tbody>
+        <tr style="height:36px"><td class="lab">ลักษณะกลิ่น (Character)</td><td>${character?e(character):'<span style="color:#666;font-size:10px">(เช่น powdery floral, citrus green ฯลฯ)</span>'}</td></tr>
+        <tr style="height:36px"><td class="lab">ความแรงของกลิ่น (Intensity)</td><td>☐ อ่อนมาก&nbsp; ☐ อ่อน&nbsp; ☐ ปานกลาง&nbsp; ☐ แรง&nbsp; ☐ แรงมาก</td></tr>
+        <tr style="height:36px"><td class="lab">ความซับซ้อนของกลิ่น (Complexity)</td><td>☐ ธรรมดา&nbsp; ☐ ปานกลาง&nbsp; ☐ ซับซ้อน</td></tr>
+        <tr style="height:36px"><td class="lab">กลิ่นที่ปรากฏเมื่อเปิดขวด (Top)</td><td>☐ เหมาะสมดี&nbsp; ☐ พอใช้&nbsp; ☐ ไม่เหมาะสม</td></tr>
+        <tr style="height:36px"><td class="lab">กลิ่นหลังใช้งาน (Dry Down)</td><td></td></tr>
+        <tr style="height:62px"><td class="lab">ความรู้สึกโดยรวม<br>(Overall Impression)</td><td></td></tr>
+      </tbody></table>
+    </div>
+  </div>`;
+}
+async function pfPrintOpen(s){ $('#docPrint').innerHTML=await pfPrintScent(s); $('#docTitle').textContent='ใบสูตรกลิ่น FM-RD-02 · '+(s.formulaCode||s.code||s.name); $('#docOverlay').hidden=false; document.body.classList.add('doc-open'); $('#docPrint').scrollTop=0; }
 function pdPrintHtml(f){
   const batch=toNum(f.batchG)||1000, c=pdCost(f), e=esc;
   const th=v=>{ if(!v) return ''; const m=String(v).match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return `${+m[3]}/${+m[2]}/${+m[1]+543}`; const d=new Date(v); return isNaN(d)?'':`${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()+543}`; };

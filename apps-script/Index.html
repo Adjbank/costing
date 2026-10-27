@@ -5486,12 +5486,6 @@ function pdFormulaPage(f){
       ${f.id?`<span class="muted" style="font-size:12px">สร้าง ${rdDate(f.createdAt)} โดย ${rdPerson(f.createdBy)} · แก้ล่าสุด ${fmtSeen(f.updatedAt)}${f.approvedBy?` · อนุมัติโดย ${rdPerson(f.approvedBy)} ${rdDate(f.approvedAt)}`:''}</span>`:''}</div>
     ${lock&&ed?'<div class="msg ok" style="margin-bottom:10px">สูตรนี้อนุมัติแล้ว ล็อกการแก้ไข · ถ้าต้องแก้ ให้เปลี่ยนสถานะด้านล่างเป็น "ทดสอบ" แล้วบันทึกก่อน</div>':''}
     <form id="pdForm" class="card" style="margin:0 0 14px" novalidate><fieldset ${ro} style="border:0;padding:0;margin:0;min-width:0">
-      <div class="pf-group"><h4>ข้อมูลสูตร</h4><div class="settings">
-        ${pdField('ชื่อสูตรผลิตภัณฑ์ *', pdInp('name', f.name, 'เช่น Siam Bloom Body Lotion'), true)}
-        ${pdField('เบส (สูตรพื้นฐาน) *', pdSel('baseId', f.baseId, baseOpts))}${pdField('ลักษณะสูตร', pdSel('mode', f.mode, Object.entries(PD_MODE)))}
-        ${pdField('ราคาเป้าหมาย ฿/กก.', pdInp('targetPrice', f.targetPrice, 'จากเบสหรือจากโครงการ', 'number'))}
-        ${pdField('บันทึก / ข้อสังเกต (ลักษณะเนื้อ ความหนืด pH ผลทดลอง สิ่งที่ปรับจากเบส)', `<textarea data-pk="note" rows="2" maxlength="3000">${esc(f.note||'')}</textarea>`, true)}
-      </div></div>
       <div class="pf-group"><h4>ข้อมูลผลิตภัณฑ์ (Product Information)</h4><div class="muted" style="font-size:12.5px;margin:-2px 0 10px">ข้อมูลหัวใบสูตร (FM-RD-03) · เลือกโครงการแล้ว ลูกค้า แบรนด์ กลิ่นของโครงการ และผู้รับผิดชอบจะมาให้อัตโนมัติ แก้ไขต่อได้</div><div class="settings pd-pi">
         ${pdField('โครงการ', pdSel('projectId', f.projectId, projOpts))}${pdField('ชื่อกิจการ/บริษัท (Customer Name)', pdInp('customer', f.customer, ''))}${pdField('ชื่อแบรนด์ (Brand Name)', pdInp('brand', f.brand, ''))}
         ${pdField('ชื่อตัวอย่าง (Sample Name)', `<select data-pk="sampScName">${scGroups('name')}</select>`)}${pdField('รหัสตัวอย่าง (Sample Code)', pdInp('fragranceCode', f.fragranceCode, 'พิมพ์เอง · เลือกชื่อตัวอย่างแล้วระบบเติมให้'))}
@@ -5505,7 +5499,13 @@ function pdFormulaPage(f){
         ${pdField('ผู้ออกแบบกลิ่น', `<input data-pk="perfumer" list="pdPeople" value="${esc(f.perfumer||'')}" maxlength="120" placeholder="อีเมลหรือชื่อ">`)}${pdField('ผู้ออกแบบผลิตภัณฑ์', `<input data-pk="designer" list="pdPeople" value="${esc(f.designer||'')}" maxlength="120" placeholder="อีเมลหรือชื่อ">`)}${pdField('ผู้ปฏิบัติการ', `<input data-pk="operator" list="pdPeople" value="${esc(f.operator||'')}" maxlength="120" placeholder="อีเมลหรือชื่อ">`)}
         <datalist id="pdPeople">${rdEmailList().map(e=>`<option value="${esc(e)}">`).join('')}</datalist>
       </div></div>
-      <div class="pf-group"><h4>กลิ่น (น้ำหอม)</h4><div class="settings">
+      <div class="pf-group"><h4>ข้อมูลสูตร</h4><div class="settings">
+        ${pdField('ชื่อสูตรผลิตภัณฑ์ *', pdInp('name', f.name, 'เช่น Siam Bloom Body Lotion'), true)}
+        ${pdField('เบส (สูตรพื้นฐาน) *', pdSel('baseId', f.baseId, baseOpts))}${pdField('ลักษณะสูตร', pdSel('mode', f.mode, Object.entries(PD_MODE)))}
+        ${pdField('ราคาเป้าหมาย ฿/กก.', pdInp('targetPrice', f.targetPrice, 'จากเบสหรือจากโครงการ', 'number'))}
+        ${pdField('บันทึก / ข้อสังเกต (ลักษณะเนื้อ ความหนืด pH ผลทดลอง สิ่งที่ปรับจากเบส)', `<textarea data-pk="note" rows="2" maxlength="3000">${esc(f.note||'')}</textarea>`, true)}
+      </div></div>
+      <div class="pf-group"><h4>ข้อมูลกลิ่น</h4><div class="settings">
         ${pdField('ชื่อกลิ่น (แก้เองได้ ใช้เมื่อไม่ผูกคลังกลิ่น)', pdInp('fragranceName', f.fragranceName, ''))}
         ${pdField('สูตรต้นทุนของกลิ่น (ใช้แจกแจงส่วนประกอบในตารางด้านล่าง)', pdSel('fragranceFormulaId', f.fragranceFormulaId, [['', sel&&sel.formulaId?'ตามกลิ่นที่เลือก (สูตรที่ผูกไว้)':'จับคู่อัตโนมัติจากชื่อกลิ่น / ไม่ระบุ'], ...pdFragFormulaOpts()]), true)}
         ${pdField('ราคาน้ำหอม ฿/กก.', pdInp('fragrancePrice', f.fragrancePrice, '', 'number'))}${pdField('% น้ำหอมในสูตร', `<input data-pk="fragPct" type="number" step="any" min="0" max="100" value="${fr&&fr.pct!=null?esc(fr.pct):''}">`)}

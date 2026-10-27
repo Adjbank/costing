@@ -1400,7 +1400,8 @@ async function gateCheck(db: Db, pr: Any, to: string): Promise<string> {
 }
 /** ข้อมูลกลิ่นของวัตถุดิบ (ชั้นโน้ต + ตระกูลกลิ่น) ใช้คำนวณกราฟลักษณะกลิ่นและ Fragrance Wheel จากสูตรจริง */
 const OLF_AX = ["citrus", "green", "aquatic", "floral", "spicy", "gourmand", "woody", "amber"], OLF_LAYER: Record<string, number> = { top: 1, heart: 1, base: 1, none: 1 };
-const olfOut = (r: Any) => ({ code: String(r.code), layer: String(r.layer || ""), fam: r.fam || {}, odor: String(r.odor || ""), src: String(r.src || ""), updatedAt: iso(r.updated_at), updatedBy: String(r.updated_by || "") });
+const olfOut = (r: Any) => ({ code: String(r.code), layer: String(r.layer || ""), fam: r.fam || {}, odor: String(r.odor || ""), src: String(r.src || ""),
+  strength: r.strength == null ? null : Number(r.strength), life: r.life == null ? null : Number(r.life), updatedAt: iso(r.updated_at), updatedBy: String(r.updated_by || "") });
 async function listRmOlf(ctx: Ctx) {
   await needAny(ctx, PF_VIEW);
   return (await ctx.db`select * from costing.rm_olf order by code`).map(olfOut);
@@ -1414,9 +1415,12 @@ async function saveRmOlf(ctx: Ctx, code: string, o: Any) {
     const fam: Record<string, number> = {};
     if (layer !== "none" && o.fam && typeof o.fam === "object") for (const k of OLF_AX) { const n = Number(o.fam[k]); if (isFinite(n) && n > 0) fam[k] = Math.round(Math.min(1, n) * 100) / 100; }
     if (Object.keys(fam).length > 4) throw new Error("เลือกตระกูลกลิ่นได้ไม่เกิน 4 กลุ่ม");
+    const sN = Number(o.strength), lN = Number(o.life);
+    const strength = layer === "none" || o.strength == null || o.strength === "" || !isFinite(sN) ? null : Math.max(1, Math.min(5, Math.round(sN)));
+    const life = layer === "none" || o.life == null || o.life === "" || !isFinite(lN) || lN <= 0 ? null : Math.round(Math.max(0.1, Math.min(2000, lN)) * 10) / 10;
     if (!layer && !Object.keys(fam).length) { await db`delete from costing.rm_olf where code = ${code}`; await log(db, m.email, "saveRmOlf", code + " · ล้าง"); return { code, layer: "", fam: {}, odor: "", src: "", updatedAt: "", updatedBy: "" }; }
-    const row = { code, layer, fam: db.json(fam), odor: str(o.odor, 200), src: "manual", updated_at: new Date(), updated_by: m.email };
-    await db`insert into costing.rm_olf ${db(row)} on conflict (code) do update set layer = excluded.layer, fam = excluded.fam, odor = excluded.odor, src = excluded.src, updated_at = excluded.updated_at, updated_by = excluded.updated_by`;
+    const row = { code, layer, fam: db.json(fam), odor: str(o.odor, 200), src: "manual", updated_at: new Date(), updated_by: m.email, strength, life };
+    await db`insert into costing.rm_olf ${db(row)} on conflict (code) do update set layer = excluded.layer, fam = excluded.fam, odor = excluded.odor, src = excluded.src, updated_at = excluded.updated_at, updated_by = excluded.updated_by, strength = excluded.strength, life = excluded.life`;
     await log(db, m.email, "saveRmOlf", code + " · " + layer + " " + Object.keys(fam).join("/"));
     return olfOut({ ...row, fam });
   });
@@ -1430,9 +1434,9 @@ async function seedRmOlf(ctx: Ctx, sha: string) {
   const j = await res.json(), rules: Any[] = Array.isArray(j.rules) ? j.rules : [], rows: Any[] = Array.isArray(j.rows) ? j.rows : [];
   return await locked(ctx, async (c) => {
     const db = c.db, now = new Date(); let n = 0;
-    const list = rows.map((x: Any) => { const ru = rules[Number(x[1])] || []; return { code: str(x[0], 40), layer: OLF_LAYER[String(ru[0])] ? String(ru[0]) : "", fam: db.json(ru[1] && typeof ru[1] === "object" ? ru[1] : {}), odor: str(ru[2], 200), src: "auto", updated_at: now, updated_by: "auto-classify" }; })
+    const list = rows.map((x: Any) => { const ru = rules[Number(x[1])] || []; return { code: str(x[0], 40), layer: OLF_LAYER[String(ru[0])] ? String(ru[0]) : "", fam: db.json(ru[1] && typeof ru[1] === "object" ? ru[1] : {}), odor: str(ru[2], 200), src: "auto", updated_at: now, updated_by: "auto-classify", strength: ru[3] == null ? null : Number(ru[3]), life: ru[4] == null ? null : Number(ru[4]) }; })
       .filter((x: Any) => /^RM-[A-Z0-9-]{3,36}$/i.test(x.code) && x.layer);
-    for (let i = 0; i < list.length; i += 300) n += (await db`insert into costing.rm_olf ${db(list.slice(i, i + 300))} on conflict (code) do nothing returning code`).length;
+    for (let i = 0; i < list.length; i += 300) n += (await db`insert into costing.rm_olf ${db(list.slice(i, i + 300))} on conflict (code) do update set strength = coalesce(costing.rm_olf.strength, excluded.strength), life = coalesce(costing.rm_olf.life, excluded.life) returning code`).length;   /* แถวเดิม: เติมเฉพาะความแรง/ความติดทนที่ยังว่าง */
     await log(db, ctx.email, "seedRmOlf", sha.slice(0, 7) + " · " + n + "/" + list.length);
     return { inserted: n, total: list.length };
   });

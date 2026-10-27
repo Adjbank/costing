@@ -2155,7 +2155,7 @@ function renderUserBar(){
     + (btCanView() ? tab('btnBt','bt','ทะเบียนพืชหอม') : '')
     + (btCanView() ? tab('btnStk','stk','คลัง R&D') : '')
     + (fdaCanView() ? tab('btnFda','fda','จดแจ้ง อย.') : '')
-    + (can('calc') ? `<button type="button" id="btnDoc" class="${v==='doc'||v==='chk'?'on':''}" ${v==='doc'||v==='chk'?'aria-current="page"':''}>${NAV_ICON.doc}<span>เอกสารวัตถุดิบ</span></button>` : '')
+    + (can('calc') ? `<button type="button" id="btnDoc" class="${v==='doc'||v==='chk'?'on':''}" ${v==='doc'||v==='chk'?'aria-current="page"':''}>${NAV_ICON.doc}<span>BOM</span></button>` : '')
     + (can('viewDb') ? tab('btnMsds','msds','MSDS วัตถุดิบ') : '')
     + (can('editPrices') ? tab('btnRm','rm','ฐานราคาวัตถุดิบ') : '')
     + (adm ? tab('btnAll','all','สูตรทั้งหมด') + tab('btnPrice','price','ทำราคาขาย') : '')

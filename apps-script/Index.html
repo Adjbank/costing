@@ -6386,9 +6386,9 @@ function drawFda(){
   const due=regs.filter((r,i)=>(st[i]==='urgent'||st[i]==='soon')&&r.decision!=='renew').length, renewed=regs.filter(r=>(r.history||[]).length).length;
   const k=(v,l,f,cls)=>`<button type="button" class="field" data-fdaf="${f}" style="min-width:120px;text-align:left;border:1px solid ${FDA.f===f&&FDA.sub==='regs'?'var(--accent,#2b6)':'var(--line)'};border-radius:10px;padding:8px 10px;background:var(--card,transparent);cursor:pointer"><label style="cursor:pointer">${l}</label><div style="font-size:22px;font-weight:600;${cls||''}">${v}</div></button>`;
   const openReqs=(FDA.reqs||[]).filter(q=>!['เรียบร้อย','ยกเลิกใบจดแจ้ง'].includes(q.status)).length;
-  $('#fdaBody').innerHTML=`<div class="settings" style="margin-bottom:10px"${FDA.sub==='inci'||FDA.sub==='label'?' hidden':''}>${k(regs.length,'เลขจดแจ้งทั้งหมด','')}${k(cnt('ok')+cnt('soon')+cnt('urgent'),'ใช้งานอยู่','active')}${k(due,'ใกล้หมดอายุ ≤ 180 วัน (ยังไม่ต่อ)','due',due?'color:var(--warn,#8a5200)':'')}${k(cnt('expired'),'หมดอายุแล้ว','expired',cnt('expired')?'color:var(--bad)':'')}${k(cnt('no'),'ไม่ต่ออายุ','no')}${k(renewed,'ต่ออายุแล้ว','renewed')}</div>
-    <div class="pf-tabs" role="tablist" style="margin:0 0 10px"><button type="button" data-fdasub="regs" class="${FDA.sub==='regs'?'on':''}">ทะเบียนเลขจดแจ้ง <span class="pf-n">${regs.length}</span></button><button type="button" data-fdasub="reqs" class="${FDA.sub==='reqs'?'on':''}">คำขอจดแจ้ง <span class="pf-n">${(FDA.reqs||[]).length}</span>${openReqs?` <span class="badge">${openReqs}</span>`:''}</button><button type="button" data-fdasub="label" class="${FDA.sub==='label'?'on':''}">ส่วนประกอบฉลาก</button><button type="button" data-fdasub="inci" class="${FDA.sub==='inci'?'on':''}">ฐานข้อมูล INCI${INC.items?` <span class="pf-n">${INC.items.length}</span>`:''}</button>${FDA.canEdit?`<button type="button" data-fdasub="alert" class="${FDA.sub==='alert'?'on':''}">ตั้งค่าการเตือนทางอีเมล</button>`:''}</div>
-    ${FDA.sub==='inci'?incDbView():FDA.sub==='label'?incLabView():FDA.sub==='alert'?fdaAlertView():FDA.sub==='reqs'?fdaReqView():fdaRegView()}`;
+  $('#fdaBody').innerHTML=`<div class="settings" style="margin-bottom:10px"${FDA.sub==='inci'||FDA.sub==='label'||FDA.sub==='archive'?' hidden':''}>${k(regs.length,'เลขจดแจ้งทั้งหมด','')}${k(cnt('ok')+cnt('soon')+cnt('urgent'),'ใช้งานอยู่','active')}${k(due,'ใกล้หมดอายุ ≤ 180 วัน (ยังไม่ต่อ)','due',due?'color:var(--warn,#8a5200)':'')}${k(cnt('expired'),'หมดอายุแล้ว','expired',cnt('expired')?'color:var(--bad)':'')}${k(cnt('no'),'ไม่ต่ออายุ','no')}${k(renewed,'ต่ออายุแล้ว','renewed')}</div>
+    <div class="pf-tabs" role="tablist" style="margin:0 0 10px"><button type="button" data-fdasub="regs" class="${FDA.sub==='regs'?'on':''}">ทะเบียนเลขจดแจ้ง <span class="pf-n">${regs.length}</span></button><button type="button" data-fdasub="reqs" class="${FDA.sub==='reqs'?'on':''}">คำขอจดแจ้ง <span class="pf-n">${(FDA.reqs||[]).length}</span>${openReqs?` <span class="badge">${openReqs}</span>`:''}</button><button type="button" data-fdasub="label" class="${FDA.sub==='label'?'on':''}">ส่วนประกอบฉลาก</button><button type="button" data-fdasub="archive" class="${FDA.sub==='archive'?'on':''}">คลังส่วนประกอบฉลาก${ARC.list?` <span class="pf-n">${ARC.list.length}</span>`:''}</button><button type="button" data-fdasub="inci" class="${FDA.sub==='inci'?'on':''}">ฐานข้อมูล INCI${INC.items?` <span class="pf-n">${INC.items.length}</span>`:''}</button>${FDA.canEdit?`<button type="button" data-fdasub="alert" class="${FDA.sub==='alert'?'on':''}">ตั้งค่าการเตือนทางอีเมล</button>`:''}</div>
+    ${FDA.sub==='inci'?incDbView():FDA.sub==='label'?incLabView():FDA.sub==='archive'?arcView():FDA.sub==='alert'?fdaAlertView():FDA.sub==='reqs'?fdaReqView():fdaRegView()}`;
 }
 function fdaRegView(){
   return `<div class="search" style="flex-wrap:wrap;gap:8px"><input id="fdaQ" type="search" autocomplete="off" placeholder="ค้นหาเลขจดแจ้ง ชื่อการค้า ชื่อผลิตภัณฑ์…" value="${esc(FDA.q)}" style="flex:1;min-width:220px">
@@ -6518,6 +6518,23 @@ $('#fdaView').addEventListener('change', e=>{
 });
 $('#fdaView').addEventListener('click', async e=>{
   const t=e.target.closest('button'); if(!t) return;
+  if(t.id==='incLabSave'){ incLabSaveToArchive(t); return; }
+  if(t.id==='arcRefresh'){ t.disabled=true; try{ await arcLoad(true); ARC.det={}; }catch(err){ toast(errText(err)); } drawFda(); return; }
+  if(t.id==='arcMore'){ ARC.shown+=100; const m=$('#arcMain'); if(m) m.innerHTML=arcTable(); return; }
+  if(t.id==='arcCopy'){ copyField($('#arcTxt'),'คัดลอกส่วนประกอบแล้ว'); return; }
+  if(t.dataset.arcopen){
+    const id=t.dataset.arcopen; if(ARC.open===id){ ARC.open=null; const m=$('#arcMain'); if(m) m.innerHTML=arcTable(); return; }
+    ARC.open=id; { const m=$('#arcMain'); if(m) m.innerHTML=arcTable(); }
+    if(!ARC.det[id]){ try{ ARC.det[id]=await api('getLabelArchive', id); }catch(err){ toast(errText(err)); ARC.open=null; } const m=$('#arcMain'); if(m) m.innerHTML=arcTable(); }
+    return;
+  }
+  if(t.dataset.arcxls){ const d=ARC.det[t.dataset.arcxls]; if(d) arcXlsx(d); return; }
+  if(t.dataset.arcdel){
+    if(!twoStep(t,'ยืนยันลบ?')) return;
+    try{ await api('deleteLabelArchive', t.dataset.arcdel); ARC.list=(ARC.list||[]).filter(x=>x.id!==t.dataset.arcdel); delete ARC.det[t.dataset.arcdel]; ARC.open=null; toast('ลบออกจากคลังแล้ว'); drawFda(); }
+    catch(err){ toast(errText(err)); }
+    return;
+  }
   if(t.dataset.fdasub){ FDA.sub=t.dataset.fdasub; FDA.form=FDA.renew=FDA.rform=null; drawFda(); return; }
   if(t.dataset.fdaf!==undefined){ FDA.sub='regs'; FDA.f=FDA.f===t.dataset.fdaf?'':t.dataset.fdaf; FDA.shown=150; drawFda(); return; }
   if(t.id==='fdaCopyScript'){ copyField($('#fdaScript'),'คัดลอกโค้ดแล้ว'); return; }
@@ -6745,7 +6762,7 @@ function incLabResult(){
   return `${r.missing.length?`<div class="msg bad" style="margin-bottom:8px"><b>วัตถุดิบยังไม่มีข้อมูลส่วนประกอบ ${r.missing.length} รายการ</b> (แสดงในวงเล็บ [ ] บนรายการ) — เพิ่มข้อมูลในแท็บ "ฐานข้อมูล INCI": ${r.missing.map(m=>`<span class="chip">${esc(m.code||m.name)} · ${fmtP(m.pct)}%${m.st==='none'?' · ไม่มีในฐาน':''}</span>`).join(' ')}</div>`:''}
     ${r.warn.length?`<div class="msg warn" style="margin-bottom:8px"><ul style="margin:0;padding-left:18px">${r.warn.map(w=>`<li>${esc(w)}</li>`).join('')}</ul></div>`:''}
     <div class="card" style="margin:0 0 12px"><h4 style="margin:0 0 6px">ส่วนประกอบบนฉลาก (Ingredients)</h4><textarea id="incLabTxt" rows="4" readonly style="width:100%;font-size:13px">${esc(txt)}</textarea>
-      <div class="row" style="gap:8px;margin-top:6px;flex-wrap:wrap;align-items:center"><button class="btn primary" type="button" id="incLabCopy">คัดลอก</button><button class="btn small" type="button" id="incLabExport">ส่งออก Excel</button><span class="muted" style="font-size:12px">${r.rows.length} รายการ (แสดงเฉพาะที่ ≥ ${fmtP(r.minPct)}%${r.hiddenMin.length?` · ซ่อน ${r.hiddenMin.length} รายการ`:''}) · สูตรรวม ${fmtP(r.lineSum)}% · สารที่น้อยกว่า 1% เรียงลำดับใดก็ได้ตามหลักการแสดงฉลาก</span></div></div>
+      <div class="row" style="gap:8px;margin-top:6px;flex-wrap:wrap;align-items:center"><button class="btn primary" type="button" id="incLabCopy">คัดลอก</button><button class="btn small" type="button" id="incLabExport">ส่งออก Excel</button><button class="btn small" type="button" id="incLabSave" title="บันทึกผลคำนวณนี้เก็บไว้ในคลังส่วนประกอบฉลาก">บันทึกเข้าคลัง</button><input id="incLabNote" type="text" maxlength="200" placeholder="หมายเหตุ (ไม่บังคับ)" style="max-width:220px"><span class="muted" style="font-size:12px">${r.rows.length} รายการ (แสดงเฉพาะที่ ≥ ${fmtP(r.minPct)}%${r.hiddenMin.length?` · ซ่อน ${r.hiddenMin.length} รายการ`:''}) · สูตรรวม ${fmtP(r.lineSum)}% · สารที่น้อยกว่า 1% เรียงลำดับใดก็ได้ตามหลักการแสดงฉลาก</span></div></div>
     <div class="tablebox"><table><thead><tr><th class="num">#</th><th>INCI</th><th>CAS</th><th class="num">% ในผลิตภัณฑ์</th><th>ประเภท</th><th>มาจากวัตถุดิบ</th></tr></thead><tbody>
       ${r.rows.map((a,i)=>`<tr${a.unknown?' style="color:var(--bad)"':''}><td class="num">${i+1}</td><td><b>${esc(a.inci)}</b></td><td class="mono" style="font-size:12px">${esc(a.cas)}</td><td class="num">${fmtP(a.pct)}</td>
         <td style="font-size:12px">${a.al?`<span class="chip warn">allergen ${a.al.kind==='a26'?'26':'83'}</span>`:''}${a.banned?' <span class="chip bad">สารต้องห้าม</span>':''}${a.unknown?'<span class="chip bad">ไม่มีข้อมูล</span>':''}${a.key==='FRAG'?'<span class="chip info">น้ำหอม</span>':''}</td>
@@ -6763,6 +6780,71 @@ function incLabExport(){
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['รหัส RM','ชื่อ','% ในผลิตภัณฑ์','ข้อมูล INCI'],...[...r.used,...r.missing].map(u=>[u.code,u.it?u.it.name:u.name,+toNum(u.pct).toFixed(6),u.st])]),'วัตถุดิบ');
   saveFile(`ส่วนประกอบฉลาก_${String(name||'').replace(/[\\/:*?"<>|]/g,'_')}_${fdaToday()}.xlsx`, XLSX.write(wb,{type:'array',bookType:'xlsx'}));
 }
+/* ---------- คลังส่วนประกอบฉลาก: บันทึกผลคำนวณส่วนประกอบบนฉลากเก็บไว้ ค้นหา เปิดดู คัดลอก ส่งออก ---------- */
+let ARC={list:null, q:'', type:'', shown:100, open:null, det:{}};
+const LBL_TYPE_TH={leave:'Leave-on', rinse:'Rinse-off', home:'Fragrance Home', oil:'Fragrance oil'};
+async function arcLoad(force){ if(ARC.list && !force) return; ARC.list=await api('listLabelArchive'); }
+function arcFiltered(){
+  const q=ARC.q.trim().toLowerCase();
+  return (ARC.list||[]).filter(x=>(!ARC.type||x.type===ARC.type) && (!q || [x.docNo,x.formulaCode,x.formulaName,x.customer,x.brand,x.note,x.ingredients].join(' ').toLowerCase().includes(q)));
+}
+function arcView(){
+  if(!ARC.list){ arcLoad().then(drawFda).catch(e=>{ const m=$('#fdaMain'); if(m) m.innerHTML=`<div class="msg bad">${esc(errText(e))}</div>`; }); return '<div id="fdaMain"><div class="empty">กำลังโหลดคลัง…</div></div>'; }
+  return `<div class="search" style="flex-wrap:wrap;gap:8px"><input id="arcQ" type="search" autocomplete="off" placeholder="ค้นหาเลขที่ LBL รหัสสูตร ชื่อสูตร ลูกค้า แบรนด์ หรือชื่อส่วนประกอบ (INCI)…" value="${esc(ARC.q)}" style="flex:1;min-width:240px">
+      <select id="arcType" aria-label="กรองกลุ่มผลิตภัณฑ์"><option value="">ทุกกลุ่มผลิตภัณฑ์</option>${Object.entries(LBL_TYPE_TH).map(([k,l])=>`<option value="${k}" ${ARC.type===k?'selected':''}>${l}</option>`).join('')}</select>
+      <button class="btn small" type="button" id="arcRefresh">รีเฟรช</button></div>
+    <div class="muted" style="font-size:12.5px;margin:6px 0 10px">คลังเก็บผลคำนวณส่วนประกอบบนฉลากที่กด "บันทึกเข้าคลัง" ในแท็บ "ส่วนประกอบฉลาก" · เก็บเป็นภาพ ณ วันที่บันทึก (แก้สูตรหรือฐาน INCI ภายหลังไม่ทำให้รายการเก่าเปลี่ยน) · บันทึกสูตรเดิมซ้ำจะได้ Rev ถัดไป</div>
+    <div id="arcMain">${arcTable()}</div>`;
+}
+function arcTable(){
+  const list=arcFiltered();
+  if(!list.length) return `<div class="empty">${(ARC.list||[]).length?'ไม่พบรายการที่ตรงกับคำค้น':'ยังไม่มีรายการในคลัง · คำนวณที่แท็บ "ส่วนประกอบฉลาก" แล้วกด "บันทึกเข้าคลัง"'}</div>`;
+  const part=list.slice(0,ARC.shown);
+  return `<div class="tablebox"><table><thead><tr><th>เลขที่</th><th>สูตร</th><th>ลูกค้า / แบรนด์</th><th>กลุ่มผลิตภัณฑ์</th><th class="num">รายการ</th><th>บันทึกเมื่อ</th><th></th></tr></thead><tbody>
+    ${part.map(x=>`<tr><td class="mono" style="white-space:nowrap">${esc(x.docNo)}<div class="muted" style="font-size:11.5px">Rev ${x.rev}</div></td>
+      <td><b style="font-size:13px">${esc(x.formulaName||'–')}</b>${x.formulaCode?`<div class="mono muted" style="font-size:11.5px">${esc(x.formulaCode)}</div>`:''}${x.note?`<div class="muted" style="font-size:12px">${esc(x.note)}</div>`:''}</td>
+      <td style="font-size:12.5px">${esc(x.customer)||'<span class="muted">–</span>'}${x.brand?`<div class="muted" style="font-size:11.5px">${esc(x.brand)}</div>`:''}</td>
+      <td style="font-size:12.5px">${esc(LBL_TYPE_TH[x.type]||x.type)}<div class="muted" style="font-size:11.5px">≥ ${fmtP(x.minPct)}%</div></td>
+      <td class="num">${x.nRows}${x.nHidden?`<div class="muted" style="font-size:11.5px">ซ่อน ${x.nHidden}</div>`:''}</td>
+      <td class="muted" style="font-size:12px;white-space:nowrap">${fmtSeen(x.createdAt)}<div>${esc(shortName(x.createdBy))}</div></td>
+      <td style="white-space:nowrap"><button class="btn small" type="button" data-arcopen="${esc(x.id)}">${ARC.open===x.id?'ปิด':'เปิด'}</button></td></tr>
+      ${ARC.open===x.id?`<tr><td colspan="7" style="background:var(--soft,rgba(0,0,0,.03))">${arcDetail(ARC.det[x.id], x)}</td></tr>`:''}`).join('')}</tbody></table></div>
+    ${list.length>part.length?`<div style="text-align:center;margin-top:12px"><button class="btn" type="button" id="arcMore">แสดงเพิ่ม (อีก ${list.length-part.length})</button></div>`:''}`;
+}
+function arcDetail(d, x){
+  if(!d) return '<div class="empty">กำลังโหลด…</div>';
+  return `<div style="padding:4px 2px"><b>ส่วนประกอบบนฉลาก (Ingredients)</b>
+    <textarea id="arcTxt" rows="4" readonly style="width:100%;font-size:13px;margin-top:6px">${esc(d.ingredients)}</textarea>
+    <div class="row" style="gap:8px;margin:6px 0 10px;flex-wrap:wrap;align-items:center"><button class="btn primary" type="button" id="arcCopy">คัดลอก</button><button class="btn small" type="button" data-arcxls="${esc(d.id)}">ส่งออก Excel</button><button class="btn small danger" type="button" data-arcdel="${esc(d.id)}">ลบออกจากคลัง</button>
+      <span class="muted" style="font-size:12px">${d.nRows} รายการ · ${esc(LBL_TYPE_TH[d.type]||d.type)} · allergen ${d.list==='a26'?'26':'83'} สาร · ชื่อน้ำหอม ${esc(d.fragName||'FRAGRANCE')} · สูตรรวม ${fmtP(d.lineSum)}% · ที่มา ${d.src==='pd'?'สูตรผลิตภัณฑ์ (PD)':d.src==='pf'?'สูตรน้ำหอม (Perfumer)':'กำหนดเอง'}</span></div>
+    ${(d.warnings||[]).length?`<div class="msg warn" style="margin-bottom:8px"><ul style="margin:0;padding-left:18px">${d.warnings.map(w=>`<li>${esc(w)}</li>`).join('')}</ul></div>`:''}
+    <div class="tablebox"><table><thead><tr><th class="num">#</th><th>INCI</th><th>CAS</th><th class="num">% ในผลิตภัณฑ์</th><th>ประเภท</th></tr></thead><tbody>
+      ${(d.rows||[]).map((a,i)=>`<tr${a.unknown?' style="color:var(--bad)"':''}><td class="num">${i+1}</td><td><b>${esc(a.inci)}</b></td><td class="mono" style="font-size:12px">${esc(a.cas)}</td><td class="num">${fmtP(a.pct)}</td>
+        <td style="font-size:12px">${a.kind?`<span class="chip warn">allergen ${a.kind==='a26'?'26':'83'}</span>`:''}${a.banned?' <span class="chip bad">สารต้องห้าม</span>':''}${a.unknown?'<span class="chip bad">ไม่มีข้อมูล</span>':''}${a.frag?'<span class="chip info">น้ำหอม</span>':''}</td></tr>`).join('')}</tbody></table></div>
+    ${(d.hidden||[]).length?`<details style="margin-top:8px"><summary class="muted" style="cursor:pointer">ส่วนประกอบที่ต่ำกว่าเกณฑ์ ไม่แสดงบนฉลาก (${d.hidden.length} รายการ)</summary><div style="font-size:12.5px;margin-top:6px">${d.hidden.map(a=>`<span class="chip">${esc(a.inci)} ${fmtP(a.pct)}%</span>`).join(' ')}</div></details>`:''}</div>`;
+}
+function arcXlsx(d){
+  if(typeof XLSX==='undefined'){ toast('โหลดตัวเขียน Excel ไม่สำเร็จ'); return; }
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['เลขที่',d.docNo+' Rev '+d.rev],['สูตร',(d.formulaCode?d.formulaCode+' · ':'')+d.formulaName],['ลูกค้า',d.customer],['แบรนด์',d.brand],['กลุ่มผลิตภัณฑ์',LBL_TYPE_TH[d.type]||d.type],['เกณฑ์แสดงส่วนประกอบ (%)',d.minPct],['รายการ allergen',d.list==='a26'?'26 สาร':'83 สาร'],['บันทึกเมื่อ',d.createdAt],['บันทึกโดย',d.createdBy],['หมายเหตุ',d.note],[],['Ingredients',d.ingredients],[],['#','INCI','CAS','% ในผลิตภัณฑ์','allergen','สารต้องห้าม','ไม่มีข้อมูล','น้ำหอม'],...(d.rows||[]).map((a,i)=>[i+1,a.inci,a.cas,a.pct,a.kind?(a.kind==='a26'?'26':'83'):'',a.banned?'ใช่':'',a.unknown?'ใช่':'',a.frag?'ใช่':''])]), 'ส่วนประกอบฉลาก');
+  if((d.hidden||[]).length) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['INCI','% ในผลิตภัณฑ์ (ต่ำกว่าเกณฑ์ ไม่แสดงบนฉลาก)'],...d.hidden.map(a=>[a.inci,a.pct])]), 'ต่ำกว่าเกณฑ์');
+  saveFile(`คลังฉลาก_${d.docNo}_Rev${d.rev}_${fdaToday()}.xlsx`, XLSX.write(wb,{type:'array',bookType:'xlsx'}));
+}
+/* บันทึกผลคำนวณปัจจุบันของแท็บ "ส่วนประกอบฉลาก" เข้าคลัง */
+async function incLabSaveToArchive(btn){
+  const r=INC.lastCalc; if(!r||!r.rows.length){ toast('ยังไม่มีผลคำนวณให้บันทึก'); return; }
+  const L=INC.lab; let fid='', code='', name='', cust='', brand='';
+  if(L.src==='pd'){ const f=(PD.list||[]).find(x=>x.id===L.pdId)||INCPD.full[L.pdId]; if(f){ fid=f.id; code=f.code||''; name=f.name||''; cust=f.customer||''; brand=f.brand||''; } }
+  else if(L.src==='pf'){ const f=pfFormulas().find(x=>x.id===L.pfId); if(f){ fid=f.id; name=f.name||''; const m=metaOf(f.p); cust=m.customer||''; brand=m.brand||''; } }
+  else name='กำหนดเอง (ใส่รหัส RM เอง)';
+  const noteEl=$('#incLabNote'), map=a=>({inci:a.inci, cas:a.cas||'', pct:a.pct, kind:a.al?a.al.kind:'', banned:!!a.banned, unknown:!!a.unknown, frag:a.key==='FRAG'});
+  const payload={src:L.src, formulaId:fid, formulaCode:code, formulaName:name, customer:cust, brand:brand, type:L.type, list:L.list, fragName:L.fragName, minPct:r.minPct, lineSum:r.lineSum,
+    ingredients:r.rows.map(a=>a.inci).join(', '), rows:r.rows.map(map), hidden:(r.hiddenMin||[]).map(a=>({inci:a.inci, pct:a.pct})), warnings:r.warn||[], note:noteEl?noteEl.value.trim():''};
+  btn.disabled=true;
+  try{ const s=await api('saveLabelArchive', payload); ARC.list=null; ARC.det={}; toast(`บันทึกเข้าคลังแล้ว ${s.docNo} (Rev ${s.rev})`); if(noteEl) noteEl.value=''; }
+  catch(e){ toast(errText(e)); }
+  finally{ btn.disabled=false; }
+}
 /* ค้นหาสูตร PD ในหน้าส่วนประกอบฉลาก (ฝั่งเซิร์ฟเวอร์ รวมสูตรนำเข้า) · วาดหน้าใหม่แล้วคืนโฟกัสให้ช่องค้นหา */
 function incRedrawKeep(){ const ae=document.activeElement, had=!!(ae&&ae.dataset&&ae.dataset.il==='q'); drawFda(); if(had){ const qi=document.querySelector('#fdaView [data-il="q"]'); if(qi){ qi.focus(); const n=qi.value.length; try{ qi.setSelectionRange(n,n); }catch(e){} } } }
 async function incPdSearch(){
@@ -6775,11 +6857,13 @@ async function incPdSearch(){
 }
 /* ---------- events (แท็บ INCI / ฉลาก) ---------- */
 $('#fdaView').addEventListener('input', e=>{
+  if(e.target.id==='arcQ'){ ARC.q=e.target.value; ARC.shown=100; const m=$('#arcMain'); if(m) m.innerHTML=arcTable(); return; }
   if(e.target.dataset.il==='q'){ INC.lab.q=e.target.value; clearTimeout(INCPD.qt); INCPD.qt=setTimeout(incPdSearch, 350); return; }
   if(e.target.id==='incQ'){ INC.q=e.target.value; INC.shown=100; const m=$('#fdaMain'); if(m) m.innerHTML=incTable(incFiltered()); }
   if(e.target.dataset.il==='manual'||e.target.dataset.il==='pfPct'){ INC.lab[e.target.dataset.il]=e.target.value; const m=$('#fdaMain'); if(m) m.innerHTML=incLabResult(); }
 });
 $('#fdaView').addEventListener('change', async e=>{
+  if(e.target.id==='arcType'){ ARC.type=e.target.value; ARC.shown=100; const m=$('#arcMain'); if(m) m.innerHTML=arcTable(); return; }
   const k0=e.target.dataset.il;
   if(k0==='q') return;
   if(k0==='customer'){ INC.lab.customer=e.target.value; INC.lab.pdId=''; if((INC.lab.q||'').trim()){ incPdSearch(); } else drawFda(); return; }

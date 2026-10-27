@@ -1835,6 +1835,61 @@ async function importPdFormulas(ctx: Ctx, d: Any) {
     return { imported: n, skipped };
   });
 }
+/* ===== คลังส่วนประกอบฉลาก: เก็บผลคำนวณส่วนประกอบบนฉลาก (Ingredients) ต่อสูตรไว้เป็นประวัติ · ดู/ค้นหาได้ทุกคนที่ดูหน้า อย. · ลบได้เฉพาะผู้บันทึกหรือแอดมิน ===== */
+const LBL_TYPES: Record<string, number> = { leave: 1, rinse: 1, home: 1, oil: 1 }, LBL_SRC: Record<string, number> = { pd: 1, pf: 1, manual: 1 };
+const lblOut = (r: Any, full: boolean) => {
+  const o: Any = { id: String(r.id), docNo: String(r.doc_no), rev: Number(r.rev) || 1, src: String(r.src), formulaId: String(r.formula_id || ""), formulaCode: String(r.formula_code || ""), formulaName: String(r.formula_name || ""),
+    customer: String(r.customer || ""), brand: String(r.brand || ""), type: String(r.type), list: String(r.list || ""), fragName: String(r.frag_name || ""), minPct: numOrNull(r.min_pct), lineSum: numOrNull(r.line_sum),
+    ingredients: String(r.ingredients || ""), note: String(r.note || ""), nRows: Number(r.n_rows) || 0, nHidden: Number(r.n_hidden) || 0, createdAt: iso(r.created_at), createdBy: String(r.created_by || "") };
+  if (full) { o.rows = r.rows || []; o.hidden = r.hidden || []; o.warnings = r.warnings || []; }
+  return o;
+};
+async function listLabelArchive(ctx: Ctx) {
+  await needAny(ctx, FDA_VIEW);
+  const rows = await ctx.db`select id, doc_no, rev, src, formula_id, formula_code, formula_name, customer, brand, type, list, frag_name, min_pct, line_sum, ingredients, note, created_at, created_by,
+    jsonb_array_length(rows) as n_rows, jsonb_array_length(hidden) as n_hidden from costing.label_archive order by created_at desc limit 3000`;
+  return rows.map((r: Any) => lblOut(r, false));
+}
+async function getLabelArchive(ctx: Ctx, id: string) {
+  await needAny(ctx, FDA_VIEW);
+  const r = await ctx.db`select *, jsonb_array_length(rows) as n_rows, jsonb_array_length(hidden) as n_hidden from costing.label_archive where id = ${str(id, 60)}`;
+  if (!r.length) throw new Error("ไม่พบรายการในคลัง");
+  return lblOut(r[0], true);
+}
+async function saveLabelArchive(ctx: Ctx, d: Any) {
+  return await locked(ctx, async (c) => {
+    const m = await needAny(c, FDA_VIEW), db = c.db; d = d || {};
+    const ingredients = str(d.ingredients, 8000);
+    const rows = (Array.isArray(d.rows) ? d.rows : []).slice(0, 400).map((x: Any) => ({ inci: str(x && x.inci, 300), cas: str(x && x.cas, 200), pct: numOrNull(x && x.pct), kind: x && (x.kind === "a26" || x.kind === "a83") ? String(x.kind) : "",
+      banned: !!(x && x.banned), unknown: !!(x && x.unknown), frag: !!(x && x.frag) })).filter((x: Any) => x.inci);
+    if (!ingredients || !rows.length) throw new Error("ไม่มีส่วนประกอบให้บันทึก");
+    const hidden = (Array.isArray(d.hidden) ? d.hidden : []).slice(0, 400).map((x: Any) => ({ inci: str(x && x.inci, 300), pct: numOrNull(x && x.pct) })).filter((x: Any) => x.inci);
+    const warnings = (Array.isArray(d.warnings) ? d.warnings : []).slice(0, 60).map((w: unknown) => str(w, 400)).filter(Boolean);
+    const src = LBL_SRC[d.src] ? String(d.src) : "manual", type = LBL_TYPES[d.type] ? String(d.type) : "leave", fid = str(d.formulaId, 60);
+    const now = new Date(), year = String(bkkYear(now));
+    const seq = await db`insert into costing.docseq (prefix, period, n) values ('LBL', ${year}, 1) on conflict (prefix, period) do update set n = costing.docseq.n + 1 returning n`;
+    const docNo = "LBL-" + year + "-" + ("0000" + String(Number(seq[0].n))).slice(-4);
+    const rev = fid ? Number((await db`select count(*)::int as n from costing.label_archive where src = ${src} and formula_id = ${fid} and type = ${type}`)[0].n) + 1 : 1;
+    const id = "lbl-" + uuid(10);
+    await db`insert into costing.label_archive ${db({ id, doc_no: docNo, rev, src, formula_id: fid, formula_code: str(d.formulaCode, 60), formula_name: str(d.formulaName, 300), customer: str(d.customer, 200), brand: str(d.brand, 200),
+      type, list: d.list === "a26" ? "a26" : "a83", frag_name: str(d.fragName, 40), min_pct: numOrNull(d.minPct), line_sum: numOrNull(d.lineSum), ingredients, rows: db.json(rows), hidden: db.json(hidden), warnings: db.json(warnings),
+      note: str(d.note, 500), created_at: now, created_by: m.email })}`;
+    await log(db, m.email, "saveLabelArchive", docNo + " · " + (str(d.formulaCode, 60) || str(d.formulaName, 100)) + " (rev " + rev + ")");
+    return { id, docNo, rev, createdAt: now.toISOString() };
+  });
+}
+async function deleteLabelArchive(ctx: Ctx, id: string) {
+  return await locked(ctx, async (c) => {
+    const m = await needAny(c, FDA_VIEW), db = c.db;
+    const r = await db`select doc_no, created_by from costing.label_archive where id = ${str(id, 60)}`;
+    if (!r.length) throw new Error("ไม่พบรายการในคลัง");
+    if (!isAdmin(m) && String(r[0].created_by).toLowerCase() !== m.email) throw new Error("FORBIDDEN");
+    await db`delete from costing.label_archive where id = ${str(id, 60)}`;
+    await log(db, m.email, "deleteLabelArchive", String(r[0].doc_no));
+    return { ok: true };
+  });
+}
+
 /** นำเข้าทะเบียนเบสจากไฟล์ Formula Base.xlsx (เจ้าของระบบเท่านั้น · upsert ตาม id ทำซ้ำได้) */
 async function importPdBases(ctx: Ctx, d: Any) {
   return await locked(ctx, async (c) => {
@@ -2662,7 +2717,7 @@ const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   listBriefs, saveBrief, deleteBrief, listScents, saveScent, deleteScent, getTypeformStatus, saveTypeformToken, syncTypeform, disconnectTypeform,
   pwLogin, setMyPassword, pwLogout, resetUserPassword,
   listCustomers, saveCustomer, listProjects, getProject, saveProject, setStage, bulkStage, raCheck, issueProjectDoc, uploadProjectDoc, getProjectDocFile, deleteProjectDoc, listSamples, saveSample, sendSample, deleteSample, evalSummary, importRd,
-  listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases, importPdFormulas, searchPdImported, getPdFormula, listPdDocFormulas, listPdCustomers, listPdByCustomer, searchPdFormulas,
+  listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases, importPdFormulas, searchPdImported, getPdFormula, listPdDocFormulas, listPdCustomers, listPdByCustomer, searchPdFormulas, listLabelArchive, getLabelArchive, saveLabelArchive, deleteLabelArchive,
   listPdTrials, savePdTrial, sendPdTrial, decidePdTrial, issuePdTrialStock,
   listRdStock, listRdStockTx, saveRdStockItem, deleteRdStockItem, addRdStockTx, importRdStock,
   listFda, saveFdaReg, renewFdaReg, deleteFdaReg, saveFdaRequest, deleteFdaRequest, getFdaAlert, saveFdaAlert, resetFdaAlertSecret,

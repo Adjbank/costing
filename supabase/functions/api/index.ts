@@ -1785,6 +1785,19 @@ async function searchPdImported(ctx: Ctx, q: string, limit?: number) {
   const total = Number((await db`select count(*)::int as n from costing.pd_formulas where created_by like 'import:%'`)[0].n);
   return { total, items: rows.map((x: Any) => maskPd(m, fmOut(x))) };
 }
+/** รายชื่อลูกค้าในสูตร Product Development ทั้งหมด (รวมสูตรที่นำเข้าจากไฟล์) + จำนวนสูตร · ใช้เป็นตัวเลือก "ลูกค้า" ในหน้าส่วนประกอบฉลาก */
+async function listPdCustomers(ctx: Ctx) {
+  await needAny(ctx, RD_VIEW);
+  const rows = await ctx.db`select data->>'customer' as customer, count(*)::int as n from costing.pd_formulas where coalesce(data->>'customer', '') <> '' group by 1 order by 1`;
+  return rows.map((x: Any) => ({ customer: String(x.customer), n: Number(x.n) }));
+}
+/** สูตรของลูกค้ารายหนึ่ง (แบบย่อ ไม่มีส่วนประกอบ) · ชื่อลูกค้าต้องตรงทั้งชื่อ */
+async function listPdByCustomer(ctx: Ctx, customer: string) {
+  await needAny(ctx, RD_VIEW);
+  const c = str(customer, 200); if (!c) throw new Error("ระบุลูกค้า");
+  const rows = await ctx.db`select id, code, name, status, data->>'brand' as brand, jsonb_array_length(coalesce(data->'lines', '[]'::jsonb)) as n_lines, created_at, updated_at from costing.pd_formulas where data->>'customer' = ${c} order by created_at desc nulls last, code limit 600`;
+  return rows.map((x: Any) => ({ id: String(x.id), code: String(x.code || ""), name: String(x.name), status: String(x.status), brand: String(x.brand || ""), nLines: Number(x.n_lines) || 0, createdAt: iso(x.created_at), updatedAt: iso(x.updated_at) }));
+}
 async function getPdFormula(ctx: Ctx, id: string) {
   const m = await needAny(ctx, RD_VIEW);
   const x = (await ctx.db`select * from costing.pd_formulas where id = ${str(id, 60)}`)[0];
@@ -2639,7 +2652,7 @@ const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   listBriefs, saveBrief, deleteBrief, listScents, saveScent, deleteScent, getTypeformStatus, saveTypeformToken, syncTypeform, disconnectTypeform,
   pwLogin, setMyPassword, pwLogout, resetUserPassword,
   listCustomers, saveCustomer, listProjects, getProject, saveProject, setStage, bulkStage, raCheck, issueProjectDoc, uploadProjectDoc, getProjectDocFile, deleteProjectDoc, listSamples, saveSample, sendSample, deleteSample, evalSummary, importRd,
-  listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases, importPdFormulas, searchPdImported, getPdFormula, listPdDocFormulas,
+  listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases, importPdFormulas, searchPdImported, getPdFormula, listPdDocFormulas, listPdCustomers, listPdByCustomer,
   listPdTrials, savePdTrial, sendPdTrial, decidePdTrial, issuePdTrialStock,
   listRdStock, listRdStockTx, saveRdStockItem, deleteRdStockItem, addRdStockTx, importRdStock,
   listFda, saveFdaReg, renewFdaReg, deleteFdaReg, saveFdaRequest, deleteFdaRequest, getFdaAlert, saveFdaAlert, resetFdaAlertSecret,

@@ -3170,7 +3170,7 @@ function drawDocs(){
   const fs=docFormulas(), q=docQ.trim().toLowerCase(), canIssue=can('export');
   const byF=new Map(); DOCS.forEach(d=>{ if(d.status!=='issued') return; const k=d.formulaId; if(!byF.has(k)) byF.set(k,{}); const o=byF.get(k); if(!o[d.type]) o[d.type]=d; });
   const rows=fs.map(f=>{ const m=metaOf(f.p), dd=byF.get(f.id)||{}; return {f, m, dd}; })
-    .filter(r=>!q || r.f.p.name.toLowerCase().includes(q) || Object.values(r.m).some(v=>v.toLowerCase().includes(q)) || r.f.owner.includes(q) || Object.values(r.dd).some(x=>x.docNo.toLowerCase().includes(q)))
+    .filter(r=>!q || r.f.p.name.toLowerCase().includes(q) || Object.values(r.m).some(v=>v.toLowerCase().includes(q)) || r.f.owner.includes(q) || (r.f.pd&&[r.f.pd.code,r.f.pd.fgCode,r.f.pd.productName,r.f.pd.fragranceCode].join(' ').toLowerCase().includes(q)) || Object.values(r.dd).some(x=>x.docNo.toLowerCase().includes(q)))
     .sort((a,b)=>(a.m.customer||'').localeCompare(b.m.customer||'','th') || a.f.p.name.localeCompare(b.f.p.name,'th'));
   const DOC_SHOW=200, allRows=rows.length, shown=rows.slice(0,DOC_SHOW);
   const dash='<span class="muted">–</span>';
@@ -3392,7 +3392,15 @@ function docRegistryXlsx(){
   saveFile(`ทะเบียนสูตร_${stamp}.xlsx`, XLSX.write(wb,{type:'array',bookType:'xlsx'}));
 }
 const docv=$('#docView');
-docv.addEventListener('input', e=>{ if(e.target.id==='docQ'){ docQ=e.target.value; const keep=DOCF; drawDocs(); DOCF=keep; drawDocForm(); } });
+let docQT=null;
+docv.addEventListener('input', e=>{
+  if(e.target.id!=='docQ') return;
+  docQ=e.target.value; clearTimeout(docQT);
+  docQT=setTimeout(()=>{
+    const keep=DOCF; drawDocs(); DOCF=keep; drawDocForm();
+    const qi=$('#docQ'); if(qi){ qi.focus(); const n=qi.value.length; try{ qi.setSelectionRange(n,n); }catch(_e){} }   /* คืนโฟกัสและเคอร์เซอร์ให้ช่องค้นหา */
+  }, 250);
+});
 docv.addEventListener('change', e=>{
   const t=e.target;
   if(t.classList.contains('doc-new')){ const k=t.value; t.value=''; if(k) openDocForm(k, t.closest('tr').dataset.fid); return; }

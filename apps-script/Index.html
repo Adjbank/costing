@@ -2961,7 +2961,7 @@ const GHS_P = {base:[['P102','Keep out of reach of children'],['P264','Wash hand
 const DOC_BANDS=[[90,'90-100'],[80,'80-90'],[70,'70-80'],[60,'60-70'],[50,'50-60'],[40,'40-50'],[30,'30-40'],[20,'20-30'],[10,'10-20'],[5,'5-10'],[1,'1-5'],[0.1,'0.1-1'],[0.01,'0.01-0.1'],[0.001,'0.001-0.01'],[0,'<0.001']];
 const docBand=p=>(DOC_BANDS.find(([lo])=>p>=lo)||DOC_BANDS[DOC_BANDS.length-1])[1];
 const docDate=d=>{ const x=d?new Date(d):new Date(); return isNaN(x)?'':x.toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}); };
-let DOCS=null, DOCF=null, docQ='', PDDOCF=[];
+let DOCS=null, DOCF=null, docQ='', docCust='', PDDOCF=[];
 /* สูตร Product Development ที่อนุมัติแล้ว → รูปแบบสูตรของหน้าเอกสาร (หน่วย %) */
 function pdAsProduct(x){
   return {id:x.id, name:x.name, unit:'pct', lossPct:0, overhead:0, batchKg:1, sell:0, nLines:x.nLines||0,
@@ -3170,9 +3170,13 @@ function drawDocs(){
   const fs=docFormulas(), q=docQ.trim().toLowerCase(), canIssue=can('export');
   const byF=new Map(); DOCS.forEach(d=>{ if(d.status!=='issued') return; const k=d.formulaId; if(!byF.has(k)) byF.set(k,{}); const o=byF.get(k); if(!o[d.type]) o[d.type]=d; });
   const rows=fs.map(f=>{ const m=metaOf(f.p), dd=byF.get(f.id)||{}; return {f, m, dd}; })
+    .filter(r=>!docCust || (docCust==='__none__' ? !r.m.customer : r.m.customer===docCust))
     .filter(r=>!q || r.f.p.name.toLowerCase().includes(q) || Object.values(r.m).some(v=>v.toLowerCase().includes(q)) || r.f.owner.includes(q) || (r.f.pd&&[r.f.pd.code,r.f.pd.fgCode,r.f.pd.productName,r.f.pd.fragranceCode].join(' ').toLowerCase().includes(q)) || Object.values(r.dd).some(x=>x.docNo.toLowerCase().includes(q)))
     .sort((a,b)=>(a.m.customer||'').localeCompare(b.m.customer||'','th') || a.f.p.name.localeCompare(b.f.p.name,'th'));
   const DOC_SHOW=200, allRows=rows.length, shown=rows.slice(0,DOC_SHOW);
+  const custCount=new Map(); fs.forEach(f=>{ const c=metaOf(f.p).customer||''; custCount.set(c,(custCount.get(c)||0)+1); });
+  if(docCust&&docCust!=='__none__'&&!custCount.has(docCust)) custCount.set(docCust,0);
+  const custOpts=[...custCount.entries()].filter(([c])=>c).sort((a,b)=>a[0].localeCompare(b[0],'th')).map(([c,n])=>`<option value="${esc(c)}" ${docCust===c?'selected':''}>${esc(c)} (${n})</option>`).join('');
   const dash='<span class="muted">–</span>';
   /* ป้ายเอกสาร 5 ประเภทต่อสูตร: มีแล้ว = กดเพื่อพิมพ์ฉบับล่าสุด · ยังไม่มี = กดเพื่อออก (ถ้ามีสิทธิ์) */
   const pills=r=>DOC_ORDER.map(k=>{ const x=r.dd[k]; return x?`<button class="doc-pill on" type="button" data-docopen="${esc(x.id)}" title="${esc(DOC_META[k].t)} ${esc(x.docNo)} · ${fmtSeen(x.issuedAt)} · กดเพื่อพิมพ์">${DOC_META[k].s}</button>`
@@ -3180,7 +3184,7 @@ function drawDocs(){
   const stat=(k,v)=>`<div class="card" style="padding:12px 18px;min-width:130px"><div class="muted" style="font-size:12.5px">${k}</div><div style="font-family:var(--f-display);font-size:28px;font-weight:700;line-height:1.2">${v}</div></div>`;
   const issued=DOCS.filter(d=>d.status==='issued');
   box.innerHTML = `<div class="row" style="gap:12px;flex-wrap:wrap;margin-bottom:16px">${stat('สูตรในทะเบียน', fs.length)}${DOC_ORDER.map(k=>stat('มี '+DOC_META[k].s+' แล้ว', fs.filter(f=>byF.get(f.id)&&byF.get(f.id)[k]).length)).join('')}${stat('เอกสารที่ออกทั้งหมด', issued.length)}</div>
-    <div class="search"><input id="docQ" type="search" autocomplete="off" placeholder="ค้นหาชื่อสูตร ลูกค้า แบรนด์ รหัสตัวอย่าง หรือเลขที่เอกสาร…" value="${esc(docQ)}">
+    <div class="search"><select id="docCust" aria-label="กรองตามลูกค้า" style="max-width:320px"><option value="">ทุกลูกค้า (${[...custCount.keys()].filter(Boolean).length})</option>${custOpts}${custCount.get('')?`<option value="__none__" ${docCust==='__none__'?'selected':''}>(ไม่ระบุลูกค้า) (${custCount.get('')})</option>`:''}</select><input id="docQ" type="search" autocomplete="off" placeholder="ค้นหาชื่อสูตร ลูกค้า แบรนด์ รหัสตัวอย่าง หรือเลขที่เอกสาร…" value="${esc(docQ)}">
       <button class="btn small" type="button" id="docRefresh">รีเฟรช</button><button class="btn small" type="button" id="docXls">ดาวน์โหลดทะเบียน Excel</button></div>
     <div class="tablebox"><table><thead><tr><th>ชื่อสูตร / ผลิตภัณฑ์</th><th>ลูกค้า</th><th>แบรนด์</th><th>รหัสตัวอย่าง</th>${isAdminRole()?'<th>เจ้าของสูตร</th>':''}<th>เอกสาร <span class="muted" style="font-weight:400;font-size:11.5px">(สีเข้ม = ออกแล้ว กดเพื่อพิมพ์)</span></th>${canIssue?'<th>ออกฉบับใหม่</th>':''}</tr></thead><tbody>
       ${shown.map(r=>`<tr data-fid="${esc(r.f.id)}"><td><b>${esc(r.m.sampleName||r.f.p.name)}</b>${r.f.pd?` <span class="chip info" style="font-size:11px" title="สูตรจาก Product Development ที่อนุมัติแล้ว">Product Development · ${esc(r.f.pd.code)}</span>`:''}${r.m.sampleName&&r.m.sampleName!==r.f.p.name?`<div class="muted" style="font-size:12px">${esc(r.f.p.name)}</div>`:''}</td><td>${esc(r.m.customer)||dash}</td><td>${esc(r.m.brand)||dash}</td><td class="mono">${esc(r.m.sampleCode)||dash}</td>${isAdminRole()?`<td class="muted" style="font-size:12.5px">${esc(shortName(r.f.owner))}</td>`:''}
@@ -3403,6 +3407,7 @@ docv.addEventListener('input', e=>{
 });
 docv.addEventListener('change', e=>{
   const t=e.target;
+  if(t.id==='docCust'){ docCust=t.value; const keep=DOCF; drawDocs(); DOCF=keep; drawDocForm(); return; }
   if(t.classList.contains('doc-new')){ const k=t.value; t.value=''; if(k) openDocForm(k, t.closest('tr').dataset.fid); return; }
   if(!DOCF) return;
   if(t.dataset.d==='mode'){ collectDocForm(); drawDocForm(); return; }

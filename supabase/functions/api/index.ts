@@ -1798,13 +1798,13 @@ async function listPdByCustomer(ctx: Ctx, customer: string) {
   const rows = await ctx.db`select id, code, name, status, data->>'brand' as brand, jsonb_array_length(coalesce(data->'lines', '[]'::jsonb)) as n_lines, created_at, updated_at from costing.pd_formulas where data->>'customer' = ${c} order by created_at desc nulls last, code limit 600`;
   return rows.map((x: Any) => ({ id: String(x.id), code: String(x.code || ""), name: String(x.name), status: String(x.status), brand: String(x.brand || ""), nLines: Number(x.n_lines) || 0, createdAt: iso(x.created_at), updatedAt: iso(x.updated_at) }));
 }
-/** ค้นหาสูตร Product Development ทุกสถานะ (รวมสูตรนำเข้า) จากรหัสสูตร/ชื่อสูตร/ชื่อสินค้า/รหัสสินค้า(FG)/รหัสตัวอย่าง/แบรนด์ · กรองตามลูกค้าได้ (ชื่อตรงทั้งชื่อ) · แบบย่อ ไม่มีส่วนประกอบ */
+/** ค้นหาสูตร Product Development ทุกสถานะ (รวมสูตรนำเข้า) จากรหัสสูตร/ชื่อสูตร/ชื่อสินค้า/รหัสสินค้า(FG)/รหัสตัวอย่าง/แบรนด์/ชื่อลูกค้า · กรองตามลูกค้าได้ (ชื่อตรงทั้งชื่อ) · แบบย่อ ไม่มีส่วนประกอบ */
 async function searchPdFormulas(ctx: Ctx, q: string, customer?: string) {
   await needAny(ctx, RD_VIEW); const db = ctx.db;
   q = str(q, 120).trim(); if (!q) throw new Error("พิมพ์คำค้น");
   const like = "%" + q.replace(/[%_\\]/g, (ch) => "\\" + ch) + "%", cu = str(customer, 200);
   const rows = await db`select id, code, name, status, data->>'brand' as brand, data->>'customer' as customer, jsonb_array_length(coalesce(data->'lines', '[]'::jsonb)) as n_lines, updated_at from costing.pd_formulas
-    where (code ilike ${like} or name ilike ${like} or data->>'brand' ilike ${like} or data->>'productName' ilike ${like} or data->>'fgCode' ilike ${like} or data->>'fragranceCode' ilike ${like} or data->>'fragranceName' ilike ${like})
+    where (code ilike ${like} or name ilike ${like} or data->>'customer' ilike ${like} or data->>'brand' ilike ${like} or data->>'productName' ilike ${like} or data->>'fgCode' ilike ${like} or data->>'fragranceCode' ilike ${like} or data->>'fragranceName' ilike ${like})
     and (${cu} = '' or data->>'customer' = ${cu}) order by (code ilike ${q}) desc, updated_at desc, code limit 100`;
   return rows.map((x: Any) => ({ id: String(x.id), code: String(x.code || ""), name: String(x.name), status: String(x.status), brand: String(x.brand || ""), customer: String(x.customer || ""), nLines: Number(x.n_lines) || 0, updatedAt: iso(x.updated_at) }));
 }

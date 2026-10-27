@@ -1191,7 +1191,7 @@ function sampleProducts(){
     ].map(([code,amt])=>({code,nameIn:'',amt}))}
   ];
 }
-function active(){ const p=state.products.find(p=>p.id===state.activeId) || state.products[0]; if(p && !p.unitMig){ p.unitMig=1; if(p.unit==='pct' && p.src==='ออกแบบในระบบ') p.unit='drop'; } return p; }
+function active(){ const p=state.products.find(p=>p.id===state.activeId) || state.products[0]; if(p && !(p.unitMig>=2)){ p.unitMig=2; if(p.unit==='pct' && !p.sample){ p.unit='drop'; save(); } }   /* ผู้ปรุงใส่เป็น Drops → ระบบคำนวณ % สูตร (ค่าเดิมในช่องคงเดิม % สูตรไม่เปลี่ยน) */ return p; }
 function save(){ if(S.me){ store.set('ss-cost-state:'+S.me.email, state); scheduleSync(); } }
 
 /* ===== calculation ===== */
@@ -1461,7 +1461,7 @@ function productAoA(p){
   const c=compute(p);
   const aoa=[
     ['สินค้า', p.name], ...(hasMeta(p) ? META_DEFS.map(d=>[d[1], metaOf(p)[d[0]]]) : []), ['ฐานราคา', DB.source.file+' · อัปเดต '+DB.source.updated], ['วันที่คำนวณ', new Date().toLocaleString('th-TH')], [],
-    ['ลำดับ','รหัส RM','ชื่อวัตถุดิบ','หมวด', p.unit==='pct'?'% ในไฟล์':p.unit==='drop'?'Drop ในไฟล์':'กรัม ในไฟล์','% ในสูตร (ปรับรวม 100)','ราคา บาท/กรัม','ต้นทุน บาท/กก. หัวน้ำหอม','สัดส่วนต้นทุน %',`กรัมที่ใช้ต่อ batch ${fmt(c.batchKg,2)} กก.`,'สถานะ','หมายเหตุ']
+    ['ลำดับ','รหัส RM','ชื่อวัตถุดิบ','หมวด', p.unit==='pct'?'% ในไฟล์':p.unit==='drop'?'Drops ในไฟล์':'กรัม ในไฟล์','% ในสูตร (ปรับรวม 100)','ราคา บาท/กรัม','ต้นทุน บาท/กก. หัวน้ำหอม','สัดส่วนต้นทุน %',`กรัมที่ใช้ต่อ batch ${fmt(c.batchKg,2)} กก.`,'สถานะ','หมายเหตุ']
   ];
   c.rows.forEach((r,k)=>aoa.push([k+1, r.e?r.e.code:normCode(r.ln.code), r.e?r.e.name:r.ln.nameIn, r.e?catOf(r.e.code):'', r.amt, +r.pct.toFixed(4), r.price, r.costKg!=null?+r.costKg.toFixed(4):null, r.costKg!=null?+(r.share*100).toFixed(2):null, +r.gBatch.toFixed(2), STATUS[r.status].t, r.e?r.e.note:'']));
   aoa.push([], ['','','รวม','', c.W, 100, '', +c.rm.toFixed(4), c.complete?100:null, +(c.inputKg*1000).toFixed(2)]);
@@ -1738,14 +1738,14 @@ function renderEditor(){
       ${META_DEFS.map(([k,l])=>`<div class="field"><label for="meta_${k}">${l}${k==='sampleCode'?' (Sample Code)':k==='sampleName'?' (Sample Name)':''}</label><input id="meta_${k}" data-meta="${k}" value="${esc(metaOf(p)[k])}" maxlength="120" placeholder="ไม่บังคับ"></div>`).join('')}
     </div>
     <div class="settings">
-      <div class="field"><label for="unit">หน่วยในสูตร</label><select id="unit"><option value="pct" ${p.unit==='pct'?'selected':''}>% (รวม 100)</option><option value="g" ${p.unit==='g'?'selected':''}>กรัม (น้ำหนักจริง)</option><option value="drop" ${p.unit==='drop'?'selected':''}>หยด (drop) → คำนวณ % ให้</option></select></div>
+      <div class="field"><label for="unit">หน่วยในสูตร</label><select id="unit"><option value="pct" ${p.unit==='pct'?'selected':''}>% (รวม 100)</option><option value="g" ${p.unit==='g'?'selected':''}>กรัม (น้ำหนักจริง)</option><option value="drop" ${p.unit==='drop'?'selected':''}>Drops (หยด) → ระบบคำนวณ % สูตรให้</option></select></div>
       <div class="field"><label for="batchKg">ขนาด batch (กก.)</label><input id="batchKg" type="number" min="0" step="any" value="${esc(p.batchKg)}"></div>
       <div class="field"><label for="lossPct">เผื่อสูญเสีย (%)</label><input id="lossPct" type="number" min="0" max="95" step="any" value="${esc(p.lossPct)}"></div>
       <div class="field"><label for="overhead">ค่าแรง+โสหุ้ย (บาท/กก.)</label><input id="overhead" type="number" min="0" step="any" value="${esc(p.overhead)}"></div>    </div>
     <div class="rm-pick"><label class="muted" for="rmPick" style="font-size:12px">เลือกวัตถุดิบจากฐานข้อมูล</label><input id="rmPick" type="search" autocomplete="off" placeholder="พิมพ์ชื่อหรือรหัส เช่น Hedione, Iso E, RM-001…"><div class="rm-list" id="rmPickList"></div></div>
     ${pctWarn?`<div class="msg warn" style="margin:0 0 12px">ผลรวม % ในสูตร = ${fmtP(c.pctSum)} ไม่ใช่ 100 · ระบบปรับสัดส่วนให้รวมเป็น 100% ก่อนคำนวณ ตรวจสอบสูตรอีกครั้ง</div>`:''}
     <div class="tablebox"><table>
-      <thead><tr><th>#</th><th>รหัส RM</th><th>ชื่อวัตถุดิบ</th><th class="num">${p.unit==='pct'?'%':p.unit==='drop'?'Drop':'กรัม'}</th><th class="num">% สูตร</th><th class="num">บาท/กรัม</th><th class="num">บาท/กก.</th><th>สัดส่วนต้นทุน</th><th class="num">กรัม/batch</th><th></th></tr></thead>
+      <thead><tr><th>#</th><th>รหัส RM</th><th>ชื่อวัตถุดิบ</th><th class="num">${p.unit==='pct'?'%':p.unit==='drop'?'Drops':'กรัม'}</th><th class="num">% สูตร</th><th class="num">บาท/กรัม</th><th class="num">บาท/กก.</th><th>สัดส่วนต้นทุน</th><th class="num">กรัม/batch</th><th></th></tr></thead>
       <tbody>${c.rows.map((r,k)=>{
         const nm = r.e ? r.e.name : (r.ln.nameIn || '—');
         const note = r.e && r.e.note ? `<span class="note">${esc(r.e.note)}</span>` : (r.status==='notfound' && r.ln.nameIn && r.ln.code ? `<span class="note">ชื่อในไฟล์: ${esc(r.ln.nameIn)}</span>`:'');
@@ -2773,9 +2773,9 @@ function openForm(id, owner){
     <div class="row" style="justify-content:space-between;align-items:flex-start">
       <div><h3>สูตรของ ${esc(f.owner)}</h3><div style="font-family:var(--f-display);font-size:26px;line-height:1.2;margin-top:4px">${esc(p.name)}</div>
         ${hasMeta(p)?`<dl class="kv" style="grid-template-columns:auto 1fr;justify-items:start;margin:8px 0">${META_DEFS.map(d=>`<dt>${d[1]}</dt><dd style="text-align:left">${esc(metaOf(p)[d[0]])||'–'}</dd>`).join('')}</dl>`:''}
-        <div class="muted" style="font-size:13px">อัปเดต ${fmtSeen(f.updatedAt)} · หน่วย ${p.unit==='g'?'กรัม':p.unit==='drop'?'Drop':'%'} · batch ${fmtP(c.batchKg)} กก. · เผื่อสูญเสีย ${fmtP(c.loss*100)}%</div></div>
+        <div class="muted" style="font-size:13px">อัปเดต ${fmtSeen(f.updatedAt)} · หน่วย ${p.unit==='g'?'กรัม':p.unit==='drop'?'Drops':'%'} · batch ${fmtP(c.batchKg)} กก. · เผื่อสูญเสีย ${fmtP(c.loss*100)}%</div></div>
       <div class="row"><button class="btn small" type="button" id="formExport">ดาวน์โหลด Excel</button><button class="btn small" type="button" id="formClose">ปิด</button></div></div>
-    <div class="tablebox" style="margin-top:12px"><table><thead><tr><th>#</th><th>รหัส RM</th><th>ชื่อวัตถุดิบ</th><th class="num">${p.unit==='g'?'กรัม':p.unit==='drop'?'Drop':'%'}</th><th class="num">% สูตร</th><th class="num">บาท/กรัม</th><th class="num">บาท/กก.</th><th>สถานะ</th></tr></thead><tbody>
+    <div class="tablebox" style="margin-top:12px"><table><thead><tr><th>#</th><th>รหัส RM</th><th>ชื่อวัตถุดิบ</th><th class="num">${p.unit==='g'?'กรัม':p.unit==='drop'?'Drops':'%'}</th><th class="num">% สูตร</th><th class="num">บาท/กรัม</th><th class="num">บาท/กก.</th><th>สถานะ</th></tr></thead><tbody>
     ${c.rows.map((r,k)=>`<tr><td class="muted">${k+1}</td><td class="mono">${esc(r.e?r.e.code:normCode(r.ln.code))}</td><td>${esc(r.e?r.e.name:(r.ln.nameIn||'—'))}</td>
       <td class="num">${fmtP(r.amt)}</td><td class="num">${fmt(r.pct,2)}</td><td class="num">${r.price!=null?fmtP(r.price):'–'}</td><td class="num">${r.costKg!=null?fmt(r.costKg,2):'–'}</td><td>${chip(r.status)}</td></tr>`).join('')}
     </tbody><tfoot><tr><td></td><td colspan="2">รวม ${c.rows.length} รายการ</td><td class="num">${fmtP(c.W)}</td><td class="num">${c.W>0?'100.00':'–'}</td><td></td><td class="num">${c.complete?'':'≥ '}${fmt(c.rm,2)}</td><td></td></tr></tfoot></table></div>

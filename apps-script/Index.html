@@ -2993,19 +2993,21 @@ function setRmSave(t){ const el=$('#rmSave'); if(el) el.textContent=t; }
 /* MSDS ต่อรหัส RM: จากเอกสารที่อัปโหลดในหมวด MSDS วัตถุดิบ (ประเภท MSDS) · ไม่นับรหัสที่ยกเลิก */
 function rmMsdsSet(){ if(!MS) return null; if(rmMsdsSet._k!==MS){ rmMsdsSet._k=MS; const st=new Set(); MS.items.forEach(d=>{ if(d.kind==='MSDS') d.codes.forEach(c=>st.add(String(c).toUpperCase())); }); rmMsdsSet._s=st; } return rmMsdsSet._s; }
 const rmHasMsds=code=>{ const st=rmMsdsSet(); return !!(st&&st.has(String(code).toUpperCase())); };
-function rmMsdsCount(){ const st=rmMsdsSet(); if(!st) return null; const act=DB.entries.filter(e=>e.status!=='cancel'); const has=act.filter(e=>st.has(e.code.toUpperCase())).length; return {total:act.length, has, miss:act.length-has, cancel:DB.entries.length-act.length}; }
+function rmMsdsCount(){ const st=rmMsdsSet(); if(!st) return null; const act=rmMsdsActive(); const has=act.filter(e=>st.has(e.code.toUpperCase())).length; return {total:act.length, has, miss:act.length-has, cancel:new Set(DB.entries.map(e=>e.code.toUpperCase())).size-act.length}; }
+/* ฐานราคามีรหัสซ้ำบางรหัส → นับต่อรหัส (1 รหัส = 1 รายการ) · รหัสที่ยกเลิกทุกแถวไม่ต้องมี MSDS */
+function rmMsdsActive(){ const m=new Map(); DB.entries.forEach(e=>{ const k=e.code.toUpperCase(), x=m.get(k); if(!x||(x.status==='cancel'&&e.status!=='cancel')) m.set(k,e); }); return [...m.values()].filter(e=>e.status!=='cancel').sort((a,b)=>a.code.localeCompare(b.code)); }
 function rmMsdsDocsOf(code){ const c=String(code).toUpperCase(); return MS?MS.items.filter(d=>d.codes.some(x=>String(x).toUpperCase()===c)):[]; }
 function exportMsdsGap(){
   if(typeof XLSX==='undefined'){ toast('โหลดตัวเขียน Excel ไม่สำเร็จ'); return; }
   if(!MS){ toast('ยังโหลดข้อมูล MSDS ไม่เสร็จ ลองใหม่อีกครั้ง'); return; }
-  const act=DB.entries.filter(e=>e.status!=='cancel').sort((a,b)=>a.code.localeCompare(b.code));
+  const act=rmMsdsActive();
   const miss=act.filter(e=>!rmHasMsds(e.code)), has=act.filter(e=>rmHasMsds(e.code));
   const sup=(code)=>[...new Set(rmMsdsDocsOf(code).map(d=>d.supplier).filter(Boolean))].join(', ');
   const other=(code)=>[...new Set(rmMsdsDocsOf(code).map(d=>d.kind))].join(', ');
   const stt=e=>STATUS[e.status]?STATUS[e.status].t:e.status;
   const head=['รหัส','รายละเอียด','หมวด','สถานะราคา','หมายเหตุราคา','ซัพพลายเออร์ (จากเอกสารอื่นที่มี)','เอกสารอื่นที่มีแล้ว','ซัพพลายเออร์ที่ติดต่อ','วันที่ขอ MSDS','สถานะติดตาม','หมายเหตุจัดซื้อ'];
   const row=e=>[e.code,e.name,catOf(e.code),stt(e),e.note||'',sup(e.code),other(e.code),'','','',''];
-  const sum=[['สรุป MSDS วัตถุดิบ','' ],['ไม่นับรหัสที่ยกเลิก / เลิกจำหน่าย',DB.entries.length-act.length],['วัตถุดิบที่ต้องมี MSDS',act.length],['มี MSDS แล้ว',has.length],['ขาด MSDS',miss.length],['ร้อยละที่มีแล้ว',act.length?Math.round(has.length/act.length*1000)/10+'%':'–']];
+  const sum=[['สรุป MSDS วัตถุดิบ','' ],['ไม่นับรหัสที่ยกเลิก / เลิกจำหน่าย',new Set(DB.entries.map(e=>e.code.toUpperCase())).size-act.length],['วัตถุดิบที่ต้องมี MSDS',act.length],['มี MSDS แล้ว',has.length],['ขาด MSDS',miss.length],['ร้อยละที่มีแล้ว',act.length?Math.round(has.length/act.length*1000)/10+'%':'–']];
   const byCat={}; act.forEach(e=>{ const c=catOf(e.code); (byCat[c]=byCat[c]||{n:0,h:0}); byCat[c].n++; if(rmHasMsds(e.code)) byCat[c].h++; });
   sum.push([''],['หมวด','ทั้งหมด','มี MSDS','ขาด MSDS']); Object.entries(byCat).sort().forEach(([c,v])=>sum.push([c,v.n,v.h,v.n-v.h]));
   const wb=XLSX.utils.book_new();

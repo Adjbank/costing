@@ -282,7 +282,7 @@ async function bootstrap(ctx: Ctx) {
   return {
     me: { email: m.email, isOwner: m.isOwner, role: m.role, roleName: m.roleName, active: m.active, auto: m.auto, perms: ok ? m.perms : {} },
     roles: m.roles, order: m.order, access: { autoJoin: m.autoJoin, defaultRole: m.defRole },
-    prices: ok && (m.perms.calc || m.perms.viewDb || m.isOwner) ? await readPrices(db) : null,
+    prices: ok && (m.perms.calc || m.perms.viewDb || m.isOwner) ? await readPrices(db, !!(m.perms.editPrices || m.isOwner)) : null,
     appUrl: await appUrl(db),
     requested: (await db`select 1 from costing.requests where email = ${m.email}`).length > 0,
     complaintsNew: ok && isAdmin(m) ? await newComplaints(db) : 0,
@@ -302,9 +302,10 @@ async function requestAccess(ctx: Ctx) {
 }
 
 /* ===== ฐานราคา ===== */
-async function readPrices(db: Db) {
-  const rows = await db`select code, name, price, status, note, updated_at, updated_by from costing.prices order by id`;
-  const entries = rows.map((r: Any) => ({ c: String(r.code), n: String(r.name), p: r.price === null ? null : Number(r.price), s: String(r.status || ""), o: String(r.note || ""), u: iso(r.updated_at), b: String(r.updated_by || "") }));
+/** showSup = ชื่อซัพพลายเออร์ส่งให้เฉพาะผู้มีสิทธิ์แก้ราคา (เจ้าของ/แอดมิน/จัดซื้อ) */
+async function readPrices(db: Db, showSup = true) {
+  const rows = await db`select code, name, price, status, note, supplier, updated_at, updated_by from costing.prices order by id`;
+  const entries = rows.map((r: Any) => ({ c: String(r.code), n: String(r.name), p: r.price === null ? null : Number(r.price), s: String(r.status || ""), o: String(r.note || ""), ...(showSup ? { v: String(r.supplier || "") } : {}), u: iso(r.updated_at), b: String(r.updated_by || "") }));
   return { entries, custom: (await getSetting(db, "pricesCustom")) === "true",
     src: { file: (await getSetting(db, "pricesFile")) || BUILTIN_SOURCE.file, updated: (await getSetting(db, "pricesUpdated")) || "", by: (await getSetting(db, "pricesBy")) || "" } };
 }
@@ -317,6 +318,9 @@ async function savePrices(ctx: Ctx, body: Any) {
     const rows = list.map((e: Any) => { const n = Number(e.p);
       return { code: String(e.c || "").toUpperCase().slice(0, 40), name: String(e.n || "").slice(0, 300), price: e.p === null || isNaN(n) ? null : n,
         status: OK_STATUS[e.s] ? e.s : "none", note: String(e.o || "").slice(0, 500) }; });
+    const oldSup: Record<string, string> = {};
+    (await db`select upper(code) as c, supplier from costing.prices where supplier <> '' order by id desc`).forEach((r: Any) => { oldSup[String(r.c)] = String(r.supplier); });
+    list.forEach((e: Any, i: number) => { rows[i].supplier = e.v === undefined || e.v === null ? (oldSup[rows[i].code] || "") : String(e.v).trim().slice(0, 200); });
     await db`delete from costing.prices`;
     for (let i = 0; i < rows.length; i += 1000) await db`insert into costing.prices ${db(rows.slice(i, i + 1000))}`;
     await setSetting(db, "pricesFile", String(body.file || "ไฟล์ที่อัปเดต").slice(0, 200));
@@ -332,7 +336,7 @@ async function updatePrices(ctx: Ctx, items: Any) {
     const m = await need(c, "editPrices"), db = c.db;
     if (!Array.isArray(items) || !items.length || items.length > 300) throw new Error("บันทึกได้ครั้งละ 1–300 รายการ");
     const cur: Record<string, Any> = {};
-    (await db`select id, code, name, price, status, note from costing.prices order by id`).forEach((r: Any) => { const k = String(r.code).toUpperCase(); if (!cur[k]) cur[k] = r; });
+    (await db`select id, code, name, price, status, note, supplier from costing.prices order by id`).forEach((r: Any) => { const k = String(r.code).toUpperCase(); if (!cur[k]) cur[k] = r; });
     const now = new Date(), notes: string[] = [];
     let changed = 0, added = 0;
     for (const it of items) {
@@ -344,16 +348,17 @@ async function updatePrices(ctx: Ctx, items: Any) {
       let status = OK_STATUS[it.s] ? it.s : "none";
       if (price !== null) status = "ok"; else if (status === "ok") status = "none";
       const note = String(it.o || "").slice(0, 500), ex = cur[code];
+      const sup = it.v === undefined || it.v === null ? (ex ? String(ex.supplier || "") : "") : String(it.v).trim().slice(0, 200);
       const name = ex ? String(ex.name) : String(it.n || "").trim().slice(0, 300);
       if (!ex && !name) throw new Error("รหัสใหม่ต้องมีชื่อวัตถุดิบ: " + code);
       if (ex) {
-        const same = (ex.price === null ? null : Number(ex.price)) === price && String(ex.status) === status && String(ex.note || "") === note;
+        const same = (ex.price === null ? null : Number(ex.price)) === price && String(ex.status) === status && String(ex.note || "") === note && String(ex.supplier || "") === sup;
         if (same) continue;
-        await db`update costing.prices set price = ${price}, status = ${status}, note = ${note}, updated_at = ${now}, updated_by = ${m.email} where id = ${ex.id}`;
-        notes.push(code + ": " + (ex.price === null ? "-" : ex.price) + " → " + (price === null ? "-" : price) + (String(ex.status) !== status ? " [" + ex.status + "→" + status + "]" : ""));
+        await db`update costing.prices set price = ${price}, status = ${status}, note = ${note}, supplier = ${sup}, updated_at = ${now}, updated_by = ${m.email} where id = ${ex.id}`;
+        notes.push(code + ": " + (ex.price === null ? "-" : ex.price) + " → " + (price === null ? "-" : price) + (String(ex.status) !== status ? " [" + ex.status + "→" + status + "]" : "") + (String(ex.supplier || "") !== sup ? " [ซัพ: " + (ex.supplier || "-") + " → " + (sup || "-") + "]" : ""));
       } else {
-        const ins = await db`insert into costing.prices (code, name, price, status, note, updated_at, updated_by) values (${code}, ${name}, ${price}, ${status}, ${note}, ${now}, ${m.email}) returning id`;
-        cur[code] = { id: ins[0].id, code, name, price, status, note }; added++;
+        const ins = await db`insert into costing.prices (code, name, price, status, note, supplier, updated_at, updated_by) values (${code}, ${name}, ${price}, ${status}, ${note}, ${sup}, ${now}, ${m.email}) returning id`;
+        cur[code] = { id: ins[0].id, code, name, price, status, note, supplier: sup }; added++;
         notes.push(code + ": เพิ่มใหม่ " + (price === null ? "-" : price));
       }
       changed++;
@@ -371,8 +376,10 @@ async function resetPrices(ctx: Ctx) {
     const m = await need(c, "editPrices"), db = c.db;
     const b = await db`select count(*)::int as n from costing.prices_builtin`;
     if (!b[0].n) throw new Error("ไม่มีฐานราคาตั้งต้นในระบบ");
+    const keepSup = await db`select upper(code) as c, max(supplier) as s from costing.prices where supplier <> '' group by 1`;
     await db`delete from costing.prices`;
     await db`insert into costing.prices (code, name, price, status, note) select code, name, price, status, note from costing.prices_builtin order by ord`;
+    for (const k of keepSup) await db`update costing.prices set supplier = ${String(k.s)} where upper(code) = ${String(k.c)}`;
     await setSetting(db, "pricesFile", BUILTIN_SOURCE.file); await setSetting(db, "pricesUpdated", BUILTIN_SOURCE.updated);
     await setSetting(db, "pricesBy", ""); await setSetting(db, "pricesCustom", "false");
     await log(db, m.email, "resetPrices", BUILTIN_SOURCE.file);

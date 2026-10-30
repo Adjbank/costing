@@ -1146,6 +1146,7 @@ const store = {
 };
 
 /* ===== price database ===== */
+const SUP_RE=/ซัพพลายเออร์|supplier|vendor|ผู้ขาย|ผู้จำหน่าย/i;
 function statusFromCell(p){
   if(typeof p==='number') return 'ok';
   const s=String(p??'').trim();
@@ -1407,18 +1408,19 @@ async function importDbFile(file){
       const h = rows[hIdx].map(cellStr);
       const cc=h.findIndex(x=>/^รหัส$|^code$|รหัส\s*rm|item\s*code/i.test(x)) >=0 ? h.findIndex(x=>/^รหัส$|^code$|รหัส\s*rm|item\s*code/i.test(x)) : h.findIndex(x=>/รหัส|code/i.test(x));
       const pc=h.findIndex(x=>/ราคา|price/i.test(x));
-      const nc=h.findIndex(x=>/รายละเอียด|ชื่อ|name|description/i.test(x));
+      const nc=h.findIndex(x=>/รายละเอียด|ชื่อ|name|description/i.test(x) && !SUP_RE.test(x));
       const notec=h.findIndex(x=>/หมายเหตุ|note|remark/i.test(x));
+      const supc=h.findIndex(x=>SUP_RE.test(x));
       for(const r of rows.slice(hIdx+1)){
         let code=cellStr(r[cc]); if(!RM_RE.test(code)){ const alt=r.map(cellStr).find(s=>RM_RE.test(s)&&normCode(s).split('-').length===4); if(!alt) continue; code=alt; }
         const pre = cc>0 ? cellStr(r[cc-1]) : '';
         const note=[notec>=0?cellStr(r[notec]):'', pre && !/^RM-[A-Z0-9/,\s-]*$/i.test(pre) ? pre : ''].filter(Boolean).join(' · ');
-        entries.push(makeEntry(code, nc>=0?cellStr(r[nc]):'', r[pc], note));
+        const en=makeEntry(code, nc>=0?cellStr(r[nc]):'', r[pc], note); if(supc>=0) en.supplier=cellStr(r[supc]); entries.push(en);
       }
     }
     if(!entries.length){ toast('ไม่พบคอลัมน์ "รหัส" และ "ราคา" ในไฟล์'); return; }
     toast('กำลังบันทึกฐานราคาให้ทั้งทีม…');
-    const res = await api('savePrices', {file:file.name, entries: entries.map(e=>({c:e.code,n:e.name,p:e.price,s:e.status,o:e.note}))});
+    const res = await api('savePrices', {file:file.name, entries: entries.map(e=>Object.assign({c:e.code,n:e.name,p:e.price,s:e.status,o:e.note}, e.supplier!==undefined?{v:e.supplier}:{}))});
     applyPriceData(res);
     toast(`อัปเดตฐานราคาให้ทั้งทีมแล้ว: ${file.name} (${entries.length} รายการ)`);
   }catch(e){ toast(e && e.message ? 'บันทึกฐานราคาไม่สำเร็จ: '+errText(e) : 'อ่านไฟล์ฐานราคาไม่ได้'); }
@@ -1426,7 +1428,7 @@ async function importDbFile(file){
 /* ฐานราคามาจากเซิร์ฟเวอร์ (ชีต Prices) เท่านั้น */
 function applyPriceData(d){
   if(d && Array.isArray(d.entries) && d.entries.length){
-    setDB(d.entries.map(x=>{ const e=makeEntry(x.c, x.n, x.p==null ? (x.s==='recheck'?'R':x.s==='cancel'?'X':x.s==='rd'?'D':'') : x.p, x.o); e.at=x.u||''; e.by=x.b||''; return e; }),
+    setDB(d.entries.map(x=>{ const e=makeEntry(x.c, x.n, x.p==null ? (x.s==='recheck'?'R':x.s==='cancel'?'X':x.s==='rd'?'D':'') : x.p, x.o); e.at=x.u||''; e.by=x.b||''; e.supplier=String(x.v||''); return e; }),
       {file:(d.src&&d.src.file)||'Summary RM', updated:(d.src&&d.src.updated)||'', by:(d.src&&d.src.by)||null}, !!d.custom);
   } else setDB([], {file:'ยังไม่มีข้อมูลราคา', updated:'–'}, false);
   if(S.inApp && !S.admin){ renderDbCard(); renderDbFilters(); renderWork(); if(can('viewDb')) renderDbTable(); }
@@ -2987,7 +2989,7 @@ prcv.addEventListener('click', async e=>{
 });
 window.addEventListener('beforeunload', e=>{ if(Object.keys(prcDirty).length){ e.preventDefault(); e.returnValue=''; } });
 /* --- ฐานราคาวัตถุดิบ: แก้ราคาทีละรายการ (สิทธิ์ editPrices = เจ้าของระบบ แอดมิน จัดซื้อ) --- */
-let rmQ='', rmStatus='', rmCat='', rmMs='', rmPage=0, rmDirty={}, rmTimer=null;
+let rmQ='', rmStatus='', rmCat='', rmMs='', rmSup='', rmPage=0, rmDirty={}, rmTimer=null;
 const RM_PAGE=50;
 function setRmSave(t){ const el=$('#rmSave'); if(el) el.textContent=t; }
 /* MSDS ต่อรหัส RM: จากเอกสารที่อัปโหลดในหมวด MSDS วัตถุดิบ (ประเภท MSDS) · ไม่นับรหัสที่ยกเลิก */
@@ -3003,24 +3005,28 @@ function exportMsdsGap(){
   const act=rmMsdsActive();
   const miss=act.filter(e=>!rmHasMsds(e.code)), has=act.filter(e=>rmHasMsds(e.code));
   const sup=(code)=>[...new Set(rmMsdsDocsOf(code).map(d=>d.supplier).filter(Boolean))].join(', ');
+  miss.sort((a,b)=>(a.supplier?0:1)-(b.supplier?0:1)||(a.supplier||'').localeCompare(b.supplier||'','th')||a.code.localeCompare(b.code));
   const other=(code)=>[...new Set(rmMsdsDocsOf(code).map(d=>d.kind))].join(', ');
   const stt=e=>STATUS[e.status]?STATUS[e.status].t:e.status;
-  const head=['รหัส','รายละเอียด','หมวด','สถานะราคา','หมายเหตุราคา','ซัพพลายเออร์ (จากเอกสารอื่นที่มี)','เอกสารอื่นที่มีแล้ว','ซัพพลายเออร์ที่ติดต่อ','วันที่ขอ MSDS','สถานะติดตาม','หมายเหตุจัดซื้อ'];
-  const row=e=>[e.code,e.name,catOf(e.code),stt(e),e.note||'',sup(e.code),other(e.code),'','','',''];
+  const head=['รหัส','รายละเอียด','หมวด','สถานะราคา','หมายเหตุราคา','ซัพพลายเออร์ (ฐานราคา)','ซัพพลายเออร์ (จากเอกสารอื่นที่มี)','เอกสารอื่นที่มีแล้ว','ซัพพลายเออร์ที่ติดต่อ','วันที่ขอ MSDS','สถานะติดตาม','หมายเหตุจัดซื้อ'];
+  const row=e=>[e.code,e.name,catOf(e.code),stt(e),e.note||'',e.supplier||'',sup(e.code),other(e.code),'','','',''];
   const sum=[['สรุป MSDS วัตถุดิบ','' ],['ไม่นับรหัสที่ยกเลิก / เลิกจำหน่าย',new Set(DB.entries.map(e=>e.code.toUpperCase())).size-act.length],['วัตถุดิบที่ต้องมี MSDS',act.length],['มี MSDS แล้ว',has.length],['ขาด MSDS',miss.length],['ร้อยละที่มีแล้ว',act.length?Math.round(has.length/act.length*1000)/10+'%':'–']];
   const byCat={}; act.forEach(e=>{ const c=catOf(e.code); (byCat[c]=byCat[c]||{n:0,h:0}); byCat[c].n++; if(rmHasMsds(e.code)) byCat[c].h++; });
   sum.push([''],['หมวด','ทั้งหมด','มี MSDS','ขาด MSDS']); Object.entries(byCat).sort().forEach(([c,v])=>sum.push([c,v.n,v.h,v.n-v.h]));
+  const bySup={}; miss.forEach(e=>{ const k=e.supplier||'(ยังไม่ระบุซัพพลายเออร์)'; bySup[k]=(bySup[k]||0)+1; });
+  sum.push([''],['ขาด MSDS แยกตามซัพพลายเออร์','จำนวนรหัส']); Object.entries(bySup).sort((a,b)=>(a[0][0]==='('?1:0)-(b[0][0]==='('?1:0)||b[1]-a[1]).forEach(([k,n])=>sum.push([k,n]));
   const wb=XLSX.utils.book_new();
   const w0=XLSX.utils.aoa_to_sheet(sum); w0['!cols']=[{wch:44},{wch:12},{wch:12},{wch:12}]; XLSX.utils.book_append_sheet(wb,w0,'สรุป');
-  const w1=XLSX.utils.aoa_to_sheet([head].concat(miss.map(row))); w1['!cols']=[{wch:20},{wch:46},{wch:28},{wch:16},{wch:34},{wch:30},{wch:16},{wch:26},{wch:14},{wch:16},{wch:30}]; XLSX.utils.book_append_sheet(wb,w1,'ขาด MSDS (ติดตาม)');
-  const w2=XLSX.utils.aoa_to_sheet([head.slice(0,7)].concat(has.map(e=>row(e).slice(0,7)))); w2['!cols']=w1['!cols'].slice(0,7); XLSX.utils.book_append_sheet(wb,w2,'มี MSDS แล้ว');
+  const w1=XLSX.utils.aoa_to_sheet([head].concat(miss.map(row))); w1['!cols']=[{wch:20},{wch:46},{wch:28},{wch:16},{wch:34},{wch:26},{wch:30},{wch:16},{wch:26},{wch:14},{wch:16},{wch:30}]; XLSX.utils.book_append_sheet(wb,w1,'ขาด MSDS (ติดตาม)');
+  const w2=XLSX.utils.aoa_to_sheet([head.slice(0,8)].concat(has.map(e=>row(e).slice(0,8)))); w2['!cols']=w1['!cols'].slice(0,8); XLSX.utils.book_append_sheet(wb,w2,'มี MSDS แล้ว');
   const d=new Date(), stamp=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
   saveFile(`MSDS_ขาด${miss.length}รายการ_${stamp}.xlsx`, XLSX.write(wb,{type:'array',bookType:'xlsx'}));
   toast(`ดาวน์โหลดรายการขาด MSDS ${miss.length} รายการแล้ว`);
 }
+const rmSuppliers=()=>[...new Set(DB.entries.map(e=>e.supplier).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th'));
 function rmFiltered(){
   const q=rmQ.trim().toLowerCase();
-  return DB.entries.filter(e=>(!rmStatus||e.status===rmStatus) && (!rmCat||e.code.split('-')[2]===rmCat) && (!rmMs||(rmMs==='has')===rmHasMsds(e.code)) && (!q || e.code.toLowerCase().includes(q) || e.name.toLowerCase().includes(q) || e.note.toLowerCase().includes(q)));
+  return DB.entries.filter(e=>(!rmStatus||e.status===rmStatus) && (!rmCat||e.code.split('-')[2]===rmCat) && (!rmMs||(rmMs==='has')===rmHasMsds(e.code)) && (!rmSup||(rmSup==='__none'?!e.supplier:e.supplier===rmSup)) && (!q || e.code.toLowerCase().includes(q) || e.name.toLowerCase().includes(q) || e.note.toLowerCase().includes(q) || (e.supplier||'').toLowerCase().includes(q)));
 }
 function renderRmView(){
   const cats=[...new Set(DB.entries.map(e=>e.code.split('-')[2]))].filter(c=>CAT[c]).sort();
@@ -3030,6 +3036,7 @@ function renderRmView(){
       <select id="rmSt" aria-label="กรองสถานะ"><option value="">ทุกสถานะ</option>${Object.entries({ok:'มีราคา',recheck:'ต้อง recheck ราคา',rd:'สกัดเอง · ถาม RD',cancel:'ยกเลิก / เลิกจำหน่าย',none:'ไม่มีราคา'}).map(([k,l])=>`<option value="${k}" ${rmStatus===k?'selected':''}>${l}</option>`).join('')}</select>
       <select id="rmCat" aria-label="กรองหมวด"><option value="">ทุกหมวด</option>${cats.map(c=>`<option value="${c}" ${rmCat===c?'selected':''}>${c} · ${esc(CAT[c])}</option>`).join('')}</select>
       <select id="rmMsSel" aria-label="กรอง MSDS"><option value="">MSDS ทั้งหมด</option><option value="has" ${rmMs==='has'?'selected':''}>มี MSDS</option><option value="miss" ${rmMs==='miss'?'selected':''}>ขาด MSDS</option></select>
+      <select id="rmSupSel" aria-label="กรองซัพพลายเออร์"><option value="">ซัพพลายเออร์ทั้งหมด</option><option value="__none" ${rmSup==='__none'?'selected':''}>ยังไม่ระบุซัพพลายเออร์</option>${rmSuppliers().map(v=>`<option value="${esc(v)}" ${rmSup===v?'selected':''}>${esc(v)}</option>`).join('')}</select>
       <button class="btn small" type="button" id="rmAddToggle">เพิ่มรหัสใหม่</button>
       <button class="btn small" type="button" id="rmFile">อัปเดตจากไฟล์ Excel</button>
       <button class="btn small" type="button" id="rmDl">ดาวน์โหลด Excel</button>
@@ -3041,13 +3048,14 @@ function renderRmView(){
         <div class="field"><label for="rmNewCode">รหัส RM</label><input id="rmNewCode" placeholder="RM-001-001-0001" maxlength="40" required></div>
         <div class="field"><label for="rmNewName">ชื่อวัตถุดิบ</label><input id="rmNewName" maxlength="300" required></div>
         <div class="field"><label for="rmNewPrice">ราคา (บาท/กรัม)</label><input id="rmNewPrice" type="number" min="0" step="any" placeholder="ไม่บังคับ"></div>
+        <div class="field"><label for="rmNewSup">ซัพพลายเออร์</label><input id="rmNewSup" maxlength="200" list="rmSupList" placeholder="ไม่บังคับ"></div>
         <div class="field"><label for="rmNewNote">หมายเหตุ</label><input id="rmNewNote" maxlength="500" placeholder="ไม่บังคับ"></div>
       </div>
       <div class="row" style="margin-top:12px"><button class="btn primary" type="submit">เพิ่มรหัส</button><span class="muted" id="rmAddErr" style="color:var(--bad)" role="alert"></span></div>
     </form>
     <div id="rmBody"></div>
     <div class="muted" id="rmSave" aria-live="polite" style="font-size:12.5px;margin-top:8px"></div>
-    <div class="note-box" style="margin-top:14px">ใส่ราคา = สถานะ "มีราคา" อัตโนมัติ · ล้างราคาแล้วเลือกสถานะอื่นได้ (recheck / สกัดเอง / ยกเลิก) · ราคาเป็น บาท/กรัม · ไฟล์ Excel ที่ดาวน์โหลดแก้แล้วอัปโหลดกลับด้วยปุ่ม "อัปเดตจากไฟล์ Excel" ได้ (ช่องราคาใส่ตัวเลข หรือ R = recheck, X = ยกเลิก, D = สกัดเอง) · การอัปโหลดไฟล์จะแทนที่ฐานราคาทั้งหมด</div>`;
+    <div class="note-box" style="margin-top:14px">ใส่ราคา = สถานะ "มีราคา" อัตโนมัติ · ล้างราคาแล้วเลือกสถานะอื่นได้ (recheck / สกัดเอง / ยกเลิก) · ราคาเป็น บาท/กรัม · ไฟล์ Excel ที่ดาวน์โหลดแก้แล้วอัปโหลดกลับด้วยปุ่ม "อัปเดตจากไฟล์ Excel" ได้ (ช่องราคาใส่ตัวเลข หรือ R = recheck, X = ยกเลิก, D = สกัดเอง) · การอัปโหลดไฟล์จะแทนที่ฐานราคาทั้งหมด · คอลัมน์ "ซัพพลายเออร์" ในไฟล์จะถูกอ่านเข้ามาด้วย (ถ้าไฟล์ไม่มีคอลัมน์นี้ ระบบเก็บซัพพลายเออร์เดิมไว้ตามรหัส)</div>`;
   drawRm();
   loadMs().then(()=>{ drawRm(); }).catch(()=>{});
 }
@@ -3059,6 +3067,7 @@ function drawRmStats(){
     + stat('มีราคา', c('ok').toLocaleString('th-TH'))
     + stat('ต้อง recheck', c('recheck').toLocaleString('th-TH'))
     + stat('ไม่มีราคา', c('none').toLocaleString('th-TH'))
+    + (()=>{ const a=rmMsdsActive(), k=a.filter(e=>e.supplier).length; return stat('ระบุซัพพลายเออร์แล้ว', k.toLocaleString('th-TH'), 'จาก '+a.length.toLocaleString('th-TH')+' (ไม่นับยกเลิก)'); })()
     + (()=>{ const m=rmMsdsCount(); return m?stat('มี MSDS', m.has.toLocaleString('th-TH'), 'จาก '+m.total.toLocaleString('th-TH')+' (ไม่นับยกเลิก '+m.cancel+')')+stat('ขาด MSDS', m.miss.toLocaleString('th-TH'), 'ร้อยละ '+(m.total?Math.round(m.has/m.total*100):0)+' มีแล้ว'):''; })()
     + stat('อัปเดตล่าสุด', esc(DB.source.updated||'–'), DB.source.by?'โดย '+esc(DB.source.by):'');
 }
@@ -3069,21 +3078,22 @@ function drawRm(){
   const shown=list.slice(rmPage*RM_PAGE, rmPage*RM_PAGE+RM_PAGE);
   const stOpt=(cur)=>Object.entries({ok:'มีราคา',recheck:'ต้อง recheck',rd:'สกัดเอง · ถาม RD',cancel:'ยกเลิก / เลิกใช้',none:'ไม่มีราคา'}).map(([k,l])=>`<option value="${k}" ${cur===k?'selected':''}>${l}</option>`).join('');
   const inp='border:1px solid var(--line-strong);border-radius:7px;padding:5px 8px;background:var(--input-bg);font:inherit';
-  body.innerHTML = `<div class="tablebox"><table><thead><tr><th>รหัส</th><th>รายละเอียด</th><th>หมวด</th><th>MSDS</th><th class="num">ราคา บาท/กรัม</th><th>สถานะ</th><th>หมายเหตุ</th><th>แก้ล่าสุด</th></tr></thead><tbody>
+  body.innerHTML = `<div class="tablebox"><table><thead><tr><th>รหัส</th><th>รายละเอียด</th><th>หมวด</th><th>MSDS</th><th>ซัพพลายเออร์</th><th class="num">ราคา บาท/กรัม</th><th>สถานะ</th><th>หมายเหตุ</th><th>แก้ล่าสุด</th></tr></thead><tbody>
     ${shown.map(e=>`<tr data-code="${esc(e.code)}"><td class="mono">${esc(e.code)}</td><td>${esc(e.name)}</td><td class="muted" style="white-space:nowrap">${esc(catOf(e.code))}</td>
       <td style="white-space:nowrap">${MS?(rmHasMsds(e.code)?'<span class="chip ok">มี</span>':(e.status==='cancel'?'<span class="muted">–</span>':'<span class="chip bad">ขาด</span>')):'<span class="muted">…</span>'}</td>
+      <td><input class="rm-sup" list="rmSupList" value="${esc(e.supplier||'')}" maxlength="200" placeholder="–" aria-label="ซัพพลายเออร์ ${esc(e.code)}" style="${inp};width:170px"></td>
       <td class="num"><input class="rm-price" type="number" min="0" step="any" value="${e.price!=null?esc(e.price):''}" placeholder="–" aria-label="ราคา ${esc(e.code)}" style="${inp};width:110px;text-align:right"></td>
       <td><select class="rm-st" aria-label="สถานะ ${esc(e.code)}" style="${inp}">${stOpt(e.status)}</select></td>
       <td><input class="rm-note" value="${esc(e.note)}" maxlength="500" aria-label="หมายเหตุ ${esc(e.code)}" style="${inp};width:200px"></td>
-      <td class="muted" style="white-space:nowrap;font-size:12.5px" data-c="at">${e.at?fmtSeen(e.at)+(e.by?'<br>'+esc(e.by):''):'–'}</td></tr>`).join('') || '<tr><td colspan="8" class="empty">ไม่พบรายการที่ตรงกับคำค้น</td></tr>'}
-    </tbody></table></div>
+      <td class="muted" style="white-space:nowrap;font-size:12.5px" data-c="at">${e.at?fmtSeen(e.at)+(e.by?'<br>'+esc(e.by):''):'–'}</td></tr>`).join('') || '<tr><td colspan="9" class="empty">ไม่พบรายการที่ตรงกับคำค้น</td></tr>'}
+    </tbody></table></div><datalist id="rmSupList">${rmSuppliers().map(v=>`<option value="${esc(v)}">`).join('')}</datalist>
     <div class="row" style="margin-top:10px;justify-content:space-between;font-size:12.5px"><span class="muted">แสดง ${shown.length} จาก ${list.length.toLocaleString('th-TH')} รายการ · หน้า ${rmPage+1}/${pages}</span>
       <span class="row"><button class="btn small" type="button" id="rmPrev" ${rmPage<=0?'disabled':''}>ก่อนหน้า</button><button class="btn small" type="button" id="rmNext" ${rmPage>=pages-1?'disabled':''}>ถัดไป</button></span></div>`;
   drawRmStats();
 }
 function rmMark(tr, patch){
   const code=tr.dataset.code, e=DB.byCode.get(code) || DB.entries.find(x=>x.code===code); if(!e) return;
-  const cur=rmDirty[code] || {c:code, p:e.price, s:e.status, o:e.note};
+  const cur=rmDirty[code] || {c:code, p:e.price, s:e.status, o:e.note, v:e.supplier||''};
   Object.assign(cur, patch); rmDirty[code]=cur;
   setRmSave('มีการแก้ไข · กำลังบันทึก…');
   clearTimeout(rmTimer); rmTimer=setTimeout(flushRm, 1200);
@@ -3097,7 +3107,7 @@ async function flushRm(){
     items.forEach(it=>{
       const e=DB.entries.find(x=>x.code===it.c); if(!e) return;
       const price=toNum(it.p); const has=it.p!=null && it.p!=='' && isFinite(price) && price>0;
-      e.price=has?price:null; e.status=has?'ok':(it.s==='ok'?'none':it.s); e.note=String(it.o||'').trim(); e.disc=DISC_RE.test(e.note); e.at=r.at; e.by=r.by;
+      e.price=has?price:null; e.status=has?'ok':(it.s==='ok'?'none':it.s); e.note=String(it.o||'').trim(); e.supplier=String(it.v||'').trim(); e.disc=DISC_RE.test(e.note); e.at=r.at; e.by=r.by;
     });
     DB.source=Object.assign({}, DB.source, {updated:r.updated, by:r.by}); DB.custom=true; setDB(DB.entries, DB.source, true);
     if(!Object.keys(rmDirty).length){ setRmSave(`บันทึกแล้ว ${r.changed} รายการ · ${new Date().toLocaleTimeString('th-TH')}`); drawRmStats(); }
@@ -3107,8 +3117,8 @@ function exportDbXlsx(){
   if(typeof XLSX==='undefined'){ toast('โหลดตัวเขียน Excel ไม่สำเร็จ'); return; }
   const list=rmFiltered();
   const cell=e=>e.status==='ok' ? e.price : e.status==='recheck' ? 'R' : e.status==='cancel' ? 'X' : e.status==='rd' ? 'D' : '';
-  const aoa=[['รหัส','รายละเอียด','ราคา (บาท/กรัม)','หมายเหตุ','หมวด','สถานะ','แก้ล่าสุด','แก้โดย']].concat(list.map(e=>[e.code, e.name, cell(e), e.note, catOf(e.code), STATUS[e.status]?STATUS[e.status].t:'', e.at||'', e.by||'']));
-  const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:20},{wch:50},{wch:16},{wch:40},{wch:28},{wch:22},{wch:22},{wch:30}];
+  const aoa=[['รหัส','รายละเอียด','ราคา (บาท/กรัม)','หมายเหตุ','หมวด','สถานะ','ซัพพลายเออร์','แก้ล่าสุด','แก้โดย']].concat(list.map(e=>[e.code, e.name, cell(e), e.note, catOf(e.code), STATUS[e.status]?STATUS[e.status].t:'', e.supplier||'', e.at||'', e.by||'']));
+  const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:20},{wch:50},{wch:16},{wch:40},{wch:28},{wch:22},{wch:26},{wch:22},{wch:30}];
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'ฐานราคา');
   const d=new Date(), stamp=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
   saveFile(`ฐานราคาวัตถุดิบ_${list.length}รายการ_${stamp}.xlsx`, XLSX.write(wb,{type:'array',bookType:'xlsx'}));
@@ -3124,12 +3134,14 @@ rmv.addEventListener('input', e=>{
     if(has) st.value='ok'; else if(st.value==='ok') st.value='none';
     rmMark(tr, {p: has ? v : null, s: st.value});
   } else if(t.classList.contains('rm-note')) rmMark(tr, {o:t.value});
+  else if(t.classList.contains('rm-sup')) rmMark(tr, {v:t.value});
 });
 rmv.addEventListener('change', e=>{
   const t=e.target;
   if(t.id==='rmSt'){ rmStatus=t.value; rmPage=0; drawRm(); return; }
   if(t.id==='rmCat'){ rmCat=t.value; rmPage=0; drawRm(); return; }
   if(t.id==='rmMsSel'){ rmMs=t.value; rmPage=0; drawRm(); return; }
+  if(t.id==='rmSupSel'){ rmSup=t.value; rmPage=0; drawRm(); return; }
   if(t.classList.contains('rm-st')){
     const tr=t.closest('tr[data-code]'), pr=tr.querySelector('.rm-price');
     if(t.value!=='ok'){ pr.value=''; rmMark(tr, {p:null, s:t.value}); }
@@ -3161,8 +3173,9 @@ rmv.addEventListener('submit', async e=>{
   try{
     await flushRm();
     const has=isFinite(price) && price>0, note=$('#rmNewNote').value.trim();
-    const r=await api('updatePrices', [{c:code, n:name, p:has?price:null, s:has?'ok':'none', o:note}]);
-    const ent=makeEntry(code, name, has?price:'', note); ent.at=r.at; ent.by=r.by;
+    const sup=$('#rmNewSup').value.trim();
+    const r=await api('updatePrices', [{c:code, n:name, p:has?price:null, s:has?'ok':'none', o:note, v:sup}]);
+    const ent=makeEntry(code, name, has?price:'', note); ent.at=r.at; ent.by=r.by; ent.supplier=sup;
     DB.entries.unshift(ent); DB.source=Object.assign({}, DB.source, {updated:r.updated, by:r.by}); setDB(DB.entries, DB.source, true);
     e.target.reset(); e.target.hidden=true; rmQ=code; rmStatus=''; rmCat=''; rmPage=0; renderRmView(); toast(`เพิ่ม ${code} แล้ว`);
   }catch(ex){ err.textContent=errText(ex); } finally{ btn.disabled=false; }

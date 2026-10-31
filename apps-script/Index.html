@@ -1006,6 +1006,7 @@ main.wrap::after{content:"";display:block;height:52px;margin:36px 0 6px;border-r
   <section id="stkView" hidden style="padding-block:24px 56px"></section>
   <section id="fdaView" hidden style="padding-block:24px 56px"></section>
   <section id="dashView" hidden style="padding-block:24px 56px"></section>
+  <section id="guideView" hidden style="padding-block:24px 56px"></section>
   <section id="perfView" hidden style="padding-block:24px 56px"></section>
   <div id="calcView">
   <div id="calcSubTabs" style="padding-top:20px"></div>
@@ -2584,6 +2585,7 @@ function renderUserBar(){
     + (can('viewDb') ? tab('btnMsds','msds','MSDS วัตถุดิบ') : '')
     + (can('editPrices') ? tab('btnRm','rm','ฐานราคาวัตถุดิบ') : '')
     + (adm ? tab('btnAll','all','สูตรทั้งหมด') + tab('btnPrice','price','ทำราคาขาย') : '')
+    + (gdCanView() ? tab('btnGuide','guide','คู่มือการทำงาน') : '')
     + (S.me&&S.me.role ? tab('btnCmp','cmp', (adm?'เรื่องร้องเรียน':'แจ้งเรื่องร้องเรียน') + (adm&&S.cNew ? ` <span class="badge">${S.cNew}</span>` : '')) : '')
     + (can('manageUsers') ? tab('btnAdmin','admin','ผู้ใช้และบทบาท') : '');
   const dark=effTheme()==='dark', ic=d=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
@@ -2643,7 +2645,7 @@ document.addEventListener('click', e=>{ const m=$('#userMenu'); if(m&&!m.hidden&
 document.addEventListener('keydown', e=>{ const m=$('#userMenu'); if(e.key==='Escape'&&m&&!m.hidden){ umOpen(false); $('#btnSettings').focus(); } });
 $('#navtabs').addEventListener('click', e=>{
   const b=e.target.closest('button'); if(!b) return;
-  const view={btnDash:'dash', btnCalc:'calc', btnChk:'chk', btnDoc:'doc', btnRd:'rd', btnPd:'pd', btnBt:'bt', btnStk:'stk', btnFda:'fda', btnPerf:'perf', btnMsds:'msds', btnRm:'rm', btnAll:'all', btnPrice:'price', btnCmp:'cmp', btnAdmin:'admin'}[b.id];
+  const view={btnDash:'dash', btnCalc:'calc', btnChk:'chk', btnDoc:'doc', btnRd:'rd', btnPd:'pd', btnBt:'bt', btnStk:'stk', btnFda:'fda', btnPerf:'perf', btnMsds:'msds', btnRm:'rm', btnAll:'all', btnPrice:'price', btnCmp:'cmp', btnAdmin:'admin', btnGuide:'guide'}[b.id];
   if(view) showView(view);
 });
 function homeView(){ if(typeof dashCanView==='function'&&dashCanView()) return 'dash';   /* เข้าระบบแล้วเริ่มที่ Dashboard */
@@ -2664,8 +2666,9 @@ async function showView(v){
   if(v==='stk' && !btCanView()) v='calc';
   if(v==='fda' && !fdaCanView()) v='calc';
   if(v==='dash' && !dashCanView()) v='calc';
+  if(v==='guide' && !gdCanView()) v='calc';
   S.view=v; S.admin = v!=='calc';                 /* S.admin = ไม่ได้อยู่หน้าคำนวณ */
-  $('#msdsView').hidden=v!=='msds'; $('#perfView').hidden=v!=='perf'; $('#rdView').hidden=v!=='rd'; $('#pdView').hidden=v!=='pd'; $('#btView').hidden=v!=='bt'; $('#stkView').hidden=v!=='stk'; $('#fdaView').hidden=v!=='fda'; $('#dashView').hidden=v!=='dash';
+  $('#msdsView').hidden=v!=='msds'; $('#perfView').hidden=v!=='perf'; $('#rdView').hidden=v!=='rd'; $('#pdView').hidden=v!=='pd'; $('#btView').hidden=v!=='bt'; $('#stkView').hidden=v!=='stk'; $('#fdaView').hidden=v!=='fda'; $('#dashView').hidden=v!=='dash'; $('#guideView').hidden=v!=='guide';
   $('#adminView').hidden=v!=='admin'; $('#allView').hidden=v!=='all'; $('#priceView').hidden=v!=='price'; $('#rmView').hidden=v!=='rm'; $('#cmpView').hidden=v!=='cmp'; $('#chkView').hidden=v!=='chk'; $('#docView').hidden=v!=='doc'; $('#calcView').hidden=v!=='calc';
   renderUserBar();
   if(v==='calc') renderCalcSubTabs();
@@ -2678,6 +2681,7 @@ async function showView(v){
   if(v==='stk'){ window.scrollTo(0,0); renderStkView(); return; }
   if(v==='fda'){ window.scrollTo(0,0); renderFdaView(); return; }
   if(v==='dash'){ window.scrollTo(0,0); renderDashView(); return; }
+  if(v==='guide'){ window.scrollTo(0,0); renderGuideView(); return; }
   if(v==='chk'){ window.scrollTo(0,0); renderChkView(); return; }
   if(v==='cmp'){ window.scrollTo(0,0); renderCmpView(); return; }
   if(v==='rm'){ window.scrollTo(0,0); renderRmView(); return; }
@@ -2688,6 +2692,80 @@ async function showView(v){
     try{ setAdm(await api('adminData')); }catch(e){ $('#adminView').innerHTML=`<div class="msg bad">${esc(errText(e))}</div>`; }
   } else renderAll();
 }
+
+/* ---------- คู่มือการทำงาน: ขั้นตอนงานของทีม R&D ตาม Research & Development Workflow · ฟอร์มที่ใช้และพิมพ์ได้ในแต่ละขั้น ---------- */
+NAV_ICON.guide='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M9 7h7M9 11h5"/></svg>';
+const gdCanView=()=>!!(S.me&&S.me.role);
+const GD_VIEW={rd:['โครงการ',()=>rdCanView()], perf:['Perfumer',()=>pfCanView()], pd:['Product Development',()=>pdCanView()], bt:['ทะเบียนพืชหอม',()=>btCanView()], fda:['จดแจ้ง อย.',()=>fdaCanView()], doc:['BOM',()=>can('calc')], msds:['MSDS วัตถุดิบ',()=>can('viewDb')], rm:['ฐานราคาวัตถุดิบ',()=>can('editPrices')]};
+/* p = การพิมพ์ฟอร์ม: yes พิมพ์ได้ในระบบ · xls ส่งออก Excel · wait รอต้นฉบับฟอร์มของบริษัท · code รอกำหนดรหัสเอกสาร + ต้นฉบับ */
+const GD_PHASES=[
+  {t:'ช่วงที่ 1 · รับงานจากฝ่ายขาย', lead:'จาก SO แยก 2 ทาง คือ FM-RD-01 กับการชำระเงิน 100% ต้องเสร็จทั้งคู่ R&D จึงเริ่มงาน', steps:[
+    {c:'FG · AR · QT · SO', n:'รายละเอียดสินค้า · รหัสลูกค้า · ใบเสนอราคา · ใบสั่งขาย', u:'ฝ่ายขาย / ฝ่ายบัญชี'},
+    {c:'FM-RD-01', n:'แบบฟอร์มคำขอพัฒนาผลิตภัณฑ์ (PDR Form)', u:'ฝ่ายขาย · PC เปิดโครงการ', v:'rd', how:'โครงการ › โครงการใหม่ (ระบบออกเลข PDR)', p:'wait'},
+    {c:'IV → BI → RE', n:'ใบกำกับภาษี → ใบวางบิล → ใบเสร็จรับเงิน (ชำระเงินครบ 100%)', u:'ฝ่ายบัญชี', gate:1}]},
+  {t:'ช่วงที่ 2 · RA ตรวจก่อนเริ่มพัฒนา', lead:'ห้ามเริ่มผสมกลิ่นก่อน RA ตรวจกฎหมายและทำสัญญาแล้ว', steps:[
+    {c:'(รอกำหนดรหัส)', n:'ตรวจกฎหมายก่อนทำการพัฒนา: อย. · IFRA · สารก่อภูมิแพ้บนฉลาก', u:'RA', v:'fda', how:'จดแจ้ง อย. › ทะเบียน / ส่วนประกอบฉลาก', p:'code'},
+    {c:'(รอกำหนดรหัส)', n:'สัญญาออกแบบกลิ่น และสัญญาผลิต', u:'RA', p:'code'}]},
+  {t:'ช่วงที่ 3 · พัฒนากลิ่น', lead:'รอบแรกเสนอ 3 แนวทาง ลูกค้าเลือก 1 · ไม่ผ่านแก้ได้ 2 ครั้ง (ส่งได้รวม 3 รอบ)', steps:[
+    {c:'ฐานข้อมูลวัตถุดิบ', n:'ข้อมูลวิจัยสารหอมและน้ำมันหอมระเหย ราคา ซัพพลายเออร์ และ MSDS', u:'Research Ingredients', v:'rm', v2:'bt', how:'ฐานราคาวัตถุดิบ · ทะเบียนพืชหอม · MSDS วัตถุดิบ'},
+    {c:'FM-RD-02', n:'แบบฟอร์มการส่งตัวอย่างให้ลูกค้า · บันทึกสูตรกลิ่น (Prototype Fragrance Formulation Record)', u:'Perfumer', v:'perf', how:'Perfumer › คลังกลิ่น › ปุ่ม "พิมพ์" ท้ายแถว หรือในหน้าแก้ไขกลิ่น', p:'yes'},
+    {c:'FM-RD-04', n:'แบบฟอร์มส่งตัวอย่างให้ลูกค้า (Sample Submission Form)', u:'PC', v:'rd', how:'โครงการ › เปิดโครงการ › ตัวอย่างที่ส่ง (ระบบออกเลข FM-RD-04)', p:'wait'},
+    {c:'FM-RD-05', n:'แบบฟอร์มการประเมินผลจากลูกค้า (Sample Evaluation Form)', u:'PC · ลูกค้ากรอกผ่านลิงก์', v:'rd', how:'โครงการ › ตัวอย่างที่ส่ง › ส่งลิงก์ประเมินให้ลูกค้า (ระบบออกเลข FM-RD-05)', p:'wait'},
+    {c:'Confirm', n:'ลูกค้า Confirm ตัวอย่างกลิ่น แล้วเก็บกลิ่นเข้าคลังกลิ่น', u:'ลูกค้า · Perfumer', ok:1}]},
+  {t:'ช่วงที่ 4 · พัฒนาผลิตภัณฑ์', lead:'PD ทำสูตรผลิตภัณฑ์จากกลิ่นที่ลูกค้าเลือก · ไม่ผ่านแก้ได้ 2 ครั้ง', steps:[
+    {c:'FM-RD-03', n:'บันทึกสูตรต้นแบบและการทดลองผลิตภัณฑ์ (Prototype Product Formulation Record)', u:'PD', v:'pd', how:'Product Development › เปิดสูตร › ปุ่ม "พิมพ์ใบสูตร"', p:'yes'},
+    {c:'FM-RD-04 / 05', n:'ส่งต้นแบบผลิตภัณฑ์ (Mock-up) และเก็บผลประเมินจากลูกค้า', u:'PC', v:'rd', how:'โครงการ › ตัวอย่างที่ส่ง (ประเภทต้นแบบสินค้า)', p:'wait'},
+    {c:'Confirm', n:'ลูกค้า Confirm ตัวอย่างสูตร', u:'ลูกค้า', ok:1},
+    {c:'FM-RD-08', n:'รายงานความคงตัวและการเปลี่ยนแปลงกลิ่น (Stability & Fragrance Change Report)', u:'PD', v:'rd', how:'โครงการ › เอกสารของโครงการ (ออกเลขเอกสาร)', p:'wait'},
+    {c:'FM-RD-10', n:'รายการตัวอย่างที่เก็บพร้อมวันที่และหมายเลข Batch', u:'PD', v:'rd', how:'โครงการ › เอกสารของโครงการ', p:'wait'}]},
+  {t:'ช่วงที่ 5 · ส่งมอบสูตรให้ฝ่ายผลิต', lead:'ออกเอกสารส่งมอบ 3 ฉบับ แล้วเก็บสูตรเข้าคลังสูตรพร้อมเอกสารประกอบ', steps:[
+    {c:'FM-RD-06', n:'เอกสารสูตรสุดท้ายพร้อมวิธีการผลิต (Final Formula Sheet & Formula Release Memo)', u:'PD', v:'rd', how:'โครงการ › เอกสารของโครงการ', p:'wait'},
+    {c:'FM-RD-09', n:'เอกสารสรุปผลการส่งมอบสูตรให้ฝ่ายผลิต (Final Formula Sheet & Formula Release Summary Report)', u:'PD', v:'rd', how:'โครงการ › เอกสารของโครงการ (บันทึกส่งมอบสูตร / BOM)', p:'wait'},
+    {c:'FM-RD-07', n:'เอกสารประกอบการผลิตนำร่อง (Pilot Batch Record)', u:'PD', v:'rd', how:'โครงการ › เอกสารของโครงการ', p:'wait'},
+    {c:'MSDS · IFRA · Allergen', n:'เอกสารประกอบสูตรในคลังสูตร (รวม COA · Stability Test · Compatibility)', u:'RA · PD', v:'doc', how:'BOM › ออกเอกสาร MSDS / IFRA / Stability / 26-83 Allergen Report', p:'yes'}]}
+];
+const GD_RULES=['ไม่มี FM-RD-01 หรือยังชำระเงินไม่ครบ 100% ไม่เริ่มงาน และไม่ผสมกลิ่นก่อน RA ตรวจและทำสัญญาแล้ว',
+  'ส่งกลิ่นรอบแรก 3 แนวทาง ลูกค้าเลือก 1',
+  'กลิ่นและผลิตภัณฑ์แก้ได้อย่างละไม่เกิน 2 ครั้ง (รวมส่งได้ 3 รอบ) ระบบไม่ให้ส่งรอบที่ 4',
+  'ผลประเมินทุกรอบบันทึกเป็น FM-RD-05 ผ่านลิงก์ประเมิน ไม่รับผลทางแชทอย่างเดียว',
+  'สูตรเป็นความลับ ห้ามส่งสูตรหรือราคาวัตถุดิบออกนอกระบบ ผู้ไม่มีสิทธิ์ดูต้นทุนจะไม่เห็นราคา',
+  'ออก MSDS, IFRA, Allergen เฉพาะสูตรที่อนุมัติแล้ว'];
+const GD_RACI_H=['งาน','ขาย','RA','Research Ingredients','Perfumer','PC','PD'];
+const GD_RACI=[['FM-RD-01 PDR','R/A','I','','I','C','I'],['ตรวจกฎหมาย + สัญญา','C','R/A','','I','I',''],['ฐานข้อมูลวัตถุดิบ','','C','R/A','C','','C'],['FM-RD-02 สูตรกลิ่น','','C','C','R/A','I',''],['FM-RD-04 / 05','I','','','C','R/A','C'],['FM-RD-03 สูตรผลิตภัณฑ์','','C','','C','I','R/A'],['FM-RD-08 / 10','','I','','','I','R/A'],['FM-RD-06 / 09 / 07','I','C','','','I','R/A'],['MSDS, COA, IFRA, Allergen','I','R/A','C','','','C']];
+const GD_P={yes:['พิมพ์ได้ในระบบ','ok'], xls:['ส่งออก Excel','info'], wait:['รอต้นฉบับฟอร์ม','warn'], code:['รอกำหนดรหัส + ต้นฉบับ','warn']};
+const gdChip=p=>GD_P[p]?`<span class="chip ${GD_P[p][1]}">${GD_P[p][0]}</span>`:'<span class="muted">–</span>';
+const gdGo=v=>{ const g=GD_VIEW[v]; return g&&g[1]()?`<button type="button" class="btn small" data-gd-go="${v}">เปิด ${esc(g[0])}</button>`:''; };
+function renderGuideView(){
+  const all=GD_PHASES.flatMap(ph=>ph.steps), forms=all.filter(s=>s.p), ready=forms.filter(s=>s.p==='yes').length;
+  const strip=GD_PHASES.map((ph,i)=>`<a href="#gd-ph${i}" style="display:inline-flex;gap:6px;align-items:center;padding:6px 12px;border-radius:999px;background:var(--input-bg);border:1px solid var(--line);color:inherit;text-decoration:none;font-size:13px"><b>${i+1}</b>${esc(ph.t.split('·')[1].trim())}</a>`).join('<span class="muted" aria-hidden="true">→</span>');
+  $('#guideView').innerHTML=`<div class="bh"><h2>คู่มือการทำงาน</h2><span class="hint">ขั้นตอนงานของทีมวิจัยและพัฒนา ตาม Research &amp; Development Workflow · แต่ละขั้นบอกผู้รับผิดชอบ หน้าที่ใช้ในระบบ และฟอร์มที่พิมพ์</span></div>
+    <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:14px"><button type="button" class="btn small primary" id="gdPrint">พิมพ์คู่มือ</button><span class="muted" style="font-size:12.5px">ฟอร์มพิมพ์ได้แล้ว ${ready} จาก ${forms.length} ขั้น · ฟอร์มที่เหลือรอต้นฉบับของบริษัทแล้วจะเพิ่มปุ่มพิมพ์ให้</span></div>
+    <div class="card" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 16px">${strip}</div>
+    ${GD_PHASES.map((ph,i)=>`<div class="card" id="gd-ph${i}" style="margin-top:14px"><h3 style="margin:0 0 4px">${esc(ph.t)}</h3><div class="muted" style="font-size:13px;margin-bottom:10px">${esc(ph.lead)}</div>
+      <div class="tablebox"><table><thead><tr><th>เอกสาร</th><th>ขั้นตอน</th><th>ผู้รับผิดชอบ</th><th>ทำในระบบ</th><th>ฟอร์ม</th></tr></thead><tbody>
+      ${ph.steps.map(s=>`<tr><td class="mono" style="white-space:nowrap">${s.ok||s.gate?`<span class="chip ok">${esc(s.c)}</span>`:esc(s.c)}</td><td style="min-width:220px">${esc(s.n)}</td><td style="white-space:nowrap">${esc(s.u)}</td>
+        <td style="font-size:12.5px;min-width:200px">${s.how?esc(s.how):'<span class="muted">นอกระบบ R&D</span>'}${s.v?`<div class="row" style="gap:6px;margin-top:6px">${gdGo(s.v)}${s.v2?gdGo(s.v2):''}</div>`:''}</td><td style="white-space:nowrap">${s.p?gdChip(s.p):'<span class="muted">–</span>'}</td></tr>`).join('')}
+      </tbody></table></div></div>`).join('')}
+    <div class="card" style="margin-top:14px"><h3 style="margin:0 0 8px">กฎที่ต้องทำตามทุกโครงการ</h3><ol style="margin:0;padding-left:20px;line-height:1.8">${GD_RULES.map(r=>`<li>${esc(r)}</li>`).join('')}</ol></div>
+    <div class="card" style="margin-top:14px"><h3 style="margin:0 0 4px">ผู้รับผิดชอบ (RACI)</h3><div class="muted" style="font-size:12.5px;margin-bottom:8px">R = ทำ · A = อนุมัติ/รับผิดชอบผล · C = ให้คำปรึกษา · I = รับทราบ · ร่างจากแผนภาพ รอหัวหน้าแต่ละหน่วยยืนยัน</div>
+      <div class="tablebox"><table><thead><tr>${GD_RACI_H.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${GD_RACI.map(r=>`<tr>${r.map((c,k)=>k?`<td style="text-align:center">${esc(c)}</td>`:`<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
+}
+/* ฉบับพิมพ์: ตารางล้วน ใช้หน้าต่างพิมพ์เอกสารเดิม (#docOverlay) */
+function gdPrintHtml(){
+  const th='border:1px solid #999;padding:5px 7px;background:#eee;text-align:left;font-size:11px', td='border:1px solid #999;padding:5px 7px;vertical-align:top;font-size:11px';
+  return `<div style="font-family:inherit;color:#000;padding:8px"><h2 style="margin:0 0 2px">คู่มือการทำงาน แผนกวิจัยและพัฒนา</h2><div style="font-size:11px;margin-bottom:12px">Scent &amp; Sense Laboratory · พิมพ์เมื่อ ${new Date().toLocaleDateString('th-TH',{day:'numeric',month:'long',year:'numeric'})}</div>
+    ${GD_PHASES.map(ph=>`<h3 style="margin:14px 0 2px;font-size:14px">${esc(ph.t)}</h3><div style="font-size:11px;margin-bottom:6px">${esc(ph.lead)}</div>
+      <table style="border-collapse:collapse;width:100%"><thead><tr><th style="${th}">เอกสาร</th><th style="${th}">ขั้นตอน</th><th style="${th}">ผู้รับผิดชอบ</th><th style="${th}">ทำในระบบ</th><th style="${th}">ฟอร์ม</th></tr></thead><tbody>
+      ${ph.steps.map(s=>`<tr><td style="${td};white-space:nowrap"><b>${esc(s.c)}</b></td><td style="${td}">${esc(s.n)}</td><td style="${td}">${esc(s.u)}</td><td style="${td}">${esc(s.how||'นอกระบบ R&D')}</td><td style="${td}">${s.p?GD_P[s.p][0]:'–'}</td></tr>`).join('')}</tbody></table>`).join('')}
+    <h3 style="margin:16px 0 4px;font-size:14px">กฎที่ต้องทำตามทุกโครงการ</h3><ol style="margin:0;padding-left:18px;font-size:11px;line-height:1.7">${GD_RULES.map(r=>`<li>${esc(r)}</li>`).join('')}</ol>
+    <h3 style="margin:16px 0 4px;font-size:14px">ผู้รับผิดชอบ (RACI)</h3><div style="font-size:10.5px;margin-bottom:4px">R = ทำ · A = อนุมัติ/รับผิดชอบผล · C = ให้คำปรึกษา · I = รับทราบ</div>
+    <table style="border-collapse:collapse;width:100%"><thead><tr>${GD_RACI_H.map(h=>`<th style="${th}">${esc(h)}</th>`).join('')}</tr></thead><tbody>${GD_RACI.map(r=>`<tr>${r.map((c,k)=>`<td style="${td}${k?';text-align:center':''}">${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+$('#guideView').addEventListener('click', e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  if(b.dataset.gdGo){ showView(b.dataset.gdGo); return; }
+  if(b.id==='gdPrint'){ $('#docPrint').innerHTML=gdPrintHtml(); $('#docTitle').textContent='คู่มือการทำงาน แผนกวิจัยและพัฒนา'; $('#docOverlay').hidden=false; document.body.classList.add('doc-open'); $('#docPrint').scrollTop=0; }
+});
 
 /* --- admin --- */
 let adminTab='dir', dirQ='';

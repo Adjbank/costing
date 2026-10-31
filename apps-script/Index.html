@@ -2701,7 +2701,7 @@ const GD_VIEW={rd:['โครงการ',()=>rdCanView()], perf:['Perfumer',()
 const GD_PHASES=[
   {t:'ช่วงที่ 1 · รับงานจากฝ่ายขาย', lead:'จาก SO แยก 2 ทาง คือ FM-RD-01 กับการชำระเงิน 100% ต้องเสร็จทั้งคู่ R&D จึงเริ่มงาน', steps:[
     {c:'FG · AR · QT · SO', n:'รายละเอียดสินค้า · รหัสลูกค้า · ใบเสนอราคา · ใบสั่งขาย', u:'ฝ่ายขาย / ฝ่ายบัญชี'},
-    {c:'FM-RD-01', n:'แบบฟอร์มคำขอพัฒนาผลิตภัณฑ์ (PDR Form)', u:'ฝ่ายขาย · PC เปิดโครงการ', v:'rd', how:'โครงการ › โครงการใหม่ (ระบบออกเลข PDR)', p:'wait'},
+    {c:'FM-RD-01', n:'แบบฟอร์มคำขอพัฒนาผลิตภัณฑ์ (PDR Form)', u:'ฝ่ายขาย · PC เปิดโครงการ', v:'rd', how:'โครงการ › เปิดโครงการ › ปุ่ม "พิมพ์ FM-RD-01" (ดึงข้อมูลโครงการลงฟอร์ม)', p:'yes'},
     {c:'IV → BI → RE', n:'ใบกำกับภาษี → ใบวางบิล → ใบเสร็จรับเงิน (ชำระเงินครบ 100%)', u:'ฝ่ายบัญชี', gate:1}]},
   {t:'ช่วงที่ 2 · RA ตรวจก่อนเริ่มพัฒนา', lead:'ห้ามเริ่มผสมกลิ่นก่อน RA ตรวจกฎหมายและทำสัญญาแล้ว', steps:[
     {c:'(รอกำหนดรหัส)', n:'ตรวจกฎหมายก่อนทำการพัฒนา: อย. · IFRA · สารก่อภูมิแพ้บนฉลาก', u:'RA', v:'fda', how:'จดแจ้ง อย. › ทะเบียน / ส่วนประกอบฉลาก', p:'code'},
@@ -2709,19 +2709,19 @@ const GD_PHASES=[
   {t:'ช่วงที่ 3 · พัฒนากลิ่น', lead:'รอบแรกเสนอ 3 แนวทาง ลูกค้าเลือก 1 · ไม่ผ่านแก้ได้ 2 ครั้ง (ส่งได้รวม 3 รอบ)', steps:[
     {c:'ฐานข้อมูลวัตถุดิบ', n:'ข้อมูลวิจัยสารหอมและน้ำมันหอมระเหย ราคา ซัพพลายเออร์ และ MSDS', u:'Research Ingredients', v:'rm', v2:'bt', how:'ฐานราคาวัตถุดิบ · ทะเบียนพืชหอม · MSDS วัตถุดิบ'},
     {c:'FM-RD-02', n:'แบบฟอร์มการส่งตัวอย่างให้ลูกค้า · บันทึกสูตรกลิ่น (Prototype Fragrance Formulation Record)', u:'Perfumer', v:'perf', how:'Perfumer › คลังกลิ่น › ปุ่ม "พิมพ์" ท้ายแถว หรือในหน้าแก้ไขกลิ่น', p:'yes'},
-    {c:'FM-RD-04', n:'แบบฟอร์มส่งตัวอย่างให้ลูกค้า (Sample Submission Form)', u:'PC', v:'rd', how:'โครงการ › เปิดโครงการ › ตัวอย่างที่ส่ง (ระบบออกเลข FM-RD-04)', p:'wait'},
-    {c:'FM-RD-05', n:'แบบฟอร์มการประเมินผลจากลูกค้า (Sample Evaluation Form)', u:'PC · ลูกค้ากรอกผ่านลิงก์', v:'rd', how:'โครงการ › ตัวอย่างที่ส่ง › ส่งลิงก์ประเมินให้ลูกค้า (ระบบออกเลข FM-RD-05)', p:'wait'},
+    {c:'FM-RD-04', n:'แบบฟอร์มส่งตัวอย่างให้ลูกค้า (Sample Submission Form)', u:'PC', v:'rd', how:'โครงการ › เปิดโครงการ › ตัวอย่างที่ส่ง › ปุ่ม "พิมพ์ FM-RD-04"', p:'yes'},
+    {c:'FM-RD-05', n:'แบบฟอร์มการประเมินผลจากลูกค้า (Sample Evaluation Form)', u:'PC · ลูกค้ากรอกผ่านลิงก์', v:'rd', how:'โครงการ › ตัวอย่างที่ส่ง › ส่งลิงก์ประเมินให้ลูกค้า · ปุ่ม "พิมพ์ FM-RD-05" (คะแนนจากลิงก์ลงฟอร์ม)', p:'yes'},
     {c:'Confirm', n:'ลูกค้า Confirm ตัวอย่างกลิ่น แล้วเก็บกลิ่นเข้าคลังกลิ่น', u:'ลูกค้า · Perfumer', ok:1}]},
   {t:'ช่วงที่ 4 · พัฒนาผลิตภัณฑ์', lead:'PD ทำสูตรผลิตภัณฑ์จากกลิ่นที่ลูกค้าเลือก · ไม่ผ่านแก้ได้ 2 ครั้ง', steps:[
     {c:'FM-RD-03', n:'บันทึกสูตรต้นแบบและการทดลองผลิตภัณฑ์ (Prototype Product Formulation Record)', u:'PD', v:'pd', how:'Product Development › เปิดสูตร › ปุ่ม "พิมพ์ใบสูตร"', p:'yes'},
-    {c:'FM-RD-04 / 05', n:'ส่งต้นแบบผลิตภัณฑ์ (Mock-up) และเก็บผลประเมินจากลูกค้า', u:'PC', v:'rd', how:'โครงการ › ตัวอย่างที่ส่ง (ประเภทต้นแบบสินค้า)', p:'wait'},
+    {c:'FM-RD-04 / 05', n:'ส่งต้นแบบผลิตภัณฑ์ (Mock-up) และเก็บผลประเมินจากลูกค้า', u:'PC', v:'rd', how:'โครงการ › ตัวอย่างที่ส่ง (ประเภทต้นแบบสินค้า) › ปุ่มพิมพ์ FM-RD-04 / 05', p:'yes'},
     {c:'Confirm', n:'ลูกค้า Confirm ตัวอย่างสูตร', u:'ลูกค้า', ok:1},
-    {c:'FM-RD-08', n:'รายงานความคงตัวและการเปลี่ยนแปลงกลิ่น (Stability & Fragrance Change Report)', u:'PD', v:'rd', how:'โครงการ › เอกสารของโครงการ (ออกเลขเอกสาร)', p:'wait'},
+    {c:'FM-RD-08', n:'รายงานความคงตัวและการเปลี่ยนแปลงกลิ่น (Stability & Fragrance Change Report)', u:'PD', v:'rd', how:'โครงการ › เอกสารของโครงการ › "พิมพ์" หรือ Product Development › เปิดสูตร › FM-RD-08', p:'yes'},
     {c:'FM-RD-10', n:'รายการตัวอย่างที่เก็บพร้อมวันที่และหมายเลข Batch', u:'PD', v:'rd', how:'โครงการ › เอกสารของโครงการ', p:'wait'}]},
   {t:'ช่วงที่ 5 · ส่งมอบสูตรให้ฝ่ายผลิต', lead:'ออกเอกสารส่งมอบ 3 ฉบับ แล้วเก็บสูตรเข้าคลังสูตรพร้อมเอกสารประกอบ', steps:[
-    {c:'FM-RD-06', n:'เอกสารสูตรสุดท้ายพร้อมวิธีการผลิต (Final Formula Sheet & Formula Release Memo)', u:'PD', v:'rd', how:'โครงการ › เอกสารของโครงการ', p:'wait'},
-    {c:'FM-RD-09', n:'เอกสารสรุปผลการส่งมอบสูตรให้ฝ่ายผลิต (Final Formula Sheet & Formula Release Summary Report)', u:'PD', v:'rd', how:'โครงการ › เอกสารของโครงการ (บันทึกส่งมอบสูตร / BOM)', p:'wait'},
-    {c:'FM-RD-07', n:'เอกสารประกอบการผลิตนำร่อง (Pilot Batch Record)', u:'PD', v:'rd', how:'โครงการ › เอกสารของโครงการ', p:'wait'},
+    {c:'FM-RD-06', n:'เอกสารสูตรสุดท้ายพร้อมวิธีการผลิต (Final Formula Sheet & Formula Release Memo)', u:'PD', v:'pd', how:'Product Development › เปิดสูตร › FM-RD-06 หรือ โครงการ › เอกสารของโครงการ › "พิมพ์"', p:'yes'},
+    {c:'FM-RD-09', n:'เอกสารสรุปผลการส่งมอบสูตรให้ฝ่ายผลิต (Final Formula Sheet & Formula Release Summary Report)', u:'PD', v:'rd', how:'Product Development › เปิดสูตร › FM-RD-09 หรือ โครงการ › เอกสารของโครงการ › "พิมพ์"', p:'yes'},
+    {c:'FM-RD-07', n:'เอกสารประกอบการผลิตนำร่อง (Pilot Batch Record)', u:'PD', v:'pd', how:'Product Development › เปิดสูตร › FM-RD-07 หรือ โครงการ › เอกสารของโครงการ › "พิมพ์"', p:'yes'},
     {c:'MSDS · IFRA · Allergen', n:'เอกสารประกอบสูตรในคลังสูตร (รวม COA · Stability Test · Compatibility)', u:'RA · PD', v:'doc', how:'BOM › ออกเอกสาร MSDS / IFRA / Stability / 26-83 Allergen Report', p:'yes'}]}
 ];
 const GD_RULES=['ไม่มี FM-RD-01 หรือยังชำระเงินไม่ครบ 100% ไม่เริ่มงาน และไม่ผสมกลิ่นก่อน RA ตรวจและทำสัญญาแล้ว',
@@ -5336,7 +5336,7 @@ function rdProjectPage(o){
   const p=o.project, d=p.data||{}, ed=rdCanEdit(), ro=ed?'':'disabled', due=rdDue(p, o.samples), next=rdNextStage(p), nextL=next?(next==='done'?'ปิดงาน (เสร็จสิ้น)':'ไปขั้น '+RD_STAGE_MAP[next][1]):'';
   const brief=(PF.briefs||[]).find(b=>b.id===p.briefId);
   const custOpts=[['', '– เลือกลูกค้า –'],['__new','+ ลูกค้าใหม่'],...RD.customers.map(c=>[c.code, `${c.code} · ${c.brand||c.company}${c.brand&&c.company?' ('+c.company+')':''}`])];
-  return `<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px"><div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button class="btn small" type="button" id="rdBack">← โครงการทั้งหมด</button><h3 style="margin:0"><span class="mono">${esc(p.pdrNo)}</span> · ${rdBrand(p)}</h3>${pfChip(p.stage,{s1:['1 รับบรีฟ','info'],s2:['2 ตรวจกฎหมาย','info'],s3:['3 ออกแบบกลิ่น','warn'],s4:['4 ต้นแบบ','warn'],s5:['5 ส่งต้นแบบ','warn'],s6:['6 Stability','warn'],s7:['7 BOM','warn'],s8:['8 Pilot','warn'],done:['เสร็จสิ้น','ok'],lost:['ยกเลิก','bad']})}${rdDueChip(due)}</div>
+  return `<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px"><div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button class="btn small" type="button" id="rdBack">← โครงการทั้งหมด</button><h3 style="margin:0"><span class="mono">${esc(p.pdrNo)}</span> · ${rdBrand(p)}</h3>${p.id?'<button class="btn small" type="button" data-fx="01" title="พิมพ์แบบฟอร์มคำขอพัฒนาผลิตภัณฑ์">พิมพ์ FM-RD-01</button>':''}${pfChip(p.stage,{s1:['1 รับบรีฟ','info'],s2:['2 ตรวจกฎหมาย','info'],s3:['3 ออกแบบกลิ่น','warn'],s4:['4 ต้นแบบ','warn'],s5:['5 ส่งต้นแบบ','warn'],s6:['6 Stability','warn'],s7:['7 BOM','warn'],s8:['8 Pilot','warn'],done:['เสร็จสิ้น','ok'],lost:['ยกเลิก','bad']})}${rdDueChip(due)}</div>
       <span class="muted" style="font-size:12px">${esc(p.docNo)} · เปิดเมื่อ ${rdDate(p.createdAt)} โดย ${rdPerson(p.createdBy)} · แก้ล่าสุด ${fmtSeen(p.updatedAt)}</span></div>
     ${rdStepper(p, o.samples)}
     ${ed&&p.stage!=='done'&&p.stage!=='lost'?`<div class="row" style="gap:8px;flex-wrap:wrap;margin:10px 0 14px;align-items:center"><button class="btn primary" type="button" data-rd-stage="${esc(next||'')}" ${next?'':'disabled'}>${esc(nextL)} →</button>${due&&due.label?`<span class="muted" style="font-size:12.5px">${esc(due.label)}${due.days?` · กำหนด ${due.days} วัน (${rdDate(due.due)})`:''}</span>`:''}
@@ -5369,7 +5369,7 @@ function rdProjectPage(o){
           ${rdField('ผล Pilot Batch', rdSel('pilotResult', d.pilot&&d.pilot.result||'', [['','–'],['pass','ผ่าน'],['fail','ไม่ผ่าน']]))}${rdField('เลข Pilot Batch', rdInp('pilotBatch', d.pilot&&d.pilot.batchNo, ''))}
           ${rdField('เลขจดแจ้ง อย.', rdInp('regNo', d.finalFormula&&d.finalFormula.regNo, ''))}${rdField('ตัวอย่างเก็บ: เลข Batch / ที่เก็บ', rdInp('retentionNote', d.retention&&d.retention.note, ''))}
         </div>
-        <div class="tablebox" style="margin-top:8px"><table><thead><tr><th>เอกสาร</th><th>เลขที่</th><th>ออกเมื่อ</th><th></th></tr></thead><tbody>${RD_SUBDOC.map(([k,f,l])=>{ const x=d[k]||{}; return `<tr><td>${f} · ${esc(l)}</td><td class="mono">${esc(x.docNo||'')}</td><td class="muted" style="font-size:12px">${x.issuedAt?rdDate(x.issuedAt)+' · '+rdPerson(x.issuedBy):''}</td><td>${ed&&!x.docNo?`<button class="btn small" type="button" data-rd-doc="${k}">ออกเลขเอกสาร</button>`:''}</td></tr>`; }).join('')}</tbody></table></div></div>
+        <div class="tablebox" style="margin-top:8px"><table><thead><tr><th>เอกสาร</th><th>เลขที่</th><th>ออกเมื่อ</th><th></th></tr></thead><tbody>${RD_SUBDOC.map(([k,f,l])=>{ const x=d[k]||{}; return `<tr><td>${f} · ${esc(l)}</td><td class="mono">${esc(x.docNo||'')}</td><td class="muted" style="font-size:12px">${x.issuedAt?rdDate(x.issuedAt)+' · '+rdPerson(x.issuedBy):''}</td><td style="white-space:nowrap">${ed&&!x.docNo?`<button class="btn small" type="button" data-rd-doc="${k}">ออกเลขเอกสาร</button> `:''}${p.id&&FX_SUB[k]?`<button class="btn small" type="button" data-fx="${FX_SUB[k]}">พิมพ์</button>`:''}</td></tr>`; }).join('')}</tbody></table></div></div>
       </fieldset>
       <div class="row" style="margin-top:14px;gap:8px;flex-wrap:wrap">${ed?'<button class="btn primary" type="submit">บันทึกโครงการ</button>':''}<span class="muted" id="rdErr" role="alert" style="color:var(--bad)"></span></div></form>
     ${p.id?rdPdBlock(p):''}
@@ -5433,12 +5433,13 @@ function rdSampleDefaultItems(kind){
 /* รอบที่ของชุดตัวอย่าง (ชุดที่ส่งแล้วของชนิดเดียวกัน เรียงตามวันที่สร้าง) */
 function rdSampleRound(s, list){ if(!list||s.status==='draft') return 0; const sent=list.filter(x=>x.kind===s.kind&&x.status!=='draft').sort((a,b)=>(a.createdAt||'').localeCompare(b.createdAt||'')); return sent.findIndex(x=>x.id===s.id)+1; }
 function rdSampleCard(s, ed, list){
-  list=list||(RD.open&&RD.open.project&&RD.open.project.id===s.projectId?RD.open.samples:null); const rnd=rdSampleRound(s, list);
+  FX_S[s.id]=s; list=list||(RD.open&&RD.open.project&&RD.open.project.id===s.projectId?RD.open.samples:null); const rnd=rdSampleRound(s, list);
   const ev=s.eval||{}, evItems=pfList(ev.items);
   return `<div class="rd-sample ${s.status}"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:6px"><div><b>${esc(SAMPLE_KIND[s.kind]||s.kind)}</b> <span class="mono muted" style="font-size:12px">${esc(s.docNo)}</span>${rnd?` <span class="chip ${rnd>=RD_MAX_ROUNDS?'warn':'info'}" title="ส่งได้ไม่เกิน ${RD_MAX_ROUNDS} รอบ (รอบแรก + แก้ไข ${RD_MAX_ROUNDS-1} ครั้ง)">รอบที่ ${rnd}/${RD_MAX_ROUNDS}${rnd>=RD_MAX_ROUNDS?' · รอบสุดท้าย':''}</span>`:''} ${pfChip(s.status,{draft:['ร่าง','info'],sent:['ส่งแล้ว รอประเมิน','warn'],evaluated:['ประเมินแล้ว','ok']})}${ev.pick&&ev.pick.action?`<span class="chip ${ev.pick.action==='produce'?'ok':'warn'}">ลูกค้าเลือก ${esc(ev.pick.code||ev.pick.name)} · ${ev.pick.action==='produce'?'ไปต่อ ผลิตจริง':'นำไปแก้ไข'}</span>`:ev.produce?'<span class="chip ok">ลูกค้าเลือกผลิตจริง</span>':''}</div>
       <div class="muted" style="font-size:12px">${s.requestedAt?'ขอส่ง '+rdDate(s.requestedAt)+' · ':''}${s.shippedAt?'ส่ง '+rdDate(s.shippedAt):''}${s.arrivalAt?' · ถึง '+rdDate(s.arrivalAt):''}${s.rdBy?' · R&D '+esc(s.rdBy.split('@')[0]):''}${s.saBy?' · SA '+esc(s.saBy.split('@')[0]):''}</div></div>
     <div style="margin-top:6px;font-size:13px">${s.items.map(it=>`<span class="chip" style="margin:0 4px 4px 0">${esc(it.code)}${it.name?' · '+esc(it.name):''}${it.size?' · '+esc(it.size):''}${it.qty?' × '+esc(it.qty):''}</span>`).join('')}</div>
     ${s.note?`<div class="muted" style="font-size:12.5px">${esc(s.note)}</div>`:''}
+    <div class="row" style="gap:6px;margin-top:6px"><button class="btn small" type="button" data-fx="04" data-fx-s="${s.id}">พิมพ์ FM-RD-04</button><button class="btn small" type="button" data-fx="05" data-fx-s="${s.id}">พิมพ์ FM-RD-05${s.status==='evaluated'?'':' (ฟอร์มเปล่า)'}</button></div>
     ${s.status==='sent'&&s.evalLink?`<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center"><input class="mono" readonly value="${esc(s.evalLink)}" style="flex:1;min-width:240px;font-size:12px;border:1px solid var(--line-strong);border-radius:8px;padding:6px 8px;background:var(--input-bg)"><button class="btn small" type="button" data-rd-copy="${esc(s.evalLink)}">คัดลอกลิงก์ประเมิน</button><a class="btn small" href="${esc(s.evalLink)}" target="_blank" rel="noopener">เปิดดู</a></div>`:''}
     ${s.status==='evaluated'?`<div style="margin-top:8px"><div class="muted" style="font-size:12px">ประเมินเมื่อ ${rdDate(ev.submittedAt)}${ev.email?' โดย '+esc(ev.email):''} · เอกสาร ${esc(s.evalDocNo)}${ev.history&&ev.history.length?' · แก้ไข '+ev.history.length+' ครั้ง':''}</div>
       <div class="tablebox" style="margin-top:4px"><table style="font-size:12.5px"><thead><tr><th>ตัวอย่าง</th>${EVAL_CRIT.map(c=>`<th class="num">${c[1]}</th>`).join('')}<th class="num">รวม/30</th><th>ลูกค้าเลือก</th><th>ความเห็น</th></tr></thead><tbody>${evItems.map(it=>{ const sc=it.scores||{}, tot=EVAL_CRIT.reduce((a,c)=>a+(Number(sc[c[0]])||0),0); return `<tr><td>${esc(it.code)}${it.name?' · '+esc(it.name):''}</td>${EVAL_CRIT.map(c=>`<td class="num">${sc[c[0]]||'–'}</td>`).join('')}<td class="num"><b>${tot||'–'}</b></td><td>${it.decision?pfChip(it.decision,RD_DEC):'–'}</td><td>${esc(it.comment||'')}</td></tr>`; }).join('')}</tbody></table></div>${ev.note?`<div style="font-size:12.5px;margin-top:4px">“${esc(ev.note)}”</div>`:''}</div>`:''}
@@ -6052,7 +6053,7 @@ function pdFormulaPage(f){
       <div class="pf-group"><h4>ส่วนประกอบ (เบส + น้ำหอม)</h4>${pdLinesTable(f, c, ed&&!lock, {})}${pdSummary(f, c)}</div>
       ${pdSecHtml(f)}
       </fieldset>
-      <div class="row" style="margin-top:14px;gap:8px;flex-wrap:wrap;align-items:center">${ed?`<button class="btn primary" type="submit">บันทึก</button><select id="pdStatus" aria-label="สถานะ">${Object.entries(PD_STATUS).map(([k,[l]])=>`<option value="${k}" ${f.status===k?'selected':''}>${l}</option>`).join('')}</select>`:''}<button class="btn" type="button" id="pdPrint">พิมพ์ใบสูตร</button>${f.id&&fdaCanView()?`<button class="btn" type="button" data-pd-inci="${esc(f.id)}">ส่วนประกอบฉลาก (INCI)</button>`:""}${ed&&f.id&&!lock?'<button class="btn small" type="button" id="pdDelete" style="color:var(--bad);margin-left:auto">ลบสูตร</button>':''}<span class="muted" id="pdErr" role="alert" style="color:var(--bad)"></span></div></form>
+      <div class="row" style="margin-top:14px;gap:8px;flex-wrap:wrap;align-items:center">${ed?`<button class="btn primary" type="submit">บันทึก</button><select id="pdStatus" aria-label="สถานะ">${Object.entries(PD_STATUS).map(([k,[l]])=>`<option value="${k}" ${f.status===k?'selected':''}>${l}</option>`).join('')}</select>`:''}<button class="btn" type="button" id="pdPrint">พิมพ์ใบสูตร</button>${['06','07','08','09'].map(c=>`<button class="btn" type="button" data-fx="${c}" data-fx-pd="1" title="พิมพ์แบบฟอร์ม FM-RD-${c} จากสูตรนี้">FM-RD-${c}</button>`).join('')}${f.id&&fdaCanView()?`<button class="btn" type="button" data-pd-inci="${esc(f.id)}">ส่วนประกอบฉลาก (INCI)</button>`:""}${ed&&f.id&&!lock?'<button class="btn small" type="button" id="pdDelete" style="color:var(--bad);margin-left:auto">ลบสูตร</button>':''}<span class="muted" id="pdErr" role="alert" style="color:var(--bad)"></span></div></form>
     ${ptCard(f)}`;
 }
 function pdBasePage(b){
@@ -6220,6 +6221,195 @@ function pdPrintHtml(f){
 }
 async function pdPrint(f){ await pdPeople(); $('#docPrint').innerHTML=pdPrintHtml(f); $('#docTitle').textContent='ใบสูตรผลิตภัณฑ์ · '+f.code; $('#docOverlay').hidden=false; document.body.classList.add('doc-open'); $('#docPrint').scrollTop=0; }
 /* บล็อกในหน้าโครงการ: สูตรผลิตภัณฑ์ของโครงการนั้น */
+/* ---------- พิมพ์แบบฟอร์ม FM-RD-01 / 04 / 05 / 06 / 07 / 08 / 09 ตามต้นฉบับของบริษัท · ดึงข้อมูลจากโครงการ / ชุดตัวอย่าง / สูตรผลิตภัณฑ์ ช่องที่ระบบไม่มีข้อมูลเว้นว่างให้กรอกด้วยมือ ---------- */
+const FX_REV={'01':'FM-RD-01: Rev. No.02. 06/02/2569','04':'FM-RD-04: Rev. No.02. 06/02/2569','05':'FM-RD-05: Rev. No.02. 18/03/2569','06':'FM-RD-06: Rev. No.02. 20/05/2569','07':'FM-RD-07: Rev. No.00. 08/05/2568','08':'FM-RD-08: Rev. No.00. 08/05/2568','09':'FM-RD-09: Rev. No.00. 08/05/2568'};
+const FX_S={};   /* ชุดตัวอย่างที่แสดงในหน้า (rdSampleCard บันทึกไว้) สำหรับปุ่มพิมพ์ */
+const fxE=v=>esc(v==null?'':String(v));
+const fxTh=v=>{ if(!v) return ''; const m=String(v).match(/^(\d{4})-(\d{2})-(\d{2})/); if(m&&String(v).length<=10) return `${+m[3]}/${+m[2]}/${+m[1]+543}`; const d=new Date(v); return isNaN(d)?'':`${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()+543}`; };
+const fxWho=v=>{ v=String(v||'').trim(); if(!v.includes('@')) return v; return (PEOPLE&&PEOPLE[v.toLowerCase()])||shortName(v); };
+const fxB=on=>on?'☑':'☐';
+const fxKv=(l,v,h)=>`<tr${h?` style="height:${h}px"`:''}><td class="lab">${l}</td><td>${v==null?'':v}</td></tr>`;
+const fxList=(items)=>items.map(([on,l])=>`${fxB(on)} ${l}`).join('<br>');
+const fxPage=(code,inner)=>`<div class="fm3-page"><div class="fm3-top">${FX_REV[code]}</div>${inner}</div>`;
+const fxTitle=(en,th)=>`<div class="fm3-title"><div><h1>${en}</h1><div class="th">${th}</div></div><img src="${LOGO.h}" alt="Scent &amp; Sense" style="height:56px;width:auto"></div>`;
+const fxDoc=(no,rev,date)=>`<div class="fm3-doc">Document No: <u>&nbsp;${fxE(no)}&nbsp;&nbsp;&nbsp;&nbsp;</u> | Reversion No.: <u>&nbsp;${fxE(rev)}&nbsp;&nbsp;&nbsp;</u> | Date Created: <u>&nbsp;${fxE(date)}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</u></div>`;
+const fxInfo=rows=>`<table class="fm2-info"><tbody>${rows}</tbody></table>`;
+/* ตารางกริด: rows = html ของ <tr> · เติมแถวว่างจนครบ min */
+const fxGrid=(heads,rows,min,foot)=>{ const r=rows.slice(), n=heads.length; while(r.length<(min||0)) r.push('<tr>'+'<td>&nbsp;</td>'.repeat(n)+'</tr>'); return `<table class="fm3-f"><thead><tr>${heads.map(h=>Array.isArray(h)?`<th style="width:${h[1]}">${h[0]}</th>`:`<th>${h}</th>`).join('')}</tr></thead><tbody>${r.join('')}${foot||''}</tbody></table>`; };
+const fxTr=cells=>'<tr>'+cells.map(c=>Array.isArray(c)?`<td class="${c[1]}">${c[0]==null?'':c[0]}</td>`:`<td>${c==null?'':c}</td>`).join('')+'</tr>';
+const fxAppr=(rows,head)=>fxGrid([[head||'Role','28%'],['Name','26%'],['Signature','26%'],['Date','20%']], rows.map(([r,n])=>`<tr style="height:30px"><td>${r}</td><td>${n||''}</td><td></td><td></td></tr>`));
+const fxStatus=(opts,cur)=>`<div style="margin-top:12px;font-size:14px">Status: ${opts.map(o=>`${fxB(o===cur)} ${o}`).join('&nbsp;&nbsp;&nbsp;&nbsp;')}</div>`;
+const fxTall=(l,v,h)=>`<tr style="height:${h||90}px"><td class="lab" style="vertical-align:top">${l}</td><td style="vertical-align:top">${v||''}</td></tr>`;
+const fxCust=code=>((typeof RD!=='undefined'&&RD.customers)||[]).find(c=>c.code===code)||{};
+function fxOpen(title, pages){ $('#docPrint').innerHTML=`<div class="fm3">${pages.join('')}</div>`; $('#docTitle').textContent=title; $('#docOverlay').hidden=false; document.body.classList.add('doc-open'); $('#docPrint').scrollTop=0; }
+
+/* FM-RD-01 แบบฟอร์มคำขอพัฒนาผลิตภัณฑ์ (PDR) จากข้อมูลโครงการ */
+function fx01(p){
+  const d=p.data||{}, c=fxCust(p.customerCode), brief=(PF.briefs||[]).find(b=>b.id===p.briefId), bd=brief&&brief.data||{};
+  const certs=String(d.certs||'').toLowerCase(), sentAny=(RD.open&&RD.open.project&&RD.open.project.id===p.id&&RD.open.samples.some(x=>x.status!=='draft'));
+  const status=p.stage==='done'||p.stage==='lost'?'Closed':sentAny?'Sample Sent':p.stage!=='s1'?'In Progress':'Open';
+  const line='&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;______________________________';
+  const p1=fxPage('01', fxTitle('Product Development Request (PDR) Form','แบบฟอร์มคำขอพัฒนาผลิตภัณฑ์')+fxDoc(p.docNo,'',fxTh(p.createdAt))
+    +'<h2>Request Information</h2>'+fxInfo(fxKv('วันที่ร้องขอ (Request Date)',fxTh(p.createdAt))+fxKv('วันที่คาดหวังกำหนดส่งตัวอย่างกลิ่น','')+fxKv('ผู้ร้องขอ AE (Requested by)',fxE(fxWho(p.owners&&p.owners.sa)))+fxKv('ผู้ร้องขอ AC (Requested by)','')+fxKv('แผนก (Department)','')
+      +fxKv('ประเภทของคำขอ',fxList([[p.kind==='new','New Product'],[p.kind==='topping','Product Modification (รหัสสินค้าก่อนหน้า)']])+'<br>'+line+'<br>'+fxList([[false,'R&amp;D Test (ใส่ข้อมูล 2.1)'],[p.kind==='cost','Cost Reduction (รหัสลูกค้า / รหัสสินค้าก่อนหน้า)']])+'<br>'+line))
+    +'<h2>1.Customer Information</h2>'+fxInfo(fxKv('1.1 ชื่อผู้ติดต่อ (Customer Name)',fxE(c.contact))+fxKv('1.2 Phone/Line',fxE(c.phone))+fxKv('1.3 ชื่อบริษัท',fxE(p.company||c.company))+fxKv('1.4 ชื่อแบรนด์',fxE(p.brand||c.brand))
+      +fxKv('1.5 Mood &amp; Tone',fxE(pfList(bd.feelings).join(', ')))+fxKv('1.6 ทิศทางการเติบโตของแบรนด์','')+fxKv('1.7 ที่อยู่จัดส่ง (ตัวอย่าง)','')+fxKv('1.8 ประเภทลูกค้า',fxList([[false,'ลูกค้าใหม่'],[false,'ลูกค้าเก่า']]))+fxKv('1.9 มูลค่าโปรเจกต์ทั้งหมด','')
+      +fxKv('1.10 กลุ่มลูกค้าเป้าหมาย (Target)',fxList([[false,'DemoGrapic (เพศ, อายุ, การศึกษา, รายได้)'],[false,'PsychoGraphic (ความสนใจ, ไลฟ์สไตล์)'],[false,'Painppoint (ทำไมต้องทำแบรนด์นี้หรือสินค้านี้)']]))));
+  const p2=fxPage('01', fxInfo(fxKv('1.11 ประเภทสินค้า',fxE(d.products))+fxKv('1.12 จำนวนกลิ่นที่ต้องการพัฒนา',p.scentCount?fxE(p.scentCount):'')+fxKv('1.13 วันที่ต้องการสินค้า','')+fxKv('1.14 วันที่ต้องการจำหน่ายสินค้า',fxTh(d.launch)))
+    +'<h2>2.Product Specifications (หากมี)</h2>'+fxInfo(fxKv('2.1 กลิ่นที่ต้องการ / บรีฟกลิ่น<br>(หากต้องการให้ทำวิจัย ระบุ________)',`2.1.1 แรงบันดาลใจ (Why แก่นของแบรนด์)<br>2.1.2 ช่วงกลิ่นที่ชื่นชอบ ${fxE(pfList(bd.like).join(', '))}<br>2.1.3 กลิ่นที่ End-user ไม่ชอบ<br>2.1.4 Scentotype<br>${['CHEERER','ADMIRER','DISCOVERER','ENCHANTER','COUNSELOR'].map(x=>`&nbsp;&nbsp;&nbsp;☐ ${x} ____________________`).join('<br>')}<br>2.1.5 Performence ของกลิ่น<br>${['กลิ่นติดทน (กลิ่นค้างผิว)','กลิ่นฟุ้งกระจาย','กลิ่นค้างอากาศ','Impact แรก'].map(x=>`&nbsp;&nbsp;&nbsp;☐ ${x}`).join('<br>')}`)
+      +fxKv('2.2 Target Cost / Unit (ราคาต้นทุน)',fxE(d.target))+fxKv('2.3 Target Price/ Unit (ราคาขาย)','')+fxKv('2.4 MOQ ที่คาดหวัง','')+fxKv('2.5 ลักษณะเนื้อผลิตภัณฑ์',fxList([[false,'STANDARD'],[false,'PREMIUM']]))+fxKv('2.6 สีเนื้อผลิตภัณฑ์ (ถ้ามี)','')+fxKv('2.7 ขนาดบรรจุภัณฑ์และจำนวนต่อกลิ่น','')
+      +fxKv('2.8 รูปแบบบรรจุภัณฑ์',fxList([[false,'ขวด'],[false,'ฝา'],[false,'กล่อง'],[false,'มีภาพประกอบ'],[false,'ไม่มีภาพประกอบ']]))+fxKv('2.9 Value Proposition<br>(คุณค่าและลักษณะเด่นของสินค้า)',fxList([[false,'Attribute'],[false,'Benefit'],[false,'Value']]))+fxKv('2.10 ตัวอย่างแบรนด์ (กลิ่นที่ชอบ)','')));
+  const p3=fxPage('01', '<h2>Regulatory &amp; Compliance Requirements</h2>'+fxInfo(fxKv('เอกสารที่ต้องการ เพิ่มเติม<br><br>มีให้เป็นพื้นฐาน<br>(COA, MSDS, IFRA อย.)',fxList([[/halal|ฮาลาล/.test(certs),'ฮาลาล Halal'],[/export|ส่งออก/.test(certs),'เอกสารส่งออก ____________________']])+'<br><br>'+fxList([[true,'COA'],[true,'MSDS'],[true,'IFRA'],[true,'อย.']]))+fxKv('ข้อกำหนดเฉพาะอื่นๆ<br>[ระบุถ้ามี เช่น ห้ามใช้สารพาราเบน, Vegan, No Alcohol ฯลฯ]',fxE(d.certs)))
+    +'<h2>Final Review &amp; Approval</h2>'+fxAppr([['Account Executive',fxE(fxWho(p.owners&&p.owners.sa))],['Account Executive Supervisor','พัชรพิชญ์ เจือจันทร์<br>กมลรัตน์ พิพัฒนพงษ์'],['Sale &amp; Marketing Manager',''],['Perfumer',fxE(((p.owners&&p.owners.perfumer)||[]).map(fxWho).join(', '))],['Product Development Chemist','ปกิตา เจริญวงษ์'],['Project Coordinator','ณิชา ลัคนาภิเศรษฐ์'],['Final Approval<br>(RD Supervisor)','รุจิรา ตระกูลยิ่งเจริญ']],'Role / Department')
+    +fxStatus(['Open','In Progress','Sample Sent','Closed'],status));
+  return [p1,p2,p3];
+}
+/* FM-RD-04 แบบฟอร์มส่งตัวอย่างให้ลูกค้า จากชุดตัวอย่าง */
+function fx04(s,p){
+  p=p||{}; const c=fxCust(p.customerCode), mock=s.kind==='mockup', items=s.items||[];
+  const rows=items.map((it,i)=>fxTr([[i+1,'ctr'],fxE(it.code),mock?'':fxE(it.name),mock?fxE(it.name):'',mock?'':'ตัวอย่างกลิ่น',fxE([it.size,it.qty?'× '+it.qty:''].filter(Boolean).join(' ')),fxTh(s.shippedAt),'']));
+  const qty=items.reduce((a,it)=>a+(Number(it.qty)||0),0);
+  const p1=fxPage('04', fxTitle('Sample Submission Form','แบบฟอร์มส่งตัวอย่างให้ลูกค้า')+fxDoc(s.docNo,'',fxTh(s.createdAt))
+    +'<h2>General Information</h2>'+fxInfo(fxKv('ชื่อบริษัท',fxE(p.company||c.company))+fxKv('แบรนด์ (Brand)',fxE(p.brand||c.brand))+fxKv('ชื่อผู้ติดต่อ (Customer Name)',fxE(c.contact))+fxKv('Phone / Line',fxE(c.phone))+fxKv('ที่อยู่จัดส่ง (ตัวอย่าง)','')+fxKv('วันที่ร้องขอ (Request Date)',fxTh(s.requestedAt))+fxKv('วันที่ส่งตัวอย่าง (Sample Sent Date)',fxTh(s.shippedAt))+fxKv('ผู้รับผิดชอบ (SA) / Submitted By (R&amp;D)',fxE([s.saBy?'SA: '+fxWho(s.saBy):'',s.rdBy?'R&D: '+fxWho(s.rdBy):''].filter(Boolean).join(' / '))))
+    +'<h2>Sample Details</h2>'+fxGrid([['No.','6%'],['Code','14%'],['Scent Name','17%'],['Sample Name','17%'],['Product Type','12%'],['Size / Unit','9%'],['Date','12%'],['Signature (AE)','13%']], rows, 11, `<tr class="tot"><td colspan="5" class="ctr">รวม</td><td class="ctr">${qty||''}</td><td colspan="2"></td></tr>`));
+  const ship=s.shippedAt||s.arrivalAt?[fxTr(['','',fxTh(s.shippedAt),fxTh(s.arrivalAt),''])]:[];
+  const p2=fxPage('04', '<h2>Shipping / Tracking Information</h2>'+fxGrid(['Courier / Service Name','Tracking No.','Shipping Date','Expected Arrival Date','Shipping By (ลายเซ็น)'], ship, 5)
+    +'<h2>Final Review &amp; Approval</h2>'+fxAppr([['Project Coordinator',''],['Account Executive Supervisor',''],['Sale &amp; Marketing Manager',''],['Final Approval (Supervisor)','']])
+    +fxStatus(['Formula Released','Hold','Cancelled'],''));
+  return [p1,p2];
+}
+/* FM-RD-05 แบบฟอร์มการประเมินผลจากลูกค้า · คะแนนจากลิงก์ประเมิน (1–5 ต่อหัวข้อ) */
+const FX_CRIT=['กลิ่น (Scent)','สี / ลักษณะภายนอก (Appearance)','ความรู้สึกหลังใช้งาน (Skin feel)','ความเหมาะสมกับกลุ่มเป้าหมาย (Target Fit)','ความเหมาะสมกับแบรนด์ (Brand Alignment)','ความชอบโดยรวม (Overall Liking)'];
+function fx05(s,p){
+  p=p||{}; const c=fxCust(p.customerCode), ev=s.eval||{}, done=s.status==='evaluated';
+  const list=(done?pfList(ev.items):[]).length?pfList(ev.items):(s.items||[]).map(it=>({code:it.code,name:it.name}));
+  const items=list.length?list:[{}];
+  const block=(it,i)=>{ const sc=it.scores||{}; return `<table class="fm3-ev" style="margin-bottom:14px"><thead><tr><th style="width:48%;text-align:left">Criteria</th><th style="text-align:left">Score (1–5)</th></tr></thead><tbody>
+    <tr style="height:28px"><td class="lab">กลิ่น / Sample Code ${String.fromCharCode(65+i)} / วันที่สูตร</td><td>${fxE([it.code,it.name].filter(Boolean).join(' · '))}</td></tr>
+    ${EVAL_CRIT.map((k,j)=>`<tr style="height:28px"><td class="lab">${FX_CRIT[j]}</td><td>${sc[k[0]]?fxE(sc[k[0]]):''}</td></tr>`).join('')}
+    <tr style="height:110px"><td class="lab" style="vertical-align:top">Comments / Suggestions</td><td style="vertical-align:top">${fxE(it.comment)}</td></tr></tbody></table>`; };
+  const pages=[fxPage('05', fxTitle('Sample Evaluation Form (SE)','แบบฟอร์มการประเมินผลจากลูกค้า')+fxDoc(s.evalDocNo,'',fxTh(ev.submittedAt||s.shippedAt))
+    +'<h2>Customer Information</h2>'+fxInfo(fxKv('ชื่อบริษัท / แบรนด์',fxE([p.company||c.company,p.brand||c.brand].filter(Boolean).join(' / ')))+fxKv('ชื่อผู้ติดต่อ (Customer Name)',fxE(c.contact))+fxKv('Phone / Line',fxE(c.phone))+fxKv('วันที่ประเมิน (Date of Evaluation)',fxTh(ev.submittedAt)))
+    +'<h2>Evaluation Criteria</h2><div style="font-size:10.5px;margin:-4px 0 6px">กรุณาให้คะแนนแต่ละหัวข้อจาก 1 ถึง 5 (1 = แย่มาก, 5 = ดีมาก) และระบุความคิดเห็นประกอบ(ถ้ามี)</div>'+block(items[0],0))];
+  for(let i=1;i<items.length;i+=2) pages.push(fxPage('05', block(items[i],i)+(items[i+1]?block(items[i+1],i+1):'')));
+  const pick=ev.pick&&ev.pick.action, prod=pick==='produce'||(!pick&&ev.produce), rev=pick==='revise', rej=done&&!pick&&!ev.produce&&list.length&&list.every(x=>x.decision==='reject');
+  pages.push(fxPage('05', '<h2>Final Review &amp; Approval</h2><div style="font-size:12px;margin:4px 0 8px">Overall Feedback:</div><div style="margin:0 0 12px 140px;line-height:1.9;font-size:12px">'+fxList([[prod,'ผลิตจริงต่อไป'+(prod&&ev.pick&&ev.pick.code?' ('+fxE(ev.pick.code)+')':'')],[rev,'ปรับปรุงก่อนส่งใหม่'+(rev&&ev.pick&&ev.pick.code?' ('+fxE(ev.pick.code)+')':'')],[rej,'ไม่เหมาะกับแนวทางของแบรนด์']])+'</div>'
+    +`<table class="fm3-ev"><tbody><tr style="height:130px"><td class="lab" style="width:48%;vertical-align:top">Comments / Suggestions</td><td style="vertical-align:top">${fxE(ev.note)}</td></tr></tbody></table>`));
+  return pages;
+}
+/* สูตรผลิตภัณฑ์ → แถวส่วนประกอบ (กลิ่นเป็น 1 บรรทัด) */
+function fxComp(f, cols){
+  if(!f||!f.lines) return {rows:[],sumPct:0,sumG:0,batch:1000};
+  const batch=toNum(f.batchG)||1000, c=pdCost(f); let sumPct=0, sumG=0;
+  const rows=c.rows.map((r,i)=>{ const ln=r.ln, g=r.pct/100*batch; sumPct+=r.pct||0; sumG+=g||0; const code=ln.frag?(f.fragranceCode||''):(ln.code||''), name=ln.frag?(f.fragranceName||'Fragrance'):(ln.name||'');
+    return cols(ln,i,fxE(code),fxE(name),r.pct?fmt(r.pct,4):'',g?fmt(g,2):''); });
+  return {rows,sumPct,sumG,batch};
+}
+const fxSteps=(f,withBy)=>((f&&f.steps)||[]).filter(x=>x.step||x.min||x.temp||x.rpm||x.equip||x.note).map((x,i)=>fxTr([[i+1,'ctr'],fxE(x.step),[fxE(x.min),'ctr'],[fxE(x.temp),'ctr'],[fxE(x.rpm),'ctr'],fxE(x.equip)].concat(withBy?['']:[]).concat([fxE(x.note)])));
+const FX_STEP_H=['ลำดับ','ขั้นตอน','เวลาที่ใช้ (นาที)','อุณหภูมิ (°C)','ความเร็วรอบ (ถ้ามี)','อุปกรณ์ที่ใช้'];
+function fxFormulaCtx(f, pr){
+  f=f||{}; pr=pr||(f.projectId?pdProj(f.projectId):null)||{};
+  return {f, pr, d:pr.data||{}, name:f.productName||f.name||'', cust:f.customer||pr.company||'', brand:f.brand||pr.brand||''};
+}
+/* FM-RD-06 เอกสารสูตรสุดท้ายพร้อมวิธีการผลิต */
+function fx06(x){
+  const {f,d}=x, ff=d.finalFormula||{}, st=d.stability||{};
+  const comp=fxComp(f,(ln,i,code,name,pct,g)=>fxTr([[fxE(ln.part||''),'ctr'],[i+1,'ctr'],code,name,[pct,'num'],[g,'num']]));
+  const spec=(f.lines?pdSpecRows(f):PD_SPEC_DEF.map(r=>({name:r[0],method:r[1],limit:r[2]}))).map(r=>fxTr([fxE(r.name),fxE(r.method),fxE(r.limit),fxE(r.result||r.target||'')]));
+  const p1=fxPage('06', fxTitle('Final Formula Sheet &amp; Formula Release Memo','แบบฟอร์มเอกสารสูตรสุดท้ายพร้อมวิธีการผลิต')+fxDoc(ff.docNo,f.revision!=null?f.revision:'',fxTh(ff.issuedAt))
+    +`<div class="fm3-doc">เลขจดแจ้ง เลขที่ <u>&nbsp;${fxE(ff.regNo)}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</u> | วันที่รับรอง <u>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</u> | วันที่สิ้นสุดการรับรอง <u>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</u></div>`
+    +'<h2>General Information</h2>'+fxInfo(fxKv('ชื่อบริษัท / ลูกค้า (Customer Name)',fxE(x.cust))+fxKv('แบรนด์ (Brand Name)',fxE(x.brand))+fxKv('ชื่อผลิตภัณฑ์ (Product Name)',fxE(x.name))+fxKv('รหัสผลิตภัณฑ์ (Product Code)',fxE(f.fgCode))+fxKv('ชื่อตัวอย่าง (Sample Name)',fxE(f.fragranceName))+fxKv('รหัสตัวอย่าง (Sample Code)',fxE(f.fragranceCode))+fxKv('วันที่ตัวอย่าง (ถ้ามี)','')+fxKv('ประเภทผลิตภัณฑ์ (Product Type)',fxE(f.category))
+      +fxKv('Intended Use<br>(Retail / In-Store / OEM / Export, etc.)','')+fxKv('Country of Distribution<br>(Country Regulation)',fxList([[false,'Thailand'],[false,'China'],[false,'EU'],[false,'USA'],[false,'Other: ____________']]))
+      +fxKv('รูปแบบการส่งมอบสินค้า (Sales Format)',fxList([[false,'Bulk (Unpacked)<br>&nbsp;&nbsp;&nbsp;&nbsp;ขายแบบ Bulk ไม่บรรจุขาย (เช่น ถัง/แกลลอน/ขวด)'],[false,'FG (Packed)<br>&nbsp;&nbsp;&nbsp;&nbsp;สินค้าสำเร็จรูป บรรจุพร้อมขาย (พร้อมฉลาก)']]))
+      +fxKv('Product Type<br>(For Stability Test Condition)',fxList([[!!st.standard,'Product Type A<br>&nbsp;&nbsp;&nbsp;&nbsp;สินค้าที่ใช้สูตรมาตรฐานเดิม เปลี่ยนเฉพาะหัวน้ำหอม และ active ingredients'],[!!d.newFormula&&!st.standard,'Product Type B<br>&nbsp;&nbsp;&nbsp;&nbsp;สินค้าที่มีการพัฒนาสูตรใหม่ (NPD) เปลี่ยนโครงสร้างเนื้อ']]))
+      +fxKv('วันที่อนุมัติสูตรสุดท้าย<br>(Final approval date)',fxTh(f.approvedAt),46)+fxKv('ผู้อนุมัติ (Approved By)',fxE(fxWho(f.approvedBy)),46)));
+  const p2=fxPage('06', '<h2>Final Formula Composition</h2>'+fxGrid([['PART','9%'],['ลำดับ','8%'],['รหัสวัตถุดิบ','19%'],'ชื่อสาร',['% (w/w)','12%'],['ปริมาณ(g)','12%']], comp.rows, 6, `<tr class="tot"><td colspan="4" class="ctr">ยอดรวม</td><td class="num">${comp.sumPct?fmt(comp.sumPct,4):''}</td><td class="num">${comp.sumG?fmt(comp.sumG,2):''}</td></tr>`)
+    +'<h2>Manufacturing Instructions</h2>'+fxGrid([['ลำดับ','8%'],'ขั้นตอน',['เวลาที่ใช้ (นาที)','10%'],['อุณหภูมิ (°C)','10%'],['ความเร็วรอบ (ถ้ามี)','10%'],['อุปกรณ์ที่ใช้','17%'],['หมายเหตุ','12%']], fxSteps(f,false), 6)
+    +'<h2>Product Specification Summary</h2>'+fxGrid(['Test Parameter','Method / Instrument','Spec Limit (if any)','Specification'], spec));
+  const att=[['Prototype Formulation Record',!!(d.prototype&&d.prototype.docNo),d.prototype&&d.prototype.docNo],['Stability Test Summary',!!(st.docNo||st.standard||st.result==='pass'),st.docNo||(st.standard?'เบสเดิม ใช้เอกสารมาตรฐาน':'')],['Regulatory Compliance Check',false,''],['IFRA Certificate (if fragrance used)',false,''],['Allergen Declaration',false,''],['SDS (Safety Data Sheet)',false,''],['COA for Active Ingredients',false,''],['Packaging Compatibility Report',false,'']];
+  const p3=fxPage('06', '<h2>Required Document Attachments</h2>'+fxGrid([['Document','38%'],['CHECK','10%'],'Notes / Reference Document'], att.map(([a,on,n])=>`<tr style="height:30px"><td>${a}</td><td class="ctr">${fxB(on)}</td><td>${fxE(n)}</td></tr>`))
+    +'<h2>Formula History &amp; Version Control</h2>'+fxGrid(['Version','Date','Created / Changed By','Summary of Changes','Reason for Change'], [], 3)
+    +'<h2>Final Review &amp; Approval</h2>'+fxAppr([['Product Development Chemist','ปกิตา เจริญวงษ์'],['Perfumer','รุจิรา ตระกูลยิ่งเจริญ'],['Quality Control Supervisor','ไพศาล สุริสาย'],['Project Coordinator','ณิชา ลัคนาภิเศรษฐ์'],['R&amp;D Supervisor','รุจิรา ตระกูลยิ่งเจริญ']]));
+  return [p1,p2,p3];
+}
+/* FM-RD-07 เอกสารประกอบการผลิตนำร่อง (Pilot Batch Record) */
+function fx07(x){
+  const {f,d}=x, pl=d.pilot||{};
+  const comp=fxComp(f,(ln,i,code,name,pct,g)=>fxTr([[i+1,'ctr'],code,name,'',[pct,'num'],[g,'num'],'','','']));
+  const ipqc=(f.lines?pdSpecRows(f):PD_SPEC_DEF.map(r=>({name:r[0],method:r[1]}))).map(r=>`<tr style="height:30px"><td>${fxE(r.name)}</td><td>${fxE(r.target||'')}</td><td>${fxE(r.method)}</td><td></td><td></td><td></td></tr>`);
+  const p1=fxPage('07', fxTitle('Pilot Batch Record (PBR)','แบบฟอร์มเอกสารประกอบการผลิตนำร่อง')+fxDoc(pl.docNo,'',fxTh(pl.issuedAt))
+    +'<h2>General Information</h2>'+fxInfo(fxKv('ชื่อผลิตภัณฑ์ / Product Name',fxE(x.name))+fxKv('รหัสสูตร / Formula Code',fxE(f.code))+fxKv('รหัสผลิต / Pilot Batch No.',fxE(pl.batchNo))+fxKv('วันที่ผลิต / Date of Manufacture','')+fxKv('ปริมาณที่ผลิต / Batch Size','')+fxKv('ผู้นำการผลิต / Conducted By','')+fxKv('ผู้ควบคุมคุณภาพ / Quality Control',''))
+    +'<h2>Raw Material Verification</h2>'+fxGrid([['ลำดับ','6%'],['รหัสวัตถุดิบ','12%'],'ชื่อสาร',['Lot No.','9%'],['% (w/w)','9%'],['ปริมาณตามสูตร (g)','10%'],['ปริมาณที่ใช้จริง (g)','11%'],['ผู้ชั่ง','9%'],['ตรวจสอบโดย','10%']], comp.rows, 10, `<tr class="tot"><td colspan="4" class="ctr">ยอดรวม</td><td class="num">${comp.sumPct?fmt(comp.sumPct,4):''}</td><td class="num">${comp.sumG?fmt(comp.sumG,2):''}</td><td></td><td></td><td></td></tr>`)
+    +'<div style="font-size:10.5px;margin-top:6px">หมายเหตุ: ต้องแนบ COA หรือ Internal Release ก่อนใช้วัตถุดิบทุกครั้ง</div>');
+  const p2=fxPage('07', '<h2>Manufacturing Process</h2>'+fxGrid([['ลำดับ','7%'],'ขั้นตอน',['เวลาที่ใช้ (นาที)','9%'],['อุณหภูมิ (°C)','9%'],['ความเร็วรอบ (ถ้ามี)','9%'],['อุปกรณ์ที่ใช้','10%'],['ผู้ดำเนินการ','10%'],['หมายเหตุ','10%']], fxSteps(f,true), 7)
+    +'<h2>In-Process Quality Control (IPQC)</h2>'+fxGrid([['จุดควบคุม / Parameter','15%'],['ค่าเป้าหมาย','14%'],['วิธีวัด / อุปกรณ์','17%'],['ผลการวัด','15%'],['Pass/Fail','12%'],'ผู้ตรวจสอบ'], ipqc));
+  const p3=fxPage('07', '<h2>SAMPLE RETENTION &amp; SUBMISSION</h2>'+fxGrid(['ประเภทตัวอย่าง',['ปริมาณ(g)','10%'],'รหัสตัวอย่าง','เก็บโดย',['วันที่','12%'],'สถานที่เก็บ'], [], 5)
+    +'<h2>Production Remarks</h2>'+fxInfo(fxTall('ปัญหาระหว่างผลิต (ถ้ามี)','',80)+fxTall('แนวทางการแก้ไข / ข้อเสนอแนะ','',95))
+    +'<h2>Final Review &amp; Approval</h2>'+fxAppr([['Production Mixer',''],['Production Manager',''],['Quality Control Manager',''],['Perfumer',''],['Product Development Chemist',''],['Project Coordinator',''],['R&amp;D Manager','']]));
+  return [p1,p2,p3];
+}
+/* FM-RD-08 รายงานความคงตัวและการเปลี่ยนแปลงของกลิ่นและผลิตภัณฑ์ */
+const FX_COND=[['Room Temperature','30℃ ± 2℃','1 / 3 / 6 เดือน','Day 0, 1M, 3M, 6M'],['Accelerated','40℃ ± 2℃','1 / 3 / 6 เดือน','Day 0, 1M, 3M, 6M'],['Freeze/Thaw','-5℃ ↔ 40℃ (3 cycles)','6 วัน','Pre/Post Cycle'],['Compatibility (Packaging)','เก็บในบรรจุภัณฑ์จริง','1 / 3 / 6 เดือน','Day 0, 1M, 3M, 6M']];
+const FX_PTS=['Day 0','1 เดือน','3 เดือน','6 เดือน'];
+function fx08(x){
+  const {f,d}=x, st=d.stability||{};
+  const obs=c=>`<h2>Observations-Physical &amp; Chemical <span style="font-size:10px;font-weight:400">(${c})</span></h2>`+fxGrid([['จุดวัดผล','9%'],'ลักษณะภายนอก',['สี','10%'],['pH','10%'],['ความหนืด','12%'],['Phase Separation','14%'],['หมายเหตุ','18%']], FX_PTS.map(t=>`<tr style="height:28px"><td>${t}</td><td></td><td></td><td></td><td></td><td>☐ Yes ☐ No</td><td></td></tr>`));
+  const frg=c=>`<h2>Fragrance Evaluation <span style="font-size:10px;font-weight:400">(${c})</span></h2>`+fxGrid([['จุดวัดผล','9%'],['ความแรงของกลิ่น','13%'],['กลิ่นเปลี่ยนหรือไม่','13%'],'ลักษณะการเปลี่ยน',['ความคงตัวของกลิ่น','18%'],['หมายเหตุ','16%']], FX_PTS.map(t=>`<tr><td>${t}</td><td style="font-size:10px">☐ อ่อน<br>☐ ปานกลาง ☐ แรง</td><td style="font-size:10px">☐ ไม่เปลี่ยน<br>☐ เปลี่ยน</td><td></td><td style="font-size:10px">☐ คงตัวดี<br>☐ เปลี่ยนเล็กน้อย ☐ เปลี่ยนมาก</td><td></td></tr>`));
+  const yn='☐ No ☐ Yes';
+  const p1=fxPage('08', fxTitle('Stability &amp; Fragrance Change Report','รายงานความคงตัวและการเปลี่ยนแปลงของกลิ่นและผลิตภัณฑ์')+fxDoc(st.docNo,'',fxTh(st.issuedAt))
+    +'<h2>General Information</h2>'+fxInfo(fxKv('ชื่อผลิตภัณฑ์ / Product Name',fxE(x.name))+fxKv('รหัสสูตร / Formula Code',fxE(f.code))+fxKv('รหัสตัวอย่าง / Sample Code','')+fxKv('วันที่เริ่มทดสอบ / Start Date','')+fxKv('Batch No. (ถ้ามี)','')+fxKv('ขนาดการทดสอบ','')+fxKv('ผู้นำการทดสอบ / Conducted by',''))
+    +'<h2>Test Conditions</h2>'+fxGrid(['ประเภทการทดสอบ','เงื่อนไขการเก็บ','ระยะเวลา','จุดวัดผล'], FX_COND.map(r=>fxTr(r)))+obs('Room Temperature'));
+  const p2=fxPage('08', obs('Accelerated')+obs('Freeze/Thaw')+obs('Compatibility (Packaging)'));
+  const p3=fxPage('08', frg('Room Temperature')+frg('Accelerated'));
+  const p4=fxPage('08', frg('Freeze/Thaw')+frg('Compatibility (Packaging)'));
+  const p5=fxPage('08', '<h2>Packing Compatibility</h2>'+fxGrid([['จุดวัดผล','10%'],['การรั่วซึม','13%'],['บวม / ยุบ','13%'],['สีของบรรจุภัณฑ์เปลี่ยน','15%'],['กลิ่นรั่ว / ซึม','13%'],'หมายเหตุ'], FX_PTS.map(t=>`<tr style="height:28px"><td>${t}</td><td>${yn}</td><td>${yn}</td><td>${yn}</td><td>${yn}</td><td></td></tr>`))
+    +'<h2>Overall Evaluation</h2>'+fxGrid([['ด้านที่ประเมิน','45%'],'ผลการประเมิน'], [`<tr style="height:30px"><td><b>ความเสถียรของสูตร (Stability)</b></td><td>${fxB(st.result==='pass'||st.standard)} ผ่าน ${fxB(st.result==='fail')} ไม่ผ่าน ☐ ต้องปรับสูตร</td></tr>`,'<tr style="height:30px"><td><b>ความคงตัวของกลิ่น</b></td><td>☐ ดีมาก ☐ คงตัวพอใช้ ☐ เปลี่ยนชัดเจน</td></tr>','<tr style="height:30px"><td><b>การเข้ากันกับบรรจุภัณฑ์</b></td><td>☐ ไม่มีปัญหา ☐ ควรเปลี่ยนวัสดุ ☐ รั่ว/เปลี่ยนสี</td></tr>',`<tr style="height:100px"><td style="vertical-align:top"><b>ข้อเสนอแนะเพิ่มเติม</b></td><td style="vertical-align:top">${fxE(st.base?'เบส: '+st.base:'')}</td></tr>`])
+    +'<h2>Final Review &amp; Approval</h2>'+fxAppr([['Product Development Chemist',''],['Perfumer',''],['Quality Control Manager',''],['Project Coordinator',''],['R&amp;D Manager','']]));
+  return [p1,p2,p3,p4,p5];
+}
+/* FM-RD-09 เอกสารสรุปผลการส่งมอบสูตรให้ฝ่ายผลิต */
+const FX_SPEC09=[['Appearance','Visual','No phase separation'],['Color','Visual','Match std. ref.'],['Odor','Sensory Panel','Match std. ref.'],['pH','pH meter',''],['Viscosity','Viscosity Meter','±10%'],['Specific Gravity','Digital Densitometer','']];
+function fx09(x){
+  const {f,d,pr}=x, bom=d.bom||{};
+  const comp=fxComp(f,(ln,i,code,name,pct,g)=>fxTr([[i+1,'ctr'],code,name,[pct,'num'],[g,'num']]));
+  const tgt=f.lines?pdSpecRows(f):[];
+  const spec=FX_SPEC09.map((r,i)=>fxTr([r[0],fxE(tgt[i]&&tgt[i].target||''),r[1],r[2],'']));
+  const p1=fxPage('09', fxTitle('Final Formula Sheet Summary Report','เอกสารสรุปผลการส่งมอบสูตรให้ฝ่ายผลิต')+fxDoc(bom.docNo,'',fxTh(bom.issuedAt))
+    +'<h2>General Information</h2>'+fxInfo(fxKv('Project / Product Name',fxE([pr.pdrNo,x.name].filter(Boolean).join(' · ')))+fxKv('รหัสสูตร / Formula Code',fxE(f.code))+fxKv('วันที่ส่งมอบ','')+fxKv('รุ่นสูตร (Version)',f.revision!=null?fxE(f.revision):'')+fxKv('Product Category',fxE(f.category))+fxKv('Brand / Customer',fxE([x.brand,x.cust].filter(Boolean).join(' / ')))
+      +fxKv('Intended Use<br>(Retail / Hotel / OEM / Export, etc.)','')+fxKv('Country of Distribution','')+fxKv('Market Compliance','☐ Thailand ☐ EU ☐ USA ☐ China ☐ Other: ____________')+fxKv('Final Formula Approval Date',fxTh(f.approvedAt))+fxKv('Approved By',fxE(fxWho(f.approvedBy))))
+    +'<h2>Final Formula Composition</h2>'+fxGrid([['ลำดับ','8%'],['รหัสวัตถุดิบ','19%'],'ชื่อสาร',['% (w/w)','14%'],['ปริมาณ(g)','14%']], comp.rows, 9, `<tr class="tot"><td colspan="3" class="ctr">ยอดรวม</td><td class="num">${comp.sumPct?fmt(comp.sumPct,4):''}</td><td class="num">${comp.sumG?fmt(comp.sumG,2):''}</td></tr>`));
+  const p2=fxPage('09', '<h2>Product Specification Summary</h2>'+fxGrid(['Test Parameter','Target Value','Method / Instrument','Spec Limit (if any)','Remarks'], spec)
+    +'<h2>Manufacturing Process</h2>'+fxGrid([['ลำดับ','7%'],'ขั้นตอน',['เวลาที่ใช้ (นาที)','9%'],['อุณหภูมิ (°C)','9%'],['ความเร็วรอบ (ถ้ามี)','9%'],['อุปกรณ์ที่ใช้','10%'],['ผู้ดำเนินการ','10%'],['หมายเหตุ','10%']], fxSteps(f,true), 7));
+  const p3=fxPage('09', '<h2>Formula Releases Approval</h2>'+fxAppr([['Product Development Chemist',''],['QA/QC Reviewer',''],['Production Manager',''],['Project Coordinator',''],['Final Approval<br>(RD Manager)','']],'Role / Department')
+    +fxStatus(['Formula Released','Hold','Cancelled'],bom.released?'Formula Released':''));
+  return [p1,p2,p3];
+}
+const FX_FN={'06':[fx06,'เอกสารสูตรสุดท้าย'],'07':[fx07,'Pilot Batch Record'],'08':[fx08,'รายงาน Stability'],'09':[fx09,'ส่งมอบสูตรให้ฝ่ายผลิต']};
+/* สูตรผลิตภัณฑ์ของโครงการที่ใช้พิมพ์ 06–09: สูตรที่อนุมัติแล้วล่าสุด ถ้าไม่มีใช้สูตรที่แก้ล่าสุด */
+const fxProjFormula=pid=>{ const l=((typeof PD!=='undefined'&&PD.list)||[]).filter(f=>f.projectId===pid).sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||''))); return l.find(f=>f.status==='approved')||l[0]||null; };
+async function fxPrint(code, o){
+  await pdPeople();
+  if(code==='01'){ fxOpen('FM-RD-01 · '+(o.p.pdrNo||''), fx01(o.p)); return; }
+  if(code==='04'){ fxOpen('FM-RD-04 · '+(o.s.docNo||''), fx04(o.s,o.p)); return; }
+  if(code==='05'){ fxOpen('FM-RD-05 · '+(o.s.evalDocNo||o.s.docNo||''), fx05(o.s,o.p)); return; }
+  const fn=FX_FN[code]; if(!fn) return; const x=fxFormulaCtx(o.f, o.p);
+  fxOpen(`FM-RD-${code} · ${fn[1]} · ${x.f.code||x.pr.pdrNo||''}`, fn[0](x));
+}
+document.addEventListener('click', async e=>{
+  const t=e.target.closest('[data-fx]'); if(!t) return;
+  const code=t.dataset.fx;
+  try{
+    if(t.dataset.fxPd!=null){ const f=PD.open; if(!f) return; if(typeof pdCollect==='function') pdCollect(f); await fxPrint(code,{f, p:f.projectId?pdProj(f.projectId):null}); return; }
+    if(t.dataset.fxS){ const s=FX_S[t.dataset.fxS]; if(!s) return; const p=RD.open&&RD.open.project&&RD.open.project.id===s.projectId?RD.open.project:pdProj(s.projectId); await fxPrint(code,{s,p}); return; }
+    const p=RD.open&&RD.open.project; if(!p||!p.id) return;
+    if(code==='01'){ await fxPrint('01',{p}); return; }
+    if(code==='03'){ try{ await loadPd(false); }catch(err){} const f=fxProjFormula(p.id); if(!f){ toast('ยังไม่มีสูตรผลิตภัณฑ์ในโครงการนี้'); return; } await pdPrint(f); return; }
+    try{ await loadPd(false); }catch(err){}
+    const f=fxProjFormula(p.id); if(!f) toast('ยังไม่มีสูตรผลิตภัณฑ์ในโครงการ · พิมพ์ฟอร์มพร้อมข้อมูลโครงการ ส่วนสูตรเว้นว่าง');
+    await fxPrint(code,{f, p});
+  }catch(err){ toast(errText(err)); }
+});
+const FX_SUB={prototype:'03',finalFormula:'06',pilot:'07',stability:'08',bom:'09'};
 function rdPdBlock(p){
   const list=(PD.list||[]).filter(f=>f.projectId===p.id);
   return `<div class="card" style="margin:0 0 14px"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><h4 style="margin:0">สูตรผลิตภัณฑ์ (Product Development) · ${list.length}</h4>${pdCanEdit()&&p.id?`<button class="btn small" type="button" data-pd-new="${esc(p.id)}">+ สร้างสูตรผลิตภัณฑ์</button>`:''}</div>

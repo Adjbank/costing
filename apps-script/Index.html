@@ -2717,7 +2717,7 @@ const GD_PHASES=[
     {c:'FM-RD-04 / 05', n:'ส่งต้นแบบผลิตภัณฑ์ (Mock-up) และเก็บผลประเมินจากลูกค้า', u:'PC', v:'rd', how:'โครงการ › ตัวอย่างที่ส่ง (ประเภทต้นแบบสินค้า) › ปุ่มพิมพ์ FM-RD-04 / 05', p:'yes'},
     {c:'Confirm', n:'ลูกค้า Confirm ตัวอย่างสูตร', u:'ลูกค้า', ok:1},
     {c:'FM-RD-08', n:'รายงานความคงตัวและการเปลี่ยนแปลงกลิ่น (Stability & Fragrance Change Report)', u:'PD', v:'rd', how:'โครงการ › เอกสารของโครงการ › "พิมพ์" หรือ Product Development › เปิดสูตร › FM-RD-08', p:'yes'},
-    {c:'FM-RD-10', n:'รายการตัวอย่างที่เก็บพร้อมวันที่และหมายเลข Batch', u:'PD', v:'rd', how:'โครงการ › เอกสารของโครงการ', p:'wait'}]},
+    {c:'FM-RD-10', n:'รายการตัวอย่างที่เก็บพร้อมวันที่และหมายเลข Batch', u:'PD', v:'pd', how:'Product Development › เปิดสูตร › FM-RD-10 หรือ โครงการ › เอกสารของโครงการ › "พิมพ์"', p:'yes'}]},
   {t:'ช่วงที่ 5 · ส่งมอบสูตรให้ฝ่ายผลิต', lead:'ออกเอกสารส่งมอบ 3 ฉบับ แล้วเก็บสูตรเข้าคลังสูตรพร้อมเอกสารประกอบ', steps:[
     {c:'FM-RD-06', n:'เอกสารสูตรสุดท้ายพร้อมวิธีการผลิต (Final Formula Sheet & Formula Release Memo)', u:'PD', v:'pd', how:'Product Development › เปิดสูตร › FM-RD-06 หรือ โครงการ › เอกสารของโครงการ › "พิมพ์"', p:'yes'},
     {c:'FM-RD-09', n:'เอกสารสรุปผลการส่งมอบสูตรให้ฝ่ายผลิต (Final Formula Sheet & Formula Release Summary Report)', u:'PD', v:'rd', how:'Product Development › เปิดสูตร › FM-RD-09 หรือ โครงการ › เอกสารของโครงการ › "พิมพ์"', p:'yes'},
@@ -6053,7 +6053,7 @@ function pdFormulaPage(f){
       <div class="pf-group"><h4>ส่วนประกอบ (เบส + น้ำหอม)</h4>${pdLinesTable(f, c, ed&&!lock, {})}${pdSummary(f, c)}</div>
       ${pdSecHtml(f)}
       </fieldset>
-      <div class="row" style="margin-top:14px;gap:8px;flex-wrap:wrap;align-items:center">${ed?`<button class="btn primary" type="submit">บันทึก</button><select id="pdStatus" aria-label="สถานะ">${Object.entries(PD_STATUS).map(([k,[l]])=>`<option value="${k}" ${f.status===k?'selected':''}>${l}</option>`).join('')}</select>`:''}<button class="btn" type="button" id="pdPrint">พิมพ์ใบสูตร</button>${['06','07','08','09'].map(c=>`<button class="btn" type="button" data-fx="${c}" data-fx-pd="1" title="พิมพ์แบบฟอร์ม FM-RD-${c} จากสูตรนี้">FM-RD-${c}</button>`).join('')}${f.id&&fdaCanView()?`<button class="btn" type="button" data-pd-inci="${esc(f.id)}">ส่วนประกอบฉลาก (INCI)</button>`:""}${ed&&f.id&&!lock?'<button class="btn small" type="button" id="pdDelete" style="color:var(--bad);margin-left:auto">ลบสูตร</button>':''}<span class="muted" id="pdErr" role="alert" style="color:var(--bad)"></span></div></form>
+      <div class="row" style="margin-top:14px;gap:8px;flex-wrap:wrap;align-items:center">${ed?`<button class="btn primary" type="submit">บันทึก</button><select id="pdStatus" aria-label="สถานะ">${Object.entries(PD_STATUS).map(([k,[l]])=>`<option value="${k}" ${f.status===k?'selected':''}>${l}</option>`).join('')}</select>`:''}<button class="btn" type="button" id="pdPrint">พิมพ์ใบสูตร</button>${['06','07','08','09','10'].map(c=>`<button class="btn" type="button" data-fx="${c}" data-fx-pd="1" title="พิมพ์แบบฟอร์ม FM-RD-${c} จากสูตรนี้">FM-RD-${c}</button>`).join('')}${f.id&&fdaCanView()?`<button class="btn" type="button" data-pd-inci="${esc(f.id)}">ส่วนประกอบฉลาก (INCI)</button>`:""}${ed&&f.id&&!lock?'<button class="btn small" type="button" id="pdDelete" style="color:var(--bad);margin-left:auto">ลบสูตร</button>':''}<span class="muted" id="pdErr" role="alert" style="color:var(--bad)"></span></div></form>
     ${ptCard(f)}`;
 }
 function pdBasePage(b){
@@ -6222,7 +6222,7 @@ function pdPrintHtml(f){
 async function pdPrint(f){ await pdPeople(); $('#docPrint').innerHTML=pdPrintHtml(f); $('#docTitle').textContent='ใบสูตรผลิตภัณฑ์ · '+f.code; $('#docOverlay').hidden=false; document.body.classList.add('doc-open'); $('#docPrint').scrollTop=0; }
 /* บล็อกในหน้าโครงการ: สูตรผลิตภัณฑ์ของโครงการนั้น */
 /* ---------- พิมพ์แบบฟอร์ม FM-RD-01 / 04 / 05 / 06 / 07 / 08 / 09 ตามต้นฉบับของบริษัท · ดึงข้อมูลจากโครงการ / ชุดตัวอย่าง / สูตรผลิตภัณฑ์ ช่องที่ระบบไม่มีข้อมูลเว้นว่างให้กรอกด้วยมือ ---------- */
-const FX_REV={'01':'FM-RD-01: Rev. No.02. 06/02/2569','04':'FM-RD-04: Rev. No.02. 06/02/2569','05':'FM-RD-05: Rev. No.02. 18/03/2569','06':'FM-RD-06: Rev. No.02. 20/05/2569','07':'FM-RD-07: Rev. No.00. 08/05/2568','08':'FM-RD-08: Rev. No.00. 08/05/2568','09':'FM-RD-09: Rev. No.00. 08/05/2568'};
+const FX_REV={'01':'FM-RD-01: Rev. No.02. 06/02/2569','04':'FM-RD-04: Rev. No.02. 06/02/2569','05':'FM-RD-05: Rev. No.02. 18/03/2569','06':'FM-RD-06: Rev. No.02. 20/05/2569','07':'FM-RD-07: Rev. No.00. 08/05/2568','08':'FM-RD-08: Rev. No.00. 08/05/2568','09':'FM-RD-09: Rev. No.00. 08/05/2568','10':'FM-RD-10: Rev. No.00. 08/05/2568'};
 const FX_S={};   /* ชุดตัวอย่างที่แสดงในหน้า (rdSampleCard บันทึกไว้) สำหรับปุ่มพิมพ์ */
 const fxE=v=>esc(v==null?'':String(v));
 const fxTh=v=>{ if(!v) return ''; const m=String(v).match(/^(\d{4})-(\d{2})-(\d{2})/); if(m&&String(v).length<=10) return `${+m[3]}/${+m[2]}/${+m[1]+543}`; const d=new Date(v); return isNaN(d)?'':`${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()+543}`; };
@@ -6384,7 +6384,15 @@ function fx09(x){
     +fxStatus(['Formula Released','Hold','Cancelled'],bom.released?'Formula Released':''));
   return [p1,p2,p3];
 }
-const FX_FN={'06':[fx06,'เอกสารสูตรสุดท้าย'],'07':[fx07,'Pilot Batch Record'],'08':[fx08,'รายงาน Stability'],'09':[fx09,'ส่งมอบสูตรให้ฝ่ายผลิต']};
+/* FM-RD-10 เอกสารรายการตัวอย่างที่เก็บ (Retention Sample Record) */
+function fx10(x){
+  const {f,d,pr}=x, rt=d.retention||{};
+  return [fxPage('10', fxTitle('Retention Sample Record','เอกสารรายการตัวอย่างที่เก็บ')+fxDoc(rt.docNo,'',fxTh(rt.issuedAt))
+    +'<h2>General Information</h2>'+fxInfo(fxKv('Project / Product Name',fxE([pr.pdrNo,x.name].filter(Boolean).join(' · ')))+fxKv('รหัสตัวอย่าง / Sample Code','')+fxKv('วันที่เก็บตัวอย่าง / Retention Date','')+fxKv('รหัสสูตร / Formula Code',fxE(f.code))+fxKv('รุ่นสูตร (Version)',f.revision!=null?fxE(f.revision):'')+fxKv('หมายเลข Batch / Batch No.',fxE(d.pilot&&d.pilot.batchNo))
+      +fxKv('Product Category',fxE(f.category))+fxKv('Brand / Customer',fxE([x.brand,x.cust].filter(Boolean).join(' / ')))+fxKv('ปริมาณที่เก็บ','')+fxKv('สถานที่จัดเก็บ','')+fxKv('วันที่หมดอายุของตัวอย่าง (ถ้ามี)','')+fxKv('หมายเหตุเพิ่มเติม',fxE(rt.note)))
+    +'<h2>Document Approval</h2>'+fxAppr([['Product Development Chemist',''],['Project Coordinator',''],['Final Approval<br>(RD Manager)','']],'Role / Department'))];
+}
+const FX_FN={'10':[fx10,'ตัวอย่างที่เก็บ'],'06':[fx06,'เอกสารสูตรสุดท้าย'],'07':[fx07,'Pilot Batch Record'],'08':[fx08,'รายงาน Stability'],'09':[fx09,'ส่งมอบสูตรให้ฝ่ายผลิต']};
 /* สูตรผลิตภัณฑ์ของโครงการที่ใช้พิมพ์ 06–09: สูตรที่อนุมัติแล้วล่าสุด ถ้าไม่มีใช้สูตรที่แก้ล่าสุด */
 const fxProjFormula=pid=>{ const l=((typeof PD!=='undefined'&&PD.list)||[]).filter(f=>f.projectId===pid).sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||''))); return l.find(f=>f.status==='approved')||l[0]||null; };
 async function fxPrint(code, o){
@@ -6409,7 +6417,7 @@ document.addEventListener('click', async e=>{
     await fxPrint(code,{f, p});
   }catch(err){ toast(errText(err)); }
 });
-const FX_SUB={prototype:'03',finalFormula:'06',pilot:'07',stability:'08',bom:'09'};
+const FX_SUB={prototype:'03',finalFormula:'06',pilot:'07',stability:'08',bom:'09',retention:'10'};
 function rdPdBlock(p){
   const list=(PD.list||[]).filter(f=>f.projectId===p.id);
   return `<div class="card" style="margin:0 0 14px"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><h4 style="margin:0">สูตรผลิตภัณฑ์ (Product Development) · ${list.length}</h4>${pdCanEdit()&&p.id?`<button class="btn small" type="button" data-pd-new="${esc(p.id)}">+ สร้างสูตรผลิตภัณฑ์</button>`:''}</div>

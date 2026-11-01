@@ -1381,6 +1381,7 @@ async function saveProject(ctx: Ctx, p: Any) {
     /* ส่วนที่เซิร์ฟเวอร์ดูแลเอง (ประวัติขั้น การข้ามเงื่อนไข เลขเอกสารย่อย) คงค่าเดิมไว้เสมอ แม้หน้าเว็บส่ง data ชุดเก่ามา */
     const data: Any = rdData(p.data), old: Any = ex ? ex.data || {} : {};
     data.pdrFiles = old.pdrFiles;   /* รายการไฟล์แนบจัดการผ่าน uploadProjectDoc/deleteProjectDoc เท่านั้น */
+    data.contractNotices = old.contractNotices;   /* ประวัติแจ้ง RA เขียนผ่าน notifyRaContracts เท่านั้น */
     if (ex) { data.stageLog = old.stageLog; data.overrides = old.overrides; Object.keys(RD_SUBDOCS).forEach((k) => { if (old[k] && old[k].docNo) data[k] = { ...(data[k] && typeof data[k] === "object" ? data[k] : {}), docNo: old[k].docNo, issuedAt: old[k].issuedAt, issuedBy: old[k].issuedBy }; }); }
     const row = { id: ex ? String(ex.id) : "p" + uuid(12), pdr_no: ex ? String(ex.pdr_no) : await nextPdrNo(db, now), doc_no: ex ? String(ex.doc_no) : await nextDocNo(db, "FM-RD-01", now),
       customer_code: code, company, brand, so_no: str(p.soNo, 60), kind, title: str(p.title, 300), scent_count: scentCount, stage: ex ? String(ex.stage) : "s1",
@@ -1589,6 +1590,29 @@ async function raCheck(ctx: Ctx, id: string, status: string, note: string) {
     await db`update costing.projects set ra = ${db.json(ra)}, actual = ${db.json(actual)}, updated_at = now(), updated_by = ${m.email} where id = ${String(pr.id)}`;
     await log(db, m.email, "raCheck", String(pr.pdr_no) + " · " + status + (ra.note ? " · " + ra.note.slice(0, 200) : ""));
     return projOut({ ...pr, ra, actual, updated_by: m.email, updated_at: new Date() });
+  });
+}
+/** ฝ่ายขายออกและตรวจสัญญา (FM-SA-02-01/02/03) แล้วแจ้งนำส่ง RA: ส่งอีเมลถึงผู้ใช้สิทธิ์ ra (ถ้าตั้งค่าอีเมลไว้) และเก็บประวัติไว้ใน data.contractNotices ให้ RA เห็นในหน้าโครงการ */
+const SA_CONTRACTS: Record<string, string[]> = { design: ["FM-SA-02-01", "สัญญาจ้างออกแบบกลิ่นน้ำหอม"], mfg: ["FM-SA-02-02", "สัญญาจ้างผลิตสินค้า"], service: ["FM-SA-02-03", "สัญญาบริการ"] };
+async function notifyRaContracts(ctx: Ctx, id: string, keys: unknown, note: string) {
+  return await locked(ctx, async (c) => {
+    const m = await needAny(c, RD_EDIT), db = c.db;
+    const pr = (await db`select * from costing.projects where id = ${String(id || "")}`)[0];
+    if (!pr) throw new Error("ไม่พบโครงการนี้");
+    const ks = [...new Set((Array.isArray(keys) ? keys : []).map(String))].filter((k) => SA_CONTRACTS[k]);
+    if (!ks.length) throw new Error("เลือกสัญญาที่จะแจ้ง RA อย่างน้อย 1 ฉบับ");
+    const to = await fdaAlertRecipients(db);
+    if (!to.length) throw new Error("ยังไม่มีผู้ใช้สิทธิ์ RA ในระบบ");
+    const mailed = !!(await getSetting(db, "resendKey")), nt = str(note, 1000), at = new Date().toISOString();
+    const lines = ks.map((k) => "  - " + SA_CONTRACTS[k][0] + " " + SA_CONTRACTS[k][1]).join("\n");
+    const text = "ฝ่ายขายออกและตรวจสอบสัญญาของโครงการ " + pr.pdr_no + " · " + (pr.brand || pr.company || "") + " เรียบร้อยแล้ว แจ้งนำส่ง RA:\n" + lines
+      + (nt ? "\n\nหมายเหตุ: " + nt : "") + "\n\nผู้แจ้ง: " + m.email + "\nเปิดโครงการ: " + await appUrl(db);
+    for (const e of to) await sendMail(db, e, "[แผนกวิจัยและพัฒนา] แจ้งนำส่งสัญญา " + pr.pdr_no + " ให้ RA", text);
+    const data = pr.data || {}, notice = { at, by: m.email, keys: ks, note: nt, to, mailed };
+    data.contractNotices = [...(Array.isArray(data.contractNotices) ? data.contractNotices : []), notice].slice(-30);
+    await db`update costing.projects set data = ${db.json(data)}, updated_at = now(), updated_by = ${m.email} where id = ${String(pr.id)}`;
+    await log(db, m.email, "notifyRaContracts", String(pr.pdr_no) + " · " + ks.map((k) => SA_CONTRACTS[k][0]).join(", ") + " → " + to.length + " คน" + (mailed ? "" : " (ยังไม่ได้ตั้งค่าอีเมล)"));
+    return projOut({ ...pr, data, updated_by: m.email, updated_at: new Date() });
   });
 }
 /** ออกเลขเอกสารให้ส่วนย่อยของโครงการ (FM-RD-03/06/07/08/09/10) ครั้งแรกครั้งเดียว แล้วเก็บไว้ใน data[key].docNo */
@@ -2928,7 +2952,7 @@ const API: Record<string, (ctx: Ctx, ...a: Any[]) => Promise<unknown>> = {
   loadCompliance, saveComplianceRules, saveRmMap, listDocs, getDoc, issueDoc, voidDoc, listRmDocs, getRmDocFile, uploadRmDoc, updateRmDoc, deleteRmDoc,
   listBriefs, saveBrief, deleteBrief, listScents, saveScent, deleteScent, getTypeformStatus, saveTypeformToken, syncTypeform, disconnectTypeform,
   pwLogin, setMyPassword, pwLogout, resetUserPassword,
-  listCustomers, saveCustomer, listProjects, getProject, saveProject, setStage, bulkStage, raCheck, issueProjectDoc, uploadProjectDoc, getProjectDocFile, deleteProjectDoc, listSamples, saveSample, sendSample, deleteSample, evalSummary, importRd,
+  listCustomers, saveCustomer, listProjects, getProject, saveProject, setStage, bulkStage, raCheck, notifyRaContracts, issueProjectDoc, uploadProjectDoc, getProjectDocFile, deleteProjectDoc, listSamples, saveSample, sendSample, deleteSample, evalSummary, importRd,
   listPdBases, savePdBase, deletePdBase, listPdFormulas, savePdFormula, deletePdFormula, importPdBases, importPdFormulas, searchPdImported, getPdFormula, listPdDocFormulas, listPdCustomers, listPdByCustomer, searchPdFormulas, listLabelArchive, getLabelArchive, saveLabelArchive, deleteLabelArchive, listPdDupKeys, listPriceQuotes, importPriceQuotes, saveProjectMockups, setUserName, listPeopleNames, saveProjectScentDesign, listRmOlf, saveRmOlf, seedRmOlf, importScentFormulas,
   listPdTrials, savePdTrial, sendPdTrial, decidePdTrial, issuePdTrialStock,
   listRdStock, listRdStockTx, saveRdStockItem, deleteRdStockItem, addRdStockTx, importRdStock,

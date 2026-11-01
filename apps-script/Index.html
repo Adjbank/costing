@@ -2713,9 +2713,9 @@ const GD_PHASES=[
     {c:'FG · AR · QT · SO', n:'รายละเอียดสินค้า · รหัสลูกค้า · ใบเสนอราคา · ใบสั่งขาย', u:'ฝ่ายขาย / ฝ่ายบัญชี'},
     {c:'FM-RD-01', n:'แบบฟอร์มคำขอพัฒนาผลิตภัณฑ์ (PDR Form)', u:'ฝ่ายขาย · PC เปิดโครงการ', v:'rd', how:'โครงการ › เปิดโครงการ › ปุ่ม "พิมพ์ FM-RD-01" (ดึงข้อมูลโครงการลงฟอร์ม)', p:'yes'},
     {c:'IV → BI → RE', n:'ใบกำกับภาษี → ใบวางบิล → ใบเสร็จรับเงิน (ชำระเงินครบ 100%)', u:'ฝ่ายบัญชี', gate:1}]},
-  {t:'ช่วงที่ 2 · RA ตรวจก่อนเริ่มพัฒนา', lead:'ห้ามเริ่มผสมกลิ่นก่อน RA ตรวจกฎหมายและทำสัญญาแล้ว', steps:[
+  {t:'ช่วงที่ 2 · RA ตรวจก่อนเริ่มพัฒนา', lead:'ห้ามเริ่มผสมกลิ่นก่อน RA ตรวจกฎหมายและฝ่ายขายออกสัญญาแล้ว (ฝ่ายขายออกและตรวจสัญญา แจ้งนำส่ง RA)', steps:[
     {c:'FM-RD-12', n:'ตรวจกฎหมายก่อนทำการพัฒนา: อย. · IFRA · สารก่อภูมิแพ้บนฉลาก', u:'RA', v:'fda', how:'จดแจ้ง อย. › ทะเบียน / ส่วนประกอบฉลาก', p:'wait'},
-    {c:'FM-RD-13 / 14', n:'สัญญาจ้างออกแบบกลิ่นน้ำหอม (FM-RD-13) และสัญญาจ้างผลิตสินค้า (FM-RD-14) · สัญญาบริการระบบกระจายกลิ่นใช้ FM-RD-15', u:'RA', v:'rd', how:'โครงการ › เปิดโครงการ › ปุ่ม "สัญญาออกแบบกลิ่น" / "สัญญาจ้างผลิต" / "สัญญาบริการ" (ดึงชื่อบริษัท แบรนด์ กลิ่น สูตรลงสัญญา ช่องที่เหลือพิมพ์แก้บนหน้าตัวอย่าง)', p:'yes'}]},
+    {c:'FM-SA-02-01 / 02 / 03', n:'สัญญาจ้างออกแบบกลิ่นน้ำหอม (FM-SA-02-01) · สัญญาจ้างผลิตสินค้า (FM-SA-02-02) · สัญญาบริการ (FM-SA-02-03) · ฝ่ายขายเป็นผู้ออกและตรวจสอบเอกสาร แล้วแจ้งนำส่ง RA', u:'ฝ่ายขาย → RA', v:'rd', how:'โครงการ › เปิดโครงการ › ปุ่ม "สัญญาออกแบบกลิ่น" / "สัญญาจ้างผลิต" / "สัญญาบริการ" (ดึงชื่อบริษัท แบรนด์ กลิ่น สูตรลงสัญญา ช่องที่เหลือพิมพ์แก้บนหน้าตัวอย่าง)', p:'yes'}]},
   {t:'ช่วงที่ 3 · พัฒนากลิ่น', lead:'รอบแรกเสนอ 3 แนวทาง ลูกค้าเลือก 1 · ไม่ผ่านแก้ได้ 2 ครั้ง (ส่งได้รวม 3 รอบ)', steps:[
     {c:'ฐานข้อมูลวัตถุดิบ', n:'ข้อมูลวิจัยสารหอมและน้ำมันหอมระเหย ราคา ซัพพลายเออร์ และ MSDS', u:'Research Ingredients', v:'rm', v2:'bt', how:'ฐานราคาวัตถุดิบ · ทะเบียนพืชหอม · MSDS วัตถุดิบ'},
     {c:'FM-RD-02', n:'แบบฟอร์มการส่งตัวอย่างให้ลูกค้า · บันทึกสูตรกลิ่น (Prototype Fragrance Formulation Record)', u:'Perfumer', v:'perf', how:'Perfumer › คลังกลิ่น › ปุ่ม "พิมพ์" ท้ายแถว หรือในหน้าแก้ไขกลิ่น', p:'yes'},
@@ -5346,7 +5346,7 @@ function rdProjectPage(o){
   const p=o.project, d=p.data||{}, ed=rdCanEdit(), ro=ed?'':'disabled', due=rdDue(p, o.samples), next=rdNextStage(p), nextL=next?(next==='done'?'ปิดงาน (เสร็จสิ้น)':'ไปขั้น '+RD_STAGE_MAP[next][1]):'';
   const brief=(PF.briefs||[]).find(b=>b.id===p.briefId);
   const custOpts=[['', '– เลือกลูกค้า –'],['__new','+ ลูกค้าใหม่'],...RD.customers.map(c=>[c.code, `${c.code} · ${c.brand||c.company}${c.brand&&c.company?' ('+c.company+')':''}`])];
-  return `<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px"><div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button class="btn small" type="button" id="rdBack">← โครงการทั้งหมด</button><h3 style="margin:0"><span class="mono">${esc(p.pdrNo)}</span> · ${rdBrand(p)}</h3>${p.id?'<button class="btn small" type="button" data-fx="01" title="พิมพ์แบบฟอร์มคำขอพัฒนาผลิตภัณฑ์">พิมพ์ FM-RD-01</button><button class="btn small" type="button" data-fx="13" title="FM-RD-13 สัญญาจ้างออกแบบกลิ่นน้ำหอม">สัญญาออกแบบกลิ่น</button><button class="btn small" type="button" data-fx="14" title="FM-RD-14 สัญญาจ้างผลิตสินค้า">สัญญาจ้างผลิต</button><button class="btn small" type="button" data-fx="15" title="FM-RD-15 สัญญาบริการ (ระบบกระจายกลิ่น)">สัญญาบริการ</button>':''}${pfChip(p.stage,{s1:['1 รับบรีฟ','info'],s2:['2 ตรวจกฎหมาย','info'],s3:['3 ออกแบบกลิ่น','warn'],s4:['4 ต้นแบบ','warn'],s5:['5 ส่งต้นแบบ','warn'],s6:['6 Stability','warn'],s7:['7 BOM','warn'],s8:['8 Pilot','warn'],done:['เสร็จสิ้น','ok'],lost:['ยกเลิก','bad']})}${rdDueChip(due)}</div>
+  return `<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px"><div class="row" style="gap:8px;flex-wrap:wrap;align-items:center"><button class="btn small" type="button" id="rdBack">← โครงการทั้งหมด</button><h3 style="margin:0"><span class="mono">${esc(p.pdrNo)}</span> · ${rdBrand(p)}</h3>${p.id?'<button class="btn small" type="button" data-fx="01" title="พิมพ์แบบฟอร์มคำขอพัฒนาผลิตภัณฑ์">พิมพ์ FM-RD-01</button><button class="btn small" type="button" data-fx="13" title="FM-SA-02-01 สัญญาจ้างออกแบบกลิ่นน้ำหอม (ฝ่ายขายออก · แจ้งนำส่ง RA)">สัญญาออกแบบกลิ่น</button><button class="btn small" type="button" data-fx="14" title="FM-SA-02-02 สัญญาจ้างผลิตสินค้า (ฝ่ายขายออก · แจ้งนำส่ง RA)">สัญญาจ้างผลิต</button><button class="btn small" type="button" data-fx="15" title="FM-SA-02-03 สัญญาบริการ (ฝ่ายขายออก · แจ้งนำส่ง RA)">สัญญาบริการ</button>':''}${pfChip(p.stage,{s1:['1 รับบรีฟ','info'],s2:['2 ตรวจกฎหมาย','info'],s3:['3 ออกแบบกลิ่น','warn'],s4:['4 ต้นแบบ','warn'],s5:['5 ส่งต้นแบบ','warn'],s6:['6 Stability','warn'],s7:['7 BOM','warn'],s8:['8 Pilot','warn'],done:['เสร็จสิ้น','ok'],lost:['ยกเลิก','bad']})}${rdDueChip(due)}</div>
       <span class="muted" style="font-size:12px">${esc(p.docNo)} · เปิดเมื่อ ${rdDate(p.createdAt)} โดย ${rdPerson(p.createdBy)} · แก้ล่าสุด ${fmtSeen(p.updatedAt)}</span></div>
     ${rdStepper(p, o.samples)}
     ${ed&&p.stage!=='done'&&p.stage!=='lost'?`<div class="row" style="gap:8px;flex-wrap:wrap;margin:10px 0 14px;align-items:center"><button class="btn primary" type="button" data-rd-stage="${esc(next||'')}" ${next?'':'disabled'}>${esc(nextL)} →</button>${due&&due.label?`<span class="muted" style="font-size:12.5px">${esc(due.label)}${due.days?` · กำหนด ${due.days} วัน (${rdDate(due.due)})`:''}</span>`:''}
@@ -6428,8 +6428,9 @@ document.addEventListener('click', async e=>{
     await fxPrint(code,{f, p});
   }catch(err){ toast(errText(err)); }
 });
-/* ---------- สัญญา FM-RD-13 ออกแบบกลิ่น / 14 จ้างผลิต / 15 บริการ ตามต้นฉบับของบริษัท · ดึงชื่อบริษัท แบรนด์ กลิ่น สูตรจากโครงการ ช่องสีเหลืองพิมพ์แก้บนหน้าตัวอย่างได้ก่อนสั่งพิมพ์ (ไม่บันทึกลงระบบ) ---------- */
-const FK_REV={'13':'FM-RD-13: Rev. No.00. 01/11/2569','14':'FM-RD-14: Rev. No.00. 01/11/2569','15':'FM-RD-15: Rev. No.00. 01/11/2569'};
+/* ---------- สัญญา FM-SA-02-01 ออกแบบกลิ่น / 02 จ้างผลิต / 03 บริการ (ฝ่ายขายออกและตรวจ แล้วแจ้งนำส่ง RA) ตามต้นฉบับของบริษัท · ดึงชื่อบริษัท แบรนด์ กลิ่น สูตรจากโครงการ ช่องสีเหลืองพิมพ์แก้บนหน้าตัวอย่างได้ก่อนสั่งพิมพ์ (ไม่บันทึกลงระบบ) ---------- */
+const FK_CODE={'13':'FM-SA-02-01','14':'FM-SA-02-02','15':'FM-SA-02-03'};
+const FK_REV={'13':'FM-SA-02-01: Rev. No.00','14':'FM-SA-02-02: Rev. No.00','15':'FM-SA-02-03: Rev. No.00'};
 const FK_US={name:'บริษัท เซนท์ แอนด์ เซนส์ แลบอราทอรี่ จำกัด', reg:'0105557081665', addr:'2/4 ซอยเพชรเกษม 35/1 ถนนเพชรเกษม แขวงบางหว้า เขตภาษีเจริญ กรุงเทพมหานคร 10160', sign:'นางสาวรุจิรา ตระกูลยิ่งเจริญ'};
 const FK_MON=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 const fkToday=()=>{ const d=new Date(); return `วันที่ ${d.getDate()} ${FK_MON[d.getMonth()]} พ.ศ. ${d.getFullYear()+543}`; };
@@ -6463,7 +6464,7 @@ function fkCtx(p){
   const ok=pds.filter(f=>f.status==='approved');
   return {company:p.company||c.company||'', brand:p.brand||c.brand||'', scents, pds:ok.length?ok:pds};
 }
-/* FM-RD-13 สัญญาจ้างออกแบบกลิ่นน้ำหอม */
+/* FM-SA-02-01 สัญญาจ้างออกแบบกลิ่นน้ำหอม */
 function fk13(p){
   const o=fkCtx(p), sc=o.scents.length?o.scents:[{}];
   const items=sc.map((s,i)=>`<div class="fk-it">${sc.length>1?`<b>${i+1})</b> `:''}เลขที่น้ำหอม (ภายในบริษัท) : ${fk(s.formulaCode||s.code,30)}<br>ชื่อการค้าภาษาไทย : ${fk('',60)}<br>ชื่อการค้าภาษาอังกฤษ : ${fk([o.brand,s.name].filter(Boolean).join(' '),60)}</div>`).join('');
@@ -6493,7 +6494,7 @@ function fk13(p){
     +fkH('หมวด 3 รูปภาพบรรยายคอนเซปต์ที่ผู้ว่าจ้างสั่งผลิต')+'<div class="fk-box">-เอกสารแนบท้าย-</div>'
     +fkSign(o,'สัญญาจ้างออกแบบกลิ่นน้ำหอม')+'</div>'];
 }
-/* FM-RD-14 สัญญาจ้างผลิตสินค้า */
+/* FM-SA-02-02 สัญญาจ้างผลิตสินค้า */
 function fk14(p){
   const o=fkCtx(p), src=o.pds.length?o.pds.map(f=>({name:f.name,code:f.code,cat:f.category})):o.scents.map(s=>({name:s.name,code:s.formulaCode||s.code}));
   const list=src.length?src:[{}];
@@ -6530,7 +6531,7 @@ function fk14(p){
     +c('ข้อสงวนสิทธิ')+fkP('ผู้รับจ้างขอสงวนสิทธิในการให้บริการต่อผู้ว่าจ้างที่ประพฤติขัดต่อกฎหมายไม่เป็นไปตามกฎระเบียบและเงื่อนไขต่าง ๆ ของผู้รับจ้างและ/หรือทำการใด ๆ ที่อาจก่อให้เกิดผลกระทบและ/หรือสร้างความเสียหายหรือสร้างความไม่สงบเรียบร้อยให้กับผู้รับจ้าง ผู้รับจ้างจะไม่รับผิดชอบในทุกกรณี โดยผู้ว่าจ้างไม่มีสิทธิเรียกร้องค่าเสียหายใด ๆ จากผู้รับจ้างทั้งสิ้น','in')
     +fkCommon(k+1)+fkSign(o,'สัญญาจ้างผลิต')+'</div>'];
 }
-/* FM-RD-15 สัญญาบริการ (ระบบกระจายกลิ่น) */
+/* FM-SA-02-03 สัญญาบริการ (ระบบกระจายกลิ่น) */
 function fk15(p){
   const o=fkCtx(p);
   const rows=fxGrid([['ลำดับ','7%'],['เลขที่ใบเสนอราคา','16%'],['สถานที่ให้บริการ','24%'],['ระยะเวลาให้บริการ','17%'],['จำนวนเครื่อง','10%'],['ค่าบริการ (บาท)','12%'],['รูปแบบการให้บริการ','14%']], [], 8);
@@ -6556,7 +6557,7 @@ function fk15(p){
 const FK_FN={'13':[fk13,'สัญญาจ้างออกแบบกลิ่นน้ำหอม'],'14':[fk14,'สัญญาจ้างผลิตสินค้า'],'15':[fk15,'สัญญาบริการ']};
 function fkOpen(code,p){
   const fn=FK_FN[code]; if(!fn) return;
-  fxOpen(`FM-RD-${code} · ${fn[1]} · ${p.pdrNo||''}`, [`<div class="fk-hint">ช่องสีเหลืองดึงจากโครงการหรือเว้นให้กรอก · คลิกพิมพ์แก้ข้อความได้ทุกจุดก่อนกด "พิมพ์" (ไม่บันทึกลงระบบ · ปิดหน้านี้แล้วข้อความที่แก้จะหาย)</div>`].concat(fn[0](p)));
+  fxOpen(`${FK_CODE[code]} · ${fn[1]} · ${p.pdrNo||''}`, [`<div class="fk-hint">ช่องสีเหลืองดึงจากโครงการหรือเว้นให้กรอก · คลิกพิมพ์แก้ข้อความได้ทุกจุดก่อนกด "พิมพ์" (ไม่บันทึกลงระบบ · ปิดหน้านี้แล้วข้อความที่แก้จะหาย)</div>`].concat(fn[0](p)));
 }
 const FX_SUB={prototype:'03',finalFormula:'06',pilot:'07',stability:'08',bom:'09',retention:'10'};
 function rdPdBlock(p){

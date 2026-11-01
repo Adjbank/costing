@@ -252,6 +252,7 @@ select.doc-new{border:1px solid var(--line-strong);border-radius:8px;padding:5px
 .help table{width:100%;font-size:12.5px;margin-top:6px}
 .help td,.help th{padding:3px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
 .help th{background:transparent;position:static}
+html.in-erp .brand,html.in-erp .navtabs{display:none}
 .navtabs{display:flex;gap:4px;background:var(--tint);border-radius:14px;padding:6px;max-width:100%;overflow-x:auto}
 .navtabs button{border:none;background:transparent;border-radius:10px;padding:8px 16px;color:var(--ink-muted);cursor:pointer;font-weight:500;white-space:nowrap;font-size:14px}
 .navtabs button:hover{color:var(--ink)}
@@ -2380,6 +2381,14 @@ const IN_ERP=(()=>{ try{ if(window.top===window) return false; const a=location.
 if(HTTP && window.top===window && location.hostname==='rd.scentandsense.co.th' && !/[?&]direct=1/.test(location.search)) location.replace(ERP_ORIGIN+'/#rd');
 function erpToken(){ return new Promise(res=>{ const on=e=>{ if(e.origin!==ERP_ORIGIN||!e.data||e.data.type!=='rd-token') return; clearTimeout(t); window.removeEventListener('message',on); res(e.data.token||null); };
   const t=setTimeout(()=>{ window.removeEventListener('message',on); res(null); },8000); window.addEventListener('message',on); window.parent.postMessage({type:'rd-ready'},ERP_ORIGIN); }); }
+/* ในหน้า ERP เมนูของระบบนี้ย้ายไปอยู่แถบเมนูของ ERP: ส่งรายการเมนูที่ผู้ใช้เปิดได้ไปให้ ERP ({type:'rd-nav'}) และเปลี่ยนหน้าตามที่ ERP สั่ง ({type:'rd-go'}) */
+const BTN2V={btnDash:'dash', btnCalc:'calc', btnDoc:'doc', btnRd:'rd', btnPd:'pd', btnBt:'bt', btnStk:'stk', btnFda:'fda', btnPerf:'perf', btnMsds:'msds', btnRm:'rm', btnAll:'all', btnPrice:'price', btnCmp:'cmp', btnAdmin:'admin', btnGuide:'guide'};
+if(IN_ERP){ document.documentElement.classList.add('in-erp'); }
+function erpNavSync(v){ if(!IN_ERP) return; try{
+  const items=[...document.querySelectorAll('#navtabs button')].map(b=>{ const sp=b.querySelector('span'), n=b.querySelector('.nav-n'), bd=b.querySelector('.badge'); return {view:BTN2V[b.id], label:sp?sp.textContent.trim():'', n:n?n.textContent.trim():(bd?bd.textContent.trim():'')}; }).filter(x=>x.view&&x.label);
+  window.parent.postMessage({type:'rd-nav', items, view:v||S.view||'', email:(S.me&&S.me.email)||''}, ERP_ORIGIN); }catch(e){} }
+if(IN_ERP) window.addEventListener('message', e=>{ if(e.origin!==ERP_ORIGIN||!e.data) return;
+  if(e.data.type==='rd-go' && typeof showView==='function' && typeof S!=='undefined' && S.me) showView(String(e.data.view||'')); });
 let erpTried=0;
 async function erpLogin(){ if(!IN_ERP||!HTTP||Date.now()-erpTried<15000) return false; erpTried=Date.now();
   const tok=await erpToken(); if(!tok) return false;
@@ -2610,6 +2619,7 @@ function renderUserBar(){
     + (gdCanView() ? tab('btnGuide','guide','คู่มือการทำงาน') : '')
     + (S.me&&S.me.role ? tab('btnCmp','cmp', (adm?'เรื่องร้องเรียน':'แจ้งเรื่องร้องเรียน') + (adm&&S.cNew ? ` <span class="badge">${S.cNew}</span>` : '')) : '')
     + (can('manageUsers') ? tab('btnAdmin','admin','ผู้ใช้และบทบาท') : '');
+  erpNavSync(v);
   const dark=effTheme()==='dark', ic=d=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
   const row=(id,icon,tint,label,extra,cls)=>`<button type="button" class="um-row ${cls||''}" id="${id}" role="menuitem"><span class="um-ic" style="background:${tint}">${ic(icon)}</span><span class="um-l">${label}</span>${extra||'<span class="um-chev">›</span>'}</button>`;
   $('#userbar').innerHTML = `${ava(S.me.email)}<span id="ubName"></span><span class="rolepill" id="ubRole"></span>

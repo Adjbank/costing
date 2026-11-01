@@ -2714,8 +2714,8 @@ const GD_PHASES=[
     {c:'FM-RD-01', n:'แบบฟอร์มคำขอพัฒนาผลิตภัณฑ์ (PDR Form)', u:'ฝ่ายขาย · PC เปิดโครงการ', v:'rd', how:'โครงการ › เปิดโครงการ › ปุ่ม "พิมพ์ FM-RD-01" (ดึงข้อมูลโครงการลงฟอร์ม)', p:'yes'},
     {c:'IV → BI → RE', n:'ใบกำกับภาษี → ใบวางบิล → ใบเสร็จรับเงิน (ชำระเงินครบ 100%)', u:'ฝ่ายบัญชี', gate:1}]},
   {t:'ช่วงที่ 2 · RA ตรวจก่อนเริ่มพัฒนา', lead:'ห้ามเริ่มผสมกลิ่นก่อน RA ตรวจกฎหมายและฝ่ายขายออกสัญญาแล้ว (ฝ่ายขายออกและตรวจสัญญา แจ้งนำส่ง RA)', steps:[
-    {c:'FM-RD-12', n:'ตรวจกฎหมายก่อนทำการพัฒนา: อย. · IFRA · สารก่อภูมิแพ้บนฉลาก', u:'RA', v:'fda', how:'จดแจ้ง อย. › ทะเบียน / ส่วนประกอบฉลาก', p:'wait'},
-    {c:'FM-SA-02-01 / 02 / 03', n:'สัญญาจ้างออกแบบกลิ่นน้ำหอม (FM-SA-02-01) · สัญญาจ้างผลิตสินค้า (FM-SA-02-02) · สัญญาบริการ (FM-SA-02-03) · ฝ่ายขายเป็นผู้ออกและตรวจสอบเอกสาร แล้วแจ้งนำส่ง RA', u:'ฝ่ายขาย → RA', v:'rd', how:'โครงการ › เปิดโครงการ › ปุ่ม "สัญญาออกแบบกลิ่น" / "สัญญาจ้างผลิต" / "สัญญาบริการ" (ดึงชื่อบริษัท แบรนด์ กลิ่น สูตรลงสัญญา ช่องที่เหลือพิมพ์แก้บนหน้าตัวอย่าง)', p:'yes'}]},
+    {c:'(รอกำหนดรหัส)', n:'ตรวจกฎหมายก่อนทำการพัฒนา: อย. · IFRA · สารก่อภูมิแพ้บนฉลาก', u:'RA', v:'fda', how:'จดแจ้ง อย. › ทะเบียน / ส่วนประกอบฉลาก', p:'wait'},
+    {c:'FM-SA-02-01 / 02 / 03', n:'สัญญาจ้างออกแบบกลิ่นน้ำหอม (FM-SA-02-01) · สัญญาจ้างผลิตสินค้า (FM-SA-02-02) · สัญญาบริการ (FM-SA-02-03) · ฝ่ายขายเป็นผู้ออกและตรวจสอบเอกสาร แล้วแจ้งนำส่ง RA', u:'ฝ่ายขาย → RA', v:'rd', how:'โครงการ › เปิดโครงการ › การ์ด "สัญญา" › พิมพ์สัญญา (ดึงชื่อบริษัท แบรนด์ กลิ่น สูตรลงสัญญา ช่องที่เหลือพิมพ์แก้บนหน้าตัวอย่าง) › ติ๊กฉบับที่ตรวจแล้ว › กด "แจ้งนำส่ง RA" ระบบส่งอีเมลถึง RA และบันทึกประวัติ', p:'yes'}]},
   {t:'ช่วงที่ 3 · พัฒนากลิ่น', lead:'รอบแรกเสนอ 3 แนวทาง ลูกค้าเลือก 1 · ไม่ผ่านแก้ได้ 2 ครั้ง (ส่งได้รวม 3 รอบ)', steps:[
     {c:'ฐานข้อมูลวัตถุดิบ', n:'ข้อมูลวิจัยสารหอมและน้ำมันหอมระเหย ราคา ซัพพลายเออร์ และ MSDS', u:'Research Ingredients', v:'rm', v2:'bt', how:'ฐานราคาวัตถุดิบ · ทะเบียนพืชหอม · MSDS วัตถุดิบ'},
     {c:'FM-RD-02', n:'แบบฟอร์มการส่งตัวอย่างให้ลูกค้า · บันทึกสูตรกลิ่น (Prototype Fragrance Formulation Record)', u:'Perfumer', v:'perf', how:'Perfumer › คลังกลิ่น › ปุ่ม "พิมพ์" ท้ายแถว หรือในหน้าแก้ไขกลิ่น', p:'yes'},
@@ -5251,7 +5251,7 @@ function rdFiltered(){ const q=RD.q.trim().toLowerCase(); return RD.list.filter(
 function rdCard(p){
   const d=rdDue(p), days=p.actual&&p.actual[p.stage]?rdDays(p.actual[p.stage]):null;
   return `<button type="button" class="rd-card ${d&&d.overdue?'late':''}" data-rd-open="${esc(p.id)}">
-    <div class="rd-card-h"><span class="mono">${esc(p.pdrNo)}</span><span class="muted">${esc(RD_KIND[p.kind]||p.kind)}</span></div>
+    <div class="rd-card-h"><span class="mono">${esc(p.pdrNo)}</span>${rdRaPend(p)?'<span class="chip warn" title="ฝ่ายขายแจ้งนำส่งสัญญา รอ RA ตรวจ">📨 สัญญารอ RA</span>':''}<span class="muted">${esc(RD_KIND[p.kind]||p.kind)}</span></div>
     <div class="rd-card-t">${rdBrand(p)}</div>${p.company&&p.brand?`<div class="muted" style="font-size:12px">${esc(p.company)}</div>`:''}
     <div class="rd-card-f"><span>${p.scentCount} กลิ่น${p.scents?` · ${p.scents} สูตร`:''}${p.samples?` · ${p.samples} ชุดตัวอย่าง`:''}</span>${days!=null?`<span class="muted">${days} วันในขั้นนี้</span>`:''}</div>
     <div class="rd-card-f">${(p.owners.perfumer||[]).length?`<span title="Perfumer">${(p.owners.perfumer||[]).map(ava).join('')}</span>`:''}${p.owners.pc?`<span title="Project Co">${ava(p.owners.pc)}</span>`:''}${rdDueChip(d)}</div></button>`;
@@ -5383,7 +5383,9 @@ function rdProjectPage(o){
       </fieldset>
       <div class="row" style="margin-top:14px;gap:8px;flex-wrap:wrap">${ed?'<button class="btn primary" type="submit">บันทึกโครงการ</button>':''}<span class="muted" id="rdErr" role="alert" style="color:var(--bad)"></span></div></form>
     ${p.id?rdPdBlock(p):''}
+    ${p.id?rdContractCard(p,ed):''}
     <div class="card" style="margin:0 0 14px"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><h4 style="margin:0">ตรวจกฎหมาย (RA) · ขั้น 2</h4>${p.ra&&p.ra.status?pfChip(p.ra.status,RD_RA):'<span class="chip info">รอตรวจ</span>'}</div>
+      ${(()=>{ const ns=(p.data&&p.data.contractNotices)||[], l=ns[ns.length-1]; return l?`<div style="font-size:12.5px;margin-top:4px">📨 ฝ่ายขายแจ้งนำส่งสัญญา ${esc(rdSaCodes(l.keys))} · ${rdPerson(l.by)} ${rdDate(l.at)}${l.note?' · '+esc(l.note):''}</div>`:''; })()}
       ${p.ra&&p.ra.at?`<div class="muted" style="font-size:12.5px;margin-top:4px">${esc(p.ra.note||'')} — ${rdPerson(p.ra.by)} ${rdDate(p.ra.at)}</div>`:''}
       ${can('ra')||isAdminRole()?`<form id="rdRaForm" class="row" style="gap:8px;flex-wrap:wrap;margin-top:8px;align-items:end" novalidate><div class="field"><label>ผลตรวจ</label><select id="rdRaStatus">${Object.entries(RD_RA).map(([k,[l]])=>`<option value="${k}" ${p.ra&&p.ra.status===k?'selected':''}>${l}</option>`).join('')}</select></div><div class="field" style="flex:1;min-width:220px"><label>หมายเหตุ / เงื่อนไข (IFRA หมวด, อย., คำกล่าวอ้าง)</label><input id="rdRaNote" value="${esc(p.ra&&p.ra.note||'')}" maxlength="2000"></div><button class="btn small primary" type="submit">บันทึกผลตรวจ</button></form>`:''}</div>
     <div class="card" style="margin:0 0 14px"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><h4 style="margin:0">กลิ่นในโครงการ (FM-RD-02) · ${o.scents.length}</h4>${rdDirChip(o)}${can('perfumer')?`<button class="btn small" type="button" id="rdNewScent">+ ออกแบบกลิ่นใหม่</button>`:''}</div>
@@ -5587,6 +5589,8 @@ rdv.addEventListener('submit', async e=>{
     rdRun('saveProject',[np],btn,p.id?'บันทึกโครงการแล้ว':'เปิดโครงการแล้ว',async r=>{ rdPatchList(r); if(!p.id){ RD.customers=await api('listCustomers'); if(RD.pdrDraft){ const dr=RD.pdrDraft; RD.pdrDraft=null; try{ await api('uploadProjectDoc', r.id, {file:dr.name, kind:'pdr'}, dr.b64); }catch(ex){ toast('เปิดโครงการแล้ว แต่แนบไฟล์ไม่สำเร็จ: '+errText(ex)); } } } RD.open=await api('getProject', r.id); drawRd(); });
     return;
   }
+  if(e.target.id==='rdSaForm'){ if(!p.id){ toast('บันทึกโครงการก่อน'); return; } const ks=[...document.querySelectorAll('[data-rd-sa]:checked')].map(x=>x.dataset.rdSa); if(!ks.length){ toast('ติ๊กสัญญาที่จะแจ้ง RA อย่างน้อย 1 ฉบับ'); return; }
+    rdRun('notifyRaContracts',[p.id,ks,$('#rdSaNote').value],e.target.querySelector('button'),'แจ้ง RA แล้ว',r=>{ RD.open.project=r; rdPatchList(r); drawRd(); }); return; }
   if(e.target.id==='rdRaForm'){ if(!p.id){ toast('บันทึกโครงการก่อน'); return; } rdRun('raCheck',[p.id,$('#rdRaStatus').value,$('#rdRaNote').value],e.target.querySelector('button'),'บันทึกผลตรวจกฎหมายแล้ว',r=>{ RD.open.project=r; rdPatchList(r); drawRd(); }); return; }
   if(e.target.id==='rdSampleForm'){ const s=rdReadSample(), err=$('#rdSampleErr'); if(!s.items.length){ err.textContent='ใส่รายการตัวอย่างอย่างน้อย 1 รายการ'; return; }
     rdRun('saveSample',[s],e.target.querySelector('button[type=submit]'),'บันทึกชุดตัวอย่างแล้ว',r=>{ RD.open.samples=RD.open.samples.filter(x=>x.id!==r.id).concat([r]); RD.sampleEdit=null; drawRd(); }); }
@@ -6560,6 +6564,18 @@ function fkOpen(code,p){
   fxOpen(`${FK_CODE[code]} · ${fn[1]} · ${p.pdrNo||''}`, [`<div class="fk-hint">ช่องสีเหลืองดึงจากโครงการหรือเว้นให้กรอก · คลิกพิมพ์แก้ข้อความได้ทุกจุดก่อนกด "พิมพ์" (ไม่บันทึกลงระบบ · ปิดหน้านี้แล้วข้อความที่แก้จะหาย)</div>`].concat(fn[0](p)));
 }
 const FX_SUB={prototype:'03',finalFormula:'06',pilot:'07',stability:'08',bom:'09',retention:'10'};
+/* สัญญา FM-SA-02-01/02/03: ฝ่ายขายออกและตรวจสอบ แล้วกดแจ้ง RA (ส่งอีเมลถึงผู้ใช้สิทธิ์ RA + เก็บประวัติในโครงการ) */
+/* ฝ่ายขายแจ้งนำส่งสัญญาแล้ว แต่ RA ยังไม่ได้บันทึกผลตรวจหลังจากนั้น */
+const rdRaPend=p=>{ const ns=(p.data&&p.data.contractNotices)||[], l=ns[ns.length-1]; return !!l&&!(p.ra&&p.ra.at&&p.ra.at>l.at); };
+const RD_SA=[['design','13','FM-SA-02-01','สัญญาจ้างออกแบบกลิ่นน้ำหอม'],['mfg','14','FM-SA-02-02','สัญญาจ้างผลิตสินค้า'],['service','15','FM-SA-02-03','สัญญาบริการ (ระบบกระจายกลิ่น)']];
+const rdSaCodes=ks=>(ks||[]).map(k=>(RD_SA.find(x=>x[0]===k)||[])[2]).filter(Boolean).join(', ');
+function rdContractCard(p, ed){
+  const ns=(p.data&&p.data.contractNotices)||[], last=ns[ns.length-1];
+  return `<div class="card" style="margin:0 0 14px"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><h4 style="margin:0">สัญญา (ฝ่ายขายออกและตรวจสอบ) · แจ้ง RA</h4>${last?'<span class="chip ok">แจ้ง RA แล้ว '+rdDate(last.at)+'</span>':'<span class="chip info">ยังไม่แจ้ง RA</span>'}</div>
+    <div class="tablebox" style="margin-top:8px"><table><tbody>${RD_SA.map(([k,c,code,l])=>`<tr><td style="width:28px">${ed&&p.id?`<input type="checkbox" data-rd-sa="${k}" aria-label="เลือก ${code}">`:''}</td><td class="mono" style="white-space:nowrap">${code}</td><td>${l}</td><td style="white-space:nowrap">${p.id?`<button class="btn small" type="button" data-fx="${c}">พิมพ์</button>`:''}</td></tr>`).join('')}</tbody></table></div>
+    ${ed&&p.id?`<form id="rdSaForm" class="row" style="gap:8px;flex-wrap:wrap;margin-top:8px;align-items:end" novalidate><div class="field" style="flex:1;min-width:220px"><label>หมายเหตุถึง RA (ถ้ามี)</label><input id="rdSaNote" maxlength="1000" placeholder="เช่น ลูกค้าเซ็นสัญญาแล้ว / รอตรวจเงื่อนไขชำระเงิน"></div><button class="btn small primary" type="submit">แจ้งนำส่ง RA</button></form><div class="muted" style="font-size:12px;margin-top:4px">ติ๊กสัญญาที่ฝ่ายขายตรวจแล้ว แล้วกดแจ้ง ระบบส่งอีเมลถึงผู้ใช้สิทธิ์ RA และบันทึกประวัติไว้ในโครงการ</div>`:''}
+    ${ns.length?`<div style="margin-top:8px;font-size:12.5px">${ns.slice().reverse().map(n=>`<div class="muted">${rdDate(n.at)} · ${rdPerson(n.by)} · ${esc(rdSaCodes(n.keys))} → RA ${(n.to||[]).length} คน${n.mailed?'':' (ยังไม่ได้ตั้งค่าอีเมล · RA ดูได้ในหน้านี้)'}${n.note?' · '+esc(n.note):''}</div>`).join('')}</div>`:''}</div>`;
+}
 function rdPdBlock(p){
   const list=(PD.list||[]).filter(f=>f.projectId===p.id);
   return `<div class="card" style="margin:0 0 14px"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><h4 style="margin:0">สูตรผลิตภัณฑ์ (Product Development) · ${list.length}</h4>${pdCanEdit()&&p.id?`<button class="btn small" type="button" data-pd-new="${esc(p.id)}">+ สร้างสูตรผลิตภัณฑ์</button>`:''}</div>

@@ -2373,7 +2373,19 @@ async function httpApi(fn, ...args){
   if(!j.ok){ if(/^AUTH_/.test(j.error)) authLost(); throw new Error(j.error); }
   return j.result;
 }
-function authLost(){ clearToken(); if(S.gate!=='signin'){ S.inApp=false; showGate('signin','เซสชันหมดอายุ เข้าสู่ระบบอีกครั้ง'); } }
+/* เปิดอยู่ในหน้า ERP (factory.scentandsense.co.th): ขอ access token ของ ERP ผ่าน postMessage แล้วแลกเป็นเซสชัน R&D ที่ฟังก์ชัน erp-login
+   (ตรวจผู้ใช้กับ ERP · อีเมลโดเมนบริษัท · สิทธิ์ยังมาจาก costing.users) · เปิดเว็บนี้ตรง ๆ จะถูกพาไปหน้า R&D ใน ERP ยกเว้นใส่ ?direct=1 */
+const ERP_ORIGIN='https://factory.scentandsense.co.th';
+const IN_ERP=(()=>{ try{ if(window.top===window) return false; const a=location.ancestorOrigins; return a&&a.length ? a[a.length-1]===ERP_ORIGIN : document.referrer.indexOf(ERP_ORIGIN)===0; }catch(e){ return false; } })();
+if(HTTP && window.top===window && location.hostname==='rd.scentandsense.co.th' && !/[?&]direct=1/.test(location.search)) location.replace(ERP_ORIGIN+'/#rd');
+function erpToken(){ return new Promise(res=>{ const on=e=>{ if(e.origin!==ERP_ORIGIN||!e.data||e.data.type!=='rd-token') return; clearTimeout(t); window.removeEventListener('message',on); res(e.data.token||null); };
+  const t=setTimeout(()=>{ window.removeEventListener('message',on); res(null); },8000); window.addEventListener('message',on); window.parent.postMessage({type:'rd-ready'},ERP_ORIGIN); }); }
+let erpTried=0;
+async function erpLogin(){ if(!IN_ERP||!HTTP||Date.now()-erpTried<15000) return false; erpTried=Date.now();
+  const tok=await erpToken(); if(!tok) return false;
+  const r=await fetch(CFG.apiUrl.replace(/\/api$/,'/erp-login'),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({token:tok})}), j=await r.json();
+  if(!j.ok) throw new Error(j.error||'ERP_AUTH'); setSession(j.result,false); try{ localStorage.setItem('ss-rd-lastemail', j.result.email); }catch(x){} return true; }
+function authLost(){ clearToken(); if(IN_ERP&&Date.now()-erpTried>=15000){ S.inApp=false; showGate('loading'); erpLogin().then(ok=>{ if(ok) boot(); else showGate('signin','เซสชันหมดอายุ เข้าสู่ระบบอีกครั้ง'); }).catch(()=>showGate('signin','เซสชันหมดอายุ เข้าสู่ระบบอีกครั้ง')); return; } if(S.gate!=='signin'){ S.inApp=false; showGate('signin','เซสชันหมดอายุ เข้าสู่ระบบอีกครั้ง'); } }
 const api = (fn, ...args) => HTTP ? httpApi(fn, ...args)
   : new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](...args));
 /* ปุ่ม Google ใช้เฉพาะยืนยันตัวตนก่อนตั้งรหัสผ่าน (ไม่ได้ใช้เข้าระบบ) */
@@ -8341,7 +8353,7 @@ async function boot(){
   showGate('loading');
   if(HTTP){
     if(!CFG.apiUrl || !CFG.googleClientId){ showGate('error','ยังไม่ได้ตั้งค่า apiUrl และ googleClientId ใน site.config.json แล้ว build ใหม่'); return; }
-    if(!getToken()){ showGate('signin'); return; }
+    if(!getToken()){ let ok=false; try{ ok=await erpLogin(); }catch(e){ showGate('signin','เข้าจาก ERP ไม่สำเร็จ: '+String((e&&e.message)||e)); return; } if(!ok){ showGate('signin'); return; } }
   } else if(typeof google==='undefined' || !google.script || !google.script.run){ showGate('noPlatform'); return; }
   try{ applyBootstrap(await api('bootstrap')); }
   catch(e){
